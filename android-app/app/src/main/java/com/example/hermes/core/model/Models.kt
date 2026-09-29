@@ -70,6 +70,67 @@ data class SwitchProfileResponse(
     val error: String? = null
 )
 
+@Serializable
+data class CreateProfileRequest(
+    val name: String,
+    @SerialName("clone_from") val cloneFrom: String? = null,
+    @SerialName("clone_config") val cloneConfig: Boolean = true,
+    @SerialName("default_model") val defaultModel: String? = null,
+    @SerialName("model_provider") val modelProvider: String? = null,
+    @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("base_url") val baseUrl: String? = null
+)
+
+@Serializable
+data class CreateProfileResponse(
+    val ok: Boolean = false,
+    val profile: ProfileInfo? = null,
+    val error: String? = null
+)
+
+@Serializable
+data class DeleteProfileRequest(
+    val name: String
+)
+
+@Serializable
+data class DeleteProfileResponse(
+    val ok: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
+)
+
+// ── Provider & Environment Variables Models ───────────────────────────────
+
+@Serializable
+data class ProviderInfo(
+    val id: String,
+    @SerialName("display_name") val displayName: String = "",
+    @SerialName("has_key") val hasKey: Boolean = false,
+    val configurable: Boolean = true,
+    @SerialName("key_source") val keySource: String = "none",
+    val models: List<String> = emptyList()
+)
+
+@Serializable
+data class ProvidersResponse(
+    val providers: List<ProviderInfo> = emptyList(),
+    @SerialName("active_profile") val activeProfile: String? = null
+)
+
+@Serializable
+data class SetProviderKeyRequest(
+    val provider: String,
+    @SerialName("api_key") val apiKey: String? = null
+)
+
+@Serializable
+data class ProviderKeyResponse(
+    val ok: Boolean = false,
+    val error: String? = null,
+    val message: String? = null
+)
+
 // ── Session Models ──────────────────────────────────────────────────────────
 
 @Serializable

@@ -43,6 +43,8 @@ fun ChatScreen(
 
     val sessionsDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showProfilesSheet by remember { mutableStateOf(false) }
+    var showCreateProfileDialog by remember { mutableStateOf(false) }
+    var showProfileEnvDialog by remember { mutableStateOf(false) }
     var showSkillsDialog by remember { mutableStateOf(false) }
     var showMemoryDialog by remember { mutableStateOf(false) }
     var showWorkspaceDialog by remember { mutableStateOf(false) }
@@ -444,6 +446,20 @@ fun ChatScreen(
                     profiles = state.profiles,
                     activeProfile = state.activeProfile,
                     onSelectProfile = { name -> viewModel.switchProfile(name) },
+                    onCreateProfile = {
+                        showProfilesSheet = false
+                        showCreateProfileDialog = true
+                    },
+                    onDeleteProfile = { name ->
+                        viewModel.deleteProfile(name) { success, err ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (success) "Profil \"$name\" supprimé"
+                                    else "Erreur : ${err ?: "Impossible de supprimer"}"
+                                )
+                            }
+                        }
+                    },
                     onOpenSkills = {
                         showProfilesSheet = false
                         viewModel.loadSkills()
@@ -459,10 +475,64 @@ fun ChatScreen(
                         viewModel.loadWorkspaces()
                         showWorkspaceDialog = true
                     },
+                    onOpenEnv = {
+                        showProfilesSheet = false
+                        viewModel.loadProviders()
+                        showProfileEnvDialog = true
+                    },
                     onDismiss = { showProfilesSheet = false },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+
+        // Create Profile Dialog
+        if (showCreateProfileDialog) {
+            CreateProfileDialog(
+                existingProfiles = state.profiles,
+                onDismiss = { showCreateProfileDialog = false },
+                onCreate = { name, cloneFrom, model, provider, apiKey ->
+                    viewModel.createProfile(name, cloneFrom, model, provider, apiKey) { success, err ->
+                        if (success) {
+                            showCreateProfileDialog = false
+                            scope.launch { snackbarHostState.showSnackbar("Profil \"$name\" créé et activé !") }
+                        } else {
+                            scope.launch { snackbarHostState.showSnackbar("Erreur : ${err ?: "Échec de création"}") }
+                        }
+                    }
+                }
+            )
+        }
+
+        // Profile Env Dialog (.env variables & API keys)
+        if (showProfileEnvDialog) {
+            ProfileEnvDialog(
+                activeProfile = state.activeProfile,
+                providers = state.providers,
+                isLoading = state.isProvidersLoading,
+                onSaveKey = { providerId, apiKey ->
+                    viewModel.setProviderKey(providerId, apiKey) { success ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (success) "Clé $providerId enregistrée dans le .env du profil ${state.activeProfile}"
+                                else "Échec de l'enregistrement de la clé"
+                            )
+                        }
+                    }
+                },
+                onDeleteKey = { providerId ->
+                    viewModel.deleteProviderKey(providerId) { success ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (success) "Clé $providerId supprimée du .env"
+                                else "Échec de la suppression"
+                            )
+                        }
+                    }
+                },
+                onRefresh = { viewModel.loadProviders() },
+                onDismiss = { showProfileEnvDialog = false }
+            )
         }
 
         // Skills Dialog

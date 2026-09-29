@@ -90,6 +90,26 @@ class HermesRepository(
         return res
     }
 
+    suspend fun createProfile(req: CreateProfileRequest): Result<CreateProfileResponse> {
+        return apiClient.createProfile(getBaseUrl(), req)
+    }
+
+    suspend fun deleteProfile(name: String): Result<DeleteProfileResponse> {
+        return apiClient.deleteProfile(getBaseUrl(), name)
+    }
+
+    suspend fun getProviders(): Result<ProvidersResponse> {
+        return apiClient.getProviders(getBaseUrl())
+    }
+
+    suspend fun setProviderKey(provider: String, apiKey: String?): Result<ProviderKeyResponse> {
+        return apiClient.setProviderKey(getBaseUrl(), provider, apiKey)
+    }
+
+    suspend fun deleteProviderKey(provider: String): Result<ProviderKeyResponse> {
+        return apiClient.deleteProviderKey(getBaseUrl(), provider)
+    }
+
     suspend fun getSessions(allProfiles: Boolean = false): Result<SessionsResponse> {
         return apiClient.getSessions(getBaseUrl(), allProfiles)
     }

@@ -84,6 +84,54 @@ class HermesApiClient(
             .url("$baseUrl/api/profile/switch")
             .post(body)
             .build()
+        val result: Result<SwitchProfileResponse> = executeRequest(request)
+        if (result.isSuccess) {
+            authInterceptor.activeProfile = name
+        }
+        result
+    }
+
+    suspend fun createProfile(baseUrl: String, req: CreateProfileRequest): Result<CreateProfileResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(req).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/profile/create")
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun deleteProfile(baseUrl: String, name: String): Result<DeleteProfileResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(DeleteProfileRequest(name)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/profile/delete")
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun getProviders(baseUrl: String): Result<ProvidersResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/providers")
+            .get()
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun setProviderKey(baseUrl: String, provider: String, apiKey: String?): Result<ProviderKeyResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(SetProviderKeyRequest(provider, apiKey)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/providers")
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun deleteProviderKey(baseUrl: String, provider: String): Result<ProviderKeyResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(mapOf("provider" to provider)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/providers/delete")
+            .post(body)
+            .build()
         executeRequest(request)
     }
 

@@ -45,6 +45,8 @@ data class ChatUiState(
     val isSearchingSessions: Boolean = false,
     val searchResults: List<SessionSummary>? = null,
     val isRepairingSessions: Boolean = false,
+    val providers: List<ProviderInfo> = emptyList(),
+    val isProvidersLoading: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -269,6 +271,102 @@ class ChatViewModel(
                 createNewSession()
             }
             _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    fun createProfile(
+        name: String,
+        cloneFrom: String? = null,
+        defaultModel: String? = null,
+        provider: String? = null,
+        apiKey: String? = null,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val req = CreateProfileRequest(
+                name = name.trim().lowercase(),
+                cloneFrom = cloneFrom?.ifBlank { null },
+                cloneConfig = true,
+                defaultModel = defaultModel?.ifBlank { null },
+                modelProvider = provider?.ifBlank { null },
+                apiKey = apiKey?.ifBlank { null }
+            )
+            val result = repository.createProfile(req)
+            if (result.isSuccess) {
+                val profilesRes = repository.getProfiles()
+                if (profilesRes.isSuccess) {
+                    _uiState.update { it.copy(profiles = profilesRes.getOrThrow().profiles) }
+                }
+                switchProfile(name.trim().lowercase())
+                onComplete?.invoke(true, null)
+            } else {
+                _uiState.update { it.copy(isLoading = false) }
+                onComplete?.invoke(false, result.exceptionOrNull()?.localizedMessage)
+            }
+        }
+    }
+
+    fun deleteProfile(name: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = repository.deleteProfile(name)
+            if (result.isSuccess) {
+                val profilesRes = repository.getProfiles()
+                if (profilesRes.isSuccess) {
+                    _uiState.update { it.copy(profiles = profilesRes.getOrThrow().profiles) }
+                }
+                if (_uiState.value.activeProfile == name) {
+                    switchProfile("default")
+                } else {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+                onComplete?.invoke(true, null)
+            } else {
+                _uiState.update { it.copy(isLoading = false) }
+                onComplete?.invoke(false, result.exceptionOrNull()?.localizedMessage)
+            }
+        }
+    }
+
+    fun loadProviders() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProvidersLoading = true) }
+            val res = repository.getProviders()
+            if (res.isSuccess) {
+                _uiState.update {
+                    it.copy(
+                        providers = res.getOrThrow().providers,
+                        isProvidersLoading = false
+                    )
+                }
+            } else {
+                _uiState.update { it.copy(isProvidersLoading = false) }
+            }
+        }
+    }
+
+    fun setProviderKey(provider: String, apiKey: String?, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            val res = repository.setProviderKey(provider, apiKey)
+            if (res.isSuccess) {
+                loadProviders()
+                onComplete?.invoke(true)
+            } else {
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
+    fun deleteProviderKey(provider: String, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            val res = repository.deleteProviderKey(provider)
+            if (res.isSuccess) {
+                loadProviders()
+                onComplete?.invoke(true)
+            } else {
+                onComplete?.invoke(false)
+            }
         }
     }
 

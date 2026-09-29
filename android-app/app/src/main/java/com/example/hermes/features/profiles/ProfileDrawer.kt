@@ -9,14 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,14 +27,19 @@ fun ProfileDrawerContent(
     profiles: List<ProfileInfo>,
     activeProfile: String,
     onSelectProfile: (String) -> Unit,
+    onCreateProfile: () -> Unit,
+    onDeleteProfile: (String) -> Unit,
     onOpenSkills: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenWorkspaces: () -> Unit,
+    onOpenEnv: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var profileToDelete by remember { mutableStateOf<String?>(null) }
+
     ModalDrawerSheet(
-        modifier = modifier.width(320.dp),
+        modifier = modifier.width(330.dp),
         drawerContainerColor = OnyxDarkSurface
     ) {
         Column(
@@ -47,41 +47,60 @@ fun ProfileDrawerContent(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header
+            // Header with Create Profile Button
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(HermesPrimaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SmartToy,
-                        contentDescription = null,
-                        tint = HermesPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(HermesPrimaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SmartToy,
+                            contentDescription = null,
+                            tint = HermesPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Agent Profiles",
+                        text = "Profils Agent",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )
-                    Text(
-                        text = "Switch persona & configuration",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = HermesTextSecondary
-                    )
+                }
+
+                FilledTonalButton(
+                    onClick = {
+                        onDismiss()
+                        onCreateProfile()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Nouveau", fontSize = 12.sp)
                 }
             }
 
-            HorizontalDivider(color = OnyxBorder, modifier = Modifier.padding(vertical = 8.dp))
+            Text(
+                text = "Basculez de persona, de configuration et d'environnement",
+                style = MaterialTheme.typography.bodySmall,
+                color = HermesTextSecondary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            HorizontalDivider(color = OnyxBorder, modifier = Modifier.padding(vertical = 4.dp))
 
             // Profile List
             LazyColumn(
@@ -133,20 +152,37 @@ fun ProfileDrawerContent(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = profile.name.replaceFirstChar { it.uppercase() },
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = HermesTextPrimary
+                                    )
+                                    if (profile.isDefault) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = OnyxDarkBackground
+                                        ) {
+                                            Text(
+                                                text = "défaut",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                color = HermesTextMuted,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
                                 Text(
-                                    text = profile.name.replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = HermesTextPrimary
-                                )
-                                Text(
-                                    text = profile.model ?: "Default model",
+                                    text = profile.model ?: "Modèle par défaut",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = HermesTextSecondary,
                                     maxLines = 1
                                 )
                                 if (profile.skillCount > 0) {
                                     Text(
-                                        text = "${profile.skillCount} skills active",
+                                        text = "${profile.skillCount} skills actifs",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = HermesSecondary
                                     )
@@ -156,10 +192,22 @@ fun ProfileDrawerContent(
                             if (isCurrent) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Active",
+                                    contentDescription = "Actif",
                                     tint = HermesPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
+                            } else if (!profile.isDefault) {
+                                IconButton(
+                                    onClick = { profileToDelete = profile.name },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteOutline,
+                                        contentDescription = "Supprimer profil",
+                                        tint = HermesTextMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -168,78 +216,121 @@ fun ProfileDrawerContent(
 
             HorizontalDivider(color = OnyxBorder, modifier = Modifier.padding(vertical = 8.dp))
 
-            // Profile Tools Section (Skills, Memory, Workspaces)
+            // Profile Tools Section (Skills, Memory, Workspaces, Env)
             Text(
-                text = "GESTION DU PROFIL ACTIF",
+                text = "GESTION DU PROFIL ACTIF ($activeProfile)",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = HermesTextMuted,
                 modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
             )
 
-            Row(
+            // 2x2 action buttons grid
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Skills Button
-                OutlinedButton(
-                    onClick = {
-                        onDismiss()
-                        onOpenSkills()
-                    },
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesSecondary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Skills", fontSize = 12.sp)
+                    // Skills Button
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onOpenSkills()
+                        },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesSecondary)
+                    ) {
+                        Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Skills", fontSize = 11.sp)
+                    }
+
+                    // Memory Button
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onOpenMemory()
+                        },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesPrimary)
+                    ) {
+                        Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Mémoire", fontSize = 11.sp)
+                    }
                 }
 
-                // Memory Button
-                OutlinedButton(
-                    onClick = {
-                        onDismiss()
-                        onOpenMemory()
-                    },
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesPrimary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Description,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Mémoire", fontSize = 12.sp)
-                }
+                    // Workspaces Button
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onOpenWorkspaces()
+                        },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesTextPrimary)
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Dossiers", fontSize = 11.sp)
+                    }
 
-                // Workspaces Button
-                OutlinedButton(
-                    onClick = {
-                        onDismiss()
-                        onOpenWorkspaces()
-                    },
-                    modifier = Modifier.weight(1.1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesTextPrimary)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Dossiers", fontSize = 12.sp)
+                    // Env Variables Button
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onOpenEnv()
+                        },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFBBF24))
+                    ) {
+                        Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Variables .env", fontSize = 11.sp)
+                    }
                 }
             }
         }
+    }
+
+    // Confirmation dialog for profile deletion
+    profileToDelete?.let { name ->
+        AlertDialog(
+            onDismissRequest = { profileToDelete = null },
+            title = { Text("Supprimer le profil") },
+            text = {
+                Text("Êtes-vous sûr de vouloir supprimer le profil \"$name\" ? Cette action effacera son dossier de configuration et ses variables d'environnement.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteProfile(name)
+                        profileToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Supprimer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { profileToDelete = null }) {
+                    Text("Annuler")
+                }
+            },
+            containerColor = OnyxDarkSurface
+        )
     }
 }
