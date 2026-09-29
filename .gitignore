@@ -1,0 +1,48 @@
+# OS & IDE artifacts
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Thumbs.db
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Android & Gradle artifacts
+.gradle/
+build/
+*/build/
+app/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+captures/
+.externalNativeBuild/
+.cxx/
+*.class
+
+# Secrets & Local credentials
+*.env
+*.env.local
+*.env.*.local
+*.key
+*.keystore
+*.jks
+*.p12
+*.pem
+secrets/
+
+# Python & WebUI reference backend
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.pytest_cache/
+*.sqlite
+*.db
+*.bak

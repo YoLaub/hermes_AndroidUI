@@ -1,0 +1,238 @@
+package com.example.hermes.core.data
+
+import com.example.hermes.core.model.*
+import com.example.hermes.core.network.AuthInterceptor
+import com.example.hermes.core.network.HermesApiClient
+import com.example.hermes.core.network.HermesSseClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+class HermesRepository(
+    val preferences: HermesPreferences,
+    val authInterceptor: AuthInterceptor = AuthInterceptor(),
+    val apiClient: HermesApiClient = HermesApiClient(authInterceptor),
+    val sseClient: HermesSseClient = HermesSseClient(authInterceptor),
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+) {
+
+    init {
+        // Wire preferences to AuthInterceptor
+        scope.launch {
+            authInterceptor.sessionCookie = preferences.sessionCookie.first()
+            authInterceptor.activeProfile = preferences.activeProfile.first()
+
+            authInterceptor.onSessionCookieUpdated = { cookie ->
+                scope.launch { preferences.setSessionCookie(cookie) }
+            }
+            authInterceptor.onProfileCookieUpdated = { profile ->
+                scope.launch { preferences.setActiveProfile(profile) }
+            }
+        }
+    }
+
+    val serverUrl: Flow<String> = preferences.serverUrl
+    val sessionCookie: Flow<String?> = preferences.sessionCookie
+    val password: Flow<String?> = preferences.password
+    val activeProfile: Flow<String> = preferences.activeProfile
+    val lastSessionId: Flow<String?> = preferences.lastSessionId
+
+    suspend fun getBaseUrl(): String = preferences.serverUrl.first()
+
+    suspend fun setServerUrl(url: String) {
+        preferences.setServerUrl(url)
+    }
+
+    suspend fun setPassword(password: String?) {
+        preferences.setPassword(password)
+    }
+
+    suspend fun clearPassword() {
+        preferences.clearPassword()
+    }
+
+    suspend fun checkHealth(): Result<HealthResponse> {
+        return apiClient.checkHealth(getBaseUrl())
+    }
+
+    suspend fun checkAuthStatus(): Result<AuthStatusResponse> {
+        return apiClient.checkAuthStatus(getBaseUrl())
+    }
+
+    suspend fun login(password: String): Result<LoginResponse> {
+        val result = apiClient.login(getBaseUrl(), password)
+        if (result.isSuccess && result.getOrNull()?.ok == true) {
+            // Persist the password on successful login
+            preferences.setPassword(password)
+        }
+        return result
+    }
+
+    suspend fun logout(): Result<Boolean> {
+        val res = apiClient.logout(getBaseUrl())
+        preferences.clearSession()
+        authInterceptor.sessionCookie = null
+        return res
+    }
+
+    suspend fun getProfiles(): Result<ProfilesResponse> {
+        return apiClient.getProfiles(getBaseUrl())
+    }
+
+    suspend fun switchProfile(name: String): Result<SwitchProfileResponse> {
+        val res = apiClient.switchProfile(getBaseUrl(), name)
+        if (res.isSuccess) {
+            preferences.setActiveProfile(name)
+            authInterceptor.activeProfile = name
+        }
+        return res
+    }
+
+    suspend fun getSessions(allProfiles: Boolean = false): Result<SessionsResponse> {
+        return apiClient.getSessions(getBaseUrl(), allProfiles)
+    }
+
+    suspend fun searchSessions(query: String, content: Boolean = true): Result<List<SessionSummary>> {
+        return apiClient.searchSessions(getBaseUrl(), query, content)
+    }
+
+    suspend fun repairSessions(): Result<SessionRepairResponse> {
+        return apiClient.repairSessions(getBaseUrl())
+    }
+
+    suspend fun getSession(sessionId: String): Result<SessionDetail> {
+        preferences.setLastSessionId(sessionId)
+        return apiClient.getSession(getBaseUrl(), sessionId)
+    }
+
+    suspend fun newSession(
+        workspace: String? = null,
+        model: String? = null,
+        modelProvider: String? = null
+    ): Result<NewSessionResponse> {
+        val profile = preferences.activeProfile.first()
+        val res = apiClient.newSession(getBaseUrl(), workspace, model, modelProvider, profile)
+        res.getOrNull()?.sessionId?.let {
+            preferences.setLastSessionId(it)
+        }
+        return res
+    }
+
+    suspend fun deleteSession(sessionId: String): Result<Boolean> {
+        return apiClient.deleteSession(getBaseUrl(), sessionId)
+    }
+
+    suspend fun renameSession(sessionId: String, title: String): Result<Boolean> {
+        return apiClient.renameSession(getBaseUrl(), sessionId, title)
+    }
+
+    suspend fun clearSession(sessionId: String): Result<Boolean> {
+        return apiClient.clearSession(getBaseUrl(), sessionId)
+    }
+
+    suspend fun undoSession(sessionId: String): Result<Boolean> {
+        return apiClient.undoSession(getBaseUrl(), sessionId)
+    }
+
+    suspend fun startChatTurn(
+        sessionId: String,
+        message: String,
+        workspace: String? = null,
+        model: String? = null,
+        attachments: List<ChatAttachment> = emptyList()
+    ): Result<ChatStartResponse> {
+        val profile = preferences.activeProfile.first()
+        val request = ChatStartRequest(
+            sessionId = sessionId,
+            message = message,
+            workspace = workspace,
+            model = model,
+            profile = profile,
+            attachments = attachments
+        )
+        return apiClient.startChatTurn(getBaseUrl(), request)
+    }
+
+    fun streamChatEvents(streamId: String): Flow<HermesSseEvent> {
+        var base = "http://10.0.2.2:8000"
+        try {
+            kotlinx.coroutines.runBlocking { base = getBaseUrl() }
+        } catch (_: Exception) {}
+        return sseClient.streamChatEvents(base, streamId)
+    }
+
+    suspend fun cancelStream(streamId: String): Result<Boolean> {
+        return apiClient.cancelStream(getBaseUrl(), streamId)
+    }
+
+    suspend fun steerStream(streamId: String, message: String): Result<Boolean> {
+        return apiClient.steerStream(getBaseUrl(), streamId, message)
+    }
+
+    suspend fun respondApproval(sessionId: String, approvalId: String, approved: Boolean): Result<Boolean> {
+        return apiClient.respondApproval(getBaseUrl(), sessionId, approvalId, approved)
+    }
+
+    suspend fun respondClarify(sessionId: String, answer: String): Result<Boolean> {
+        return apiClient.respondClarify(getBaseUrl(), sessionId, answer)
+    }
+
+    suspend fun getYoloStatus(sessionId: String): Result<Boolean> {
+        return apiClient.getYoloStatus(getBaseUrl(), sessionId)
+    }
+
+    suspend fun setYoloStatus(sessionId: String, enabled: Boolean): Result<Boolean> {
+        return apiClient.setYoloStatus(getBaseUrl(), sessionId, enabled)
+    }
+
+    suspend fun getSkills(category: String? = null): Result<SkillsResponse> {
+        return apiClient.getSkills(getBaseUrl(), category)
+    }
+
+    suspend fun getSkillContent(name: String, file: String? = null): Result<SkillDetailResponse> {
+        return apiClient.getSkillContent(getBaseUrl(), name, file)
+    }
+
+    suspend fun saveSkill(name: String, content: String, category: String? = null): Result<Boolean> {
+        return apiClient.saveSkill(getBaseUrl(), name, content, category)
+    }
+
+    suspend fun deleteSkill(name: String): Result<Boolean> {
+        return apiClient.deleteSkill(getBaseUrl(), name)
+    }
+
+    suspend fun getMemory(): Result<MemoryResponse> {
+        return apiClient.getMemory(getBaseUrl())
+    }
+
+    suspend fun saveMemory(section: String, content: String): Result<Boolean> {
+        return apiClient.saveMemory(getBaseUrl(), section, content)
+    }
+
+    suspend fun getWorkspaces(): Result<WorkspacesResponse> {
+        return apiClient.getWorkspaces(getBaseUrl())
+    }
+
+    suspend fun addWorkspace(path: String, name: String? = null): Result<Boolean> {
+        return apiClient.addWorkspace(getBaseUrl(), path, name)
+    }
+
+    suspend fun removeWorkspace(path: String): Result<Boolean> {
+        return apiClient.removeWorkspace(getBaseUrl(), path)
+    }
+
+    suspend fun listFiles(sessionId: String, path: String = "."): Result<DirectoryListingResponse> {
+        return apiClient.listFiles(getBaseUrl(), sessionId, path)
+    }
+
+    suspend fun uploadFile(
+        sessionId: String,
+        filename: String,
+        fileBytes: ByteArray,
+        mimeType: String
+    ): Result<UploadResponse> {
+        return apiClient.uploadFile(getBaseUrl(), sessionId, filename, fileBytes, mimeType)
+    }
+}
