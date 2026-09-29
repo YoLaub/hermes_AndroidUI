@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     viewModel: ChatViewModel,
     onNavigateToSettings: () -> Unit,
+    onNavigateToKanban: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -196,6 +197,15 @@ fun ChatScreen(
                             Icon(
                                 imageVector = Icons.Default.AddComment,
                                 contentDescription = "New Chat",
+                                tint = HermesPrimary
+                            )
+                        }
+
+                        // Kanban Board
+                        IconButton(onClick = onNavigateToKanban) {
+                            Icon(
+                                imageVector = Icons.Default.ViewKanban,
+                                contentDescription = "Tableau Kanban",
                                 tint = HermesPrimary
                             )
                         }

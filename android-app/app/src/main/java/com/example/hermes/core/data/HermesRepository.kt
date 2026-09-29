@@ -235,4 +235,43 @@ class HermesRepository(
     ): Result<UploadResponse> {
         return apiClient.uploadFile(getBaseUrl(), sessionId, filename, fileBytes, mimeType)
     }
+
+    // ── Kanban ────────────────────────────────────────────────────────────────
+
+    suspend fun getKanbanBoards(): Result<KanbanBoardsResponse> {
+        return apiClient.getKanbanBoards(getBaseUrl())
+    }
+
+    suspend fun getKanbanBoard(board: String? = null): Result<KanbanBoardResponse> {
+        return apiClient.getKanbanBoard(getBaseUrl(), board)
+    }
+
+    suspend fun switchKanbanBoard(slug: String): Result<Boolean> {
+        return apiClient.switchKanbanBoard(getBaseUrl(), slug)
+    }
+
+    suspend fun createKanbanTask(req: KanbanCreateTaskRequest, board: String? = null): Result<KanbanTaskResponse> {
+        return apiClient.createKanbanTask(getBaseUrl(), req, board)
+    }
+
+    suspend fun updateKanbanTask(taskId: String, req: KanbanUpdateTaskRequest, board: String? = null): Result<KanbanTaskResponse> {
+        return apiClient.updateKanbanTask(getBaseUrl(), taskId, req, board)
+    }
+
+    suspend fun blockKanbanTask(taskId: String, reason: String = "Blocked via Mobile App", board: String? = null): Result<KanbanTaskResponse> {
+        return apiClient.blockKanbanTask(getBaseUrl(), taskId, reason, board)
+    }
+
+    suspend fun unblockKanbanTask(taskId: String, board: String? = null): Result<KanbanTaskResponse> {
+        return apiClient.unblockKanbanTask(getBaseUrl(), taskId, board)
+    }
+
+    suspend fun archiveKanbanTask(taskId: String, board: String? = null): Result<KanbanTaskResponse> {
+        return apiClient.archiveKanbanTask(getBaseUrl(), taskId, board)
+    }
+
+    suspend fun dispatchKanban(board: String? = null): Result<KanbanDispatchResponse> {
+        return apiClient.dispatchKanban(getBaseUrl(), board)
+    }
 }
+

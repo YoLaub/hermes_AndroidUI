@@ -485,4 +485,89 @@ data class SessionRepairResponse(
     val repairs: List<String> = emptyList()
 )
 
+// ── Kanban Models ──────────────────────────────────────────────────────────
+
+@Serializable
+data class KanbanTask(
+    val id: String,
+    val title: String,
+    val body: String? = null,
+    val status: String = "todo",
+    val priority: Int = 0,
+    val assignee: String? = null,
+    val tenant: String? = null,
+    @SerialName("age_seconds") val ageSeconds: Double? = null,
+    val progress: Double? = null,
+    @SerialName("link_counts") val linkCounts: Map<String, Int> = emptyMap(),
+    @SerialName("comment_count") val commentCount: Int = 0
+)
+
+@Serializable
+data class KanbanColumn(
+    val name: String,
+    val tasks: List<KanbanTask> = emptyList()
+)
+
+@Serializable
+data class KanbanBoardResponse(
+    val columns: List<KanbanColumn> = emptyList(),
+    val tenants: List<String> = emptyList(),
+    val assignees: List<String> = emptyList(),
+    @SerialName("latest_event_id") val latestEventId: Int = 0,
+    val changed: Boolean = true,
+    @SerialName("read_only") val readOnly: Boolean = false
+)
+
+@Serializable
+data class KanbanBoardMeta(
+    val slug: String,
+    val name: String? = null,
+    val description: String? = null,
+    @SerialName("is_current") val isCurrent: Boolean = false,
+    val total: Int = 0
+)
+
+@Serializable
+data class KanbanBoardsResponse(
+    val boards: List<KanbanBoardMeta> = emptyList(),
+    val current: String? = "default",
+    @SerialName("read_only") val readOnly: Boolean = false
+)
+
+@Serializable
+data class KanbanCreateTaskRequest(
+    val title: String,
+    val body: String? = null,
+    val status: String? = null,
+    val priority: Int = 0,
+    val assignee: String? = null
+)
+
+@Serializable
+data class KanbanUpdateTaskRequest(
+    val title: String? = null,
+    val body: String? = null,
+    val status: String? = null,
+    val priority: Int? = null,
+    val assignee: String? = null,
+    val reason: String? = null
+)
+
+@Serializable
+data class KanbanTaskResponse(
+    val task: KanbanTask,
+    @SerialName("read_only") val readOnly: Boolean = false
+)
+
+@Serializable
+data class KanbanBlockTaskRequest(
+    val reason: String = "Blocked via Mobile App"
+)
+
+@Serializable
+data class KanbanDispatchResponse(
+    val spawned: Int = 0,
+    val message: String? = null
+)
+
 

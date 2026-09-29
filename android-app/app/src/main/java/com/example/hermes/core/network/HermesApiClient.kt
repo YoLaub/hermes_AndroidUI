@@ -331,6 +331,86 @@ class HermesApiClient(
         result.map { it.yoloEnabled }
     }
 
+    // ── Kanban Endpoints ──────────────────────────────────────────────────────
+
+    suspend fun getKanbanBoards(baseUrl: String): Result<KanbanBoardsResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/kanban/boards")
+            .get()
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun getKanbanBoard(baseUrl: String, board: String? = null): Result<KanbanBoardResponse> = withContext(Dispatchers.IO) {
+        val url = if (board != null) "$baseUrl/api/kanban/board?board=$board" else "$baseUrl/api/kanban/board"
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun switchKanbanBoard(baseUrl: String, slug: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/kanban/boards/$slug/switch")
+            .post("{}".toRequestBody(jsonMediaType))
+            .build()
+        executeEmptyResponse(request)
+    }
+
+    suspend fun createKanbanTask(baseUrl: String, req: KanbanCreateTaskRequest, board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
+        val url = if (board != null) "$baseUrl/api/kanban/tasks?board=$board" else "$baseUrl/api/kanban/tasks"
+        val body = json.encodeToString(req).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun updateKanbanTask(baseUrl: String, taskId: String, req: KanbanUpdateTaskRequest, board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
+        val url = if (board != null) "$baseUrl/api/kanban/tasks/$taskId/patch?board=$board" else "$baseUrl/api/kanban/tasks/$taskId/patch"
+        val body = json.encodeToString(req).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun blockKanbanTask(baseUrl: String, taskId: String, reason: String = "Blocked via Mobile App", board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
+        val url = if (board != null) "$baseUrl/api/kanban/tasks/$taskId/block?board=$board" else "$baseUrl/api/kanban/tasks/$taskId/block"
+        val body = json.encodeToString(KanbanBlockTaskRequest(reason)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun unblockKanbanTask(baseUrl: String, taskId: String, board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
+        val url = if (board != null) "$baseUrl/api/kanban/tasks/$taskId/unblock?board=$board" else "$baseUrl/api/kanban/tasks/$taskId/unblock"
+        val body = "{}".toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun archiveKanbanTask(baseUrl: String, taskId: String, board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
+        updateKanbanTask(baseUrl, taskId, KanbanUpdateTaskRequest(status = "archived"), board)
+    }
+
+    suspend fun dispatchKanban(baseUrl: String, board: String? = null): Result<KanbanDispatchResponse> = withContext(Dispatchers.IO) {
+        val url = if (board != null) "$baseUrl/api/kanban/dispatch?board=$board" else "$baseUrl/api/kanban/dispatch"
+        val request = Request.Builder()
+            .url(url)
+            .post("{}".toRequestBody(jsonMediaType))
+            .build()
+        executeRequest(request)
+    }
+
     private inline fun <reified T> executeRequest(request: Request): Result<T> {
         return try {
             val result: T = executeRequestInternal(request)

@@ -12,6 +12,8 @@ import com.example.hermes.features.auth.AuthScreen
 import com.example.hermes.features.auth.AuthViewModel
 import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
+import com.example.hermes.features.kanban.KanbanScreen
+import com.example.hermes.features.kanban.KanbanViewModel
 
 @Composable
 fun MainNavigation() {
@@ -21,6 +23,7 @@ fun MainNavigation() {
 
     val authViewModel = remember { AuthViewModel(repository) }
     val chatViewModel = remember { ChatViewModel(repository) }
+    val kanbanViewModel = remember { KanbanViewModel(repository) }
 
     val backStack = rememberNavBackStack(AuthRoute)
 
@@ -42,9 +45,22 @@ fun MainNavigation() {
                     viewModel = chatViewModel,
                     onNavigateToSettings = {
                         backStack.removeLastOrNull()
+                    },
+                    onNavigateToKanban = {
+                        backStack.add(KanbanRoute)
+                        kanbanViewModel.loadData()
+                    }
+                )
+            }
+            entry<KanbanRoute> {
+                KanbanScreen(
+                    viewModel = kanbanViewModel,
+                    onNavigateBack = {
+                        backStack.removeLastOrNull()
                     }
                 )
             }
         }
     )
 }
+

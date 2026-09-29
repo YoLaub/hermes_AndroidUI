@@ -245,5 +245,80 @@ class ModelsSerializationTest {
         assertTrue(serialized.contains("sess_xyz"))
         assertTrue(serialized.contains("true"))
     }
+
+    @Test
+    fun testKanbanBoardDeserialization() {
+        val kanbanJson = """
+            {
+              "columns": [
+                {
+                  "name": "todo",
+                  "tasks": [
+                    {
+                      "id": "task_abc",
+                      "title": "Implement feature X",
+                      "body": "Need to finish API and UI",
+                      "status": "todo",
+                      "priority": 1,
+                      "assignee": "john",
+                      "age_seconds": 120.5,
+                      "comment_count": 2
+                    }
+                  ]
+                },
+                {
+                  "name": "done",
+                  "tasks": []
+                }
+              ],
+              "tenants": ["default"],
+              "assignees": ["john", "mario"],
+              "latest_event_id": 42,
+              "changed": true,
+              "read_only": false
+            }
+        """.trimIndent()
+        val board = json.decodeFromString<KanbanBoardResponse>(kanbanJson)
+        assertEquals(2, board.columns.size)
+        assertEquals("todo", board.columns[0].name)
+        assertEquals(1, board.columns[0].tasks.size)
+        val task = board.columns[0].tasks[0]
+        assertEquals("task_abc", task.id)
+        assertEquals("Implement feature X", task.title)
+        assertEquals("john", task.assignee)
+        assertEquals(1, task.priority)
+        assertEquals(42, board.latestEventId)
+    }
+
+    @Test
+    fun testKanbanBoardsListDeserialization() {
+        val boardsJson = """
+            {
+              "boards": [
+                {
+                  "slug": "default",
+                  "name": "Main Board",
+                  "is_current": true,
+                  "total": 12
+                },
+                {
+                  "slug": "experiments",
+                  "name": "Experiments",
+                  "is_current": false,
+                  "total": 3
+                }
+              ],
+              "current": "default",
+              "read_only": false
+            }
+        """.trimIndent()
+        val res = json.decodeFromString<KanbanBoardsResponse>(boardsJson)
+        assertEquals(2, res.boards.size)
+        assertEquals("default", res.current)
+        assertEquals("Main Board", res.boards[0].name)
+        assertTrue(res.boards[0].isCurrent)
+        assertEquals(12, res.boards[0].total)
+    }
 }
+
 
