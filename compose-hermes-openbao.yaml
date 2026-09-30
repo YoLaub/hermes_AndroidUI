@@ -1,0 +1,581 @@
+services:
+  hermes-agent:
+    image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
+    user: 0:0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 400
+    depends_on:
+      hermes-browser:
+        condition: service_healthy
+      hermes-browser-init:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if ! command -v vim >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends vim
+          rm -rf /var/lib/apt/lists/*
+        fi
+        # Ne pas relancer les autres profils dans chaque conteneur.
+        # Modification du conteneur uniquement, pas du volume partage.
+        rm -f /etc/cont-init.d/02-reconcile-profiles
+        exec /init /opt/hermes/docker/main-wrapper.sh "$$@"
+      - --
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        profile_dir="/home/hermeswebui/.hermes/profiles/$${HERMES_RUN_PROFILE}"
+        if [ "$${HERMES_RUN_PROFILE}" = default ]; then
+          profile_dir=/home/hermeswebui/.hermes
+          browser_bin=/home/hermeswebui/.hermes/profiles/gaston/node/bin
+        else
+          browser_bin="$${profile_dir}/node/bin"
+        fi
+        if [ ! -s "$${profile_dir}/config.yaml" ]; then
+          echo "Profil non configure : $${profile_dir}/config.yaml" >&2
+          exit 1
+        fi
+        export PATH="$${browser_bin}:$$PATH"
+        # CDP passe directement par le proxy HTTP/WebSocket du service navigateur.
+        ready=0
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if /opt/hermes/.venv/bin/python -c 'import json, os, urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open(os.environ["BROWSER_CDP_URL"].rstrip("/")+"/json/version", timeout=3); assert r.status == 200; d=json.load(r); assert d.get("webSocketDebuggerUrl", "").startswith("ws://hermes-browser:9222/devtools/browser/")'; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$$ready" != 1 ]; then
+          echo "Navigateur CDP indisponible" >&2
+          exit 1
+        fi
+        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+    volumes:
+      - hermes-home:/home/hermeswebui/.hermes
+      - hermes-agent-src:/opt/hermes
+      - hermes-workspace:/workspace
+    healthcheck:
+      disable: true
+    environment:
+      - HERMES_HOME=/home/hermeswebui/.hermes
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - BROWSER_CDP_URL=http://hermes-browser:9222
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - HERMES_RUN_PROFILE=default
+  gateway-john:
+    image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
+    user: 0:0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 400
+    depends_on:
+      hermes-browser:
+        condition: service_healthy
+      hermes-browser-init:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if ! command -v vim >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends vim
+          rm -rf /var/lib/apt/lists/*
+        fi
+        # Ne pas relancer les autres profils dans chaque conteneur.
+        # Modification du conteneur uniquement, pas du volume partage.
+        rm -f /etc/cont-init.d/02-reconcile-profiles
+        exec /init /opt/hermes/docker/main-wrapper.sh "$$@"
+      - --
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        profile_dir="/home/hermeswebui/.hermes/profiles/$${HERMES_RUN_PROFILE}"
+        if [ "$${HERMES_RUN_PROFILE}" = default ]; then
+          profile_dir=/home/hermeswebui/.hermes
+          browser_bin=/home/hermeswebui/.hermes/profiles/gaston/node/bin
+        else
+          browser_bin="$${profile_dir}/node/bin"
+        fi
+        if [ ! -s "$${profile_dir}/config.yaml" ]; then
+          echo "Profil non configure : $${profile_dir}/config.yaml" >&2
+          exit 1
+        fi
+        export PATH="$${browser_bin}:$$PATH"
+        # CDP passe directement par le proxy HTTP/WebSocket du service navigateur.
+        ready=0
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if /opt/hermes/.venv/bin/python -c 'import json, os, urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open(os.environ["BROWSER_CDP_URL"].rstrip("/")+"/json/version", timeout=3); assert r.status == 200; d=json.load(r); assert d.get("webSocketDebuggerUrl", "").startswith("ws://hermes-browser:9222/devtools/browser/")'; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$$ready" != 1 ]; then
+          echo "Navigateur CDP indisponible" >&2
+          exit 1
+        fi
+        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+    volumes:
+      - hermes-home:/home/hermeswebui/.hermes
+      - hermes-agent-src:/opt/hermes
+      - hermes-workspace:/workspace
+    healthcheck:
+      disable: true
+    environment:
+      - HERMES_HOME=/home/hermeswebui/.hermes
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - BROWSER_CDP_URL=http://hermes-browser:9222
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - HERMES_RUN_PROFILE=john
+  gateway-mario:
+    image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
+    user: 0:0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 400
+    depends_on:
+      hermes-browser:
+        condition: service_healthy
+      hermes-browser-init:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if ! command -v vim >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends vim
+          rm -rf /var/lib/apt/lists/*
+        fi
+        # Ne pas relancer les autres profils dans chaque conteneur.
+        # Modification du conteneur uniquement, pas du volume partage.
+        rm -f /etc/cont-init.d/02-reconcile-profiles
+        exec /init /opt/hermes/docker/main-wrapper.sh "$$@"
+      - --
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        profile_dir="/home/hermeswebui/.hermes/profiles/$${HERMES_RUN_PROFILE}"
+        if [ "$${HERMES_RUN_PROFILE}" = default ]; then
+          profile_dir=/home/hermeswebui/.hermes
+          browser_bin=/home/hermeswebui/.hermes/profiles/gaston/node/bin
+        else
+          browser_bin="$${profile_dir}/node/bin"
+        fi
+        if [ ! -s "$${profile_dir}/config.yaml" ]; then
+          echo "Profil non configure : $${profile_dir}/config.yaml" >&2
+          exit 1
+        fi
+        export PATH="$${browser_bin}:$$PATH"
+        # CDP passe directement par le proxy HTTP/WebSocket du service navigateur.
+        ready=0
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if /opt/hermes/.venv/bin/python -c 'import json, os, urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open(os.environ["BROWSER_CDP_URL"].rstrip("/")+"/json/version", timeout=3); assert r.status == 200; d=json.load(r); assert d.get("webSocketDebuggerUrl", "").startswith("ws://hermes-browser:9222/devtools/browser/")'; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$$ready" != 1 ]; then
+          echo "Navigateur CDP indisponible" >&2
+          exit 1
+        fi
+        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+    volumes:
+      - hermes-home:/home/hermeswebui/.hermes
+      - hermes-agent-src:/opt/hermes
+      - hermes-workspace:/workspace
+    healthcheck:
+      disable: true
+    environment:
+      - HERMES_HOME=/home/hermeswebui/.hermes
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - BROWSER_CDP_URL=http://hermes-browser:9222
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - HERMES_RUN_PROFILE=mario
+  gateway-gaston:
+    image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
+    user: 0:0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 400
+    depends_on:
+      hermes-browser:
+        condition: service_healthy
+      hermes-browser-init:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if ! command -v vim >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends vim
+          rm -rf /var/lib/apt/lists/*
+        fi
+        # Ne pas relancer les autres profils dans chaque conteneur.
+        # Modification du conteneur uniquement, pas du volume partage.
+        rm -f /etc/cont-init.d/02-reconcile-profiles
+        exec /init /opt/hermes/docker/main-wrapper.sh "$$@"
+      - --
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        profile_dir="/home/hermeswebui/.hermes/profiles/$${HERMES_RUN_PROFILE}"
+        if [ "$${HERMES_RUN_PROFILE}" = default ]; then
+          profile_dir=/home/hermeswebui/.hermes
+          browser_bin=/home/hermeswebui/.hermes/profiles/gaston/node/bin
+        else
+          browser_bin="$${profile_dir}/node/bin"
+        fi
+        if [ ! -s "$${profile_dir}/config.yaml" ]; then
+          echo "Profil non configure : $${profile_dir}/config.yaml" >&2
+          exit 1
+        fi
+        export PATH="$${browser_bin}:$$PATH"
+        # CDP passe directement par le proxy HTTP/WebSocket du service navigateur.
+        ready=0
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if /opt/hermes/.venv/bin/python -c 'import json, os, urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=opener.open(os.environ["BROWSER_CDP_URL"].rstrip("/")+"/json/version", timeout=3); assert r.status == 200; d=json.load(r); assert d.get("webSocketDebuggerUrl", "").startswith("ws://hermes-browser:9222/devtools/browser/")'; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$$ready" != 1 ]; then
+          echo "Navigateur CDP indisponible" >&2
+          exit 1
+        fi
+        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+    volumes:
+      - hermes-home:/home/hermeswebui/.hermes
+      - hermes-agent-src:/opt/hermes
+      - hermes-workspace:/workspace
+    healthcheck:
+      disable: true
+    environment:
+      - HERMES_HOME=/home/hermeswebui/.hermes
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - BROWSER_CDP_URL=http://hermes-browser:9222
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - HERMES_RUN_PROFILE=gaston
+  hermes-browser:
+    image: zenika/alpine-chrome:124
+    user: root
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+    mem_limit: 1g
+    pids_limit: 200
+    shm_size: 512m
+    tmpfs:
+      - /tmp
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        # socat seul ne reecrit ni Host ni l'URL WebSocket annoncee par Chromium.
+        # nginx gere HTTP + Upgrade WebSocket dans ce meme conteneur.
+        # Aucun port CDP n'est publie sur l'hote Docker.
+        if ! command -v nginx >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1 || ! command -v vim >/dev/null 2>&1; then
+          apk add --no-cache nginx curl jq vim
+        fi
+        mkdir -p /tmp/cdp-client-body /tmp/cdp-proxy
+        cat > /tmp/cdp-nginx.conf <<'NGINX'
+        user nginx;
+        worker_processes 1;
+        pid /tmp/cdp-nginx.pid;
+        error_log /dev/stderr warn;
+        events {
+          worker_connections 1024;
+        }
+        http {
+          access_log off;
+          client_body_temp_path /tmp/cdp-client-body;
+          proxy_temp_path /tmp/cdp-proxy;
+          map $$http_upgrade $$connection_upgrade {
+            default upgrade;
+            '' close;
+          }
+          server {
+            listen 0.0.0.0:9222;
+            server_name hermes-browser;
+            location / {
+              proxy_pass http://127.0.0.1:9223;
+              proxy_http_version 1.1;
+              # Chromium refuse certains Host DNS ; seul le proxy parle a Chromium.
+              proxy_set_header Host 127.0.0.1:9223;
+              proxy_set_header Upgrade $$http_upgrade;
+              proxy_set_header Connection $$connection_upgrade;
+              proxy_set_header Origin "";
+              proxy_set_header Accept-Encoding "";
+              proxy_connect_timeout 5s;
+              proxy_read_timeout 3600s;
+              proxy_send_timeout 3600s;
+              proxy_buffering off;
+              proxy_request_buffering off;
+              proxy_cache off;
+              proxy_redirect off;
+              add_header Cache-Control "no-store" always;
+              # /json/version et /json/list annoncent un endpoint joignable depuis
+              # les gateways. L'UUID et le chemin CDP sont conserves tels quels.
+              sub_filter_types application/json;
+              sub_filter_once off;
+              sub_filter 'ws://127.0.0.1:9223/' 'ws://hermes-browser:9222/';
+              sub_filter 'ws://localhost:9223/' 'ws://hermes-browser:9222/';
+              sub_filter 'ws=127.0.0.1:9223/' 'ws=hermes-browser:9222/';
+              sub_filter 'ws=localhost:9223/' 'ws=hermes-browser:9222/';
+            }
+          }
+        }
+        NGINX
+        # Echouer immediatement si le module de reecriture/configuration manque.
+        nginx -t -c /tmp/cdp-nginx.conf
+        chrome_pid=
+        proxy_pid=
+        cleanup() {
+          trap - EXIT
+          if [ -n "$$proxy_pid" ]; then kill "$$proxy_pid" 2>/dev/null || true; fi
+          if [ -n "$$chrome_pid" ]; then kill "$$chrome_pid" 2>/dev/null || true; fi
+          wait 2>/dev/null || true
+        }
+        trap cleanup EXIT
+        trap 'exit 0' INT TERM
+        chromium-browser --no-sandbox --headless=new --disable-gpu \
+          --disable-dev-shm-usage --remote-debugging-address=127.0.0.1 \
+          --remote-debugging-port=9223 --remote-allow-origins='*' &
+        chrome_pid=$$!
+        nginx -c /tmp/cdp-nginx.conf -g 'daemon off;' &
+        proxy_pid=$$!
+        # Si Chromium OU nginx tombe, arreter l'autre et laisser Docker redemarrer.
+        set +e
+        wait -n "$$chrome_pid" "$$proxy_pid"
+        status=$$?
+        set -e
+        echo "Un processus Chromium/proxy CDP s'est arrete (code $$status)." >&2
+        exit 1
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - |
+          # Controle HTTP/JSON : ce healthcheck ne valide PAS Page.enable/navigation.
+          response=$$(mktemp)
+          trap 'rm -f "$$response"' EXIT
+          code=$$(curl --noproxy '*' --silent --show-error --max-time 4 \
+            --header 'Host: hermes-browser:9222' \
+            --output "$$response" --write-out '%{http_code}' \
+            http://127.0.0.1:9222/json/version) || exit 1
+          [ "$$code" = 200 ] || exit 1
+          jq -e '.webSocketDebuggerUrl | strings | test("^ws://hermes-browser:9222/devtools/browser/[^/]+$$")' "$$response" >/dev/null
+      interval: 10s
+      timeout: 6s
+      retries: 10
+      start_period: 120s
+  hermes-browser-init:
+    image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
+    user: 0:0
+    restart: 'no'
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HOME=/home/hermeswebui
+      - NPM_CONFIG_CACHE=/tmp/.npm
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        if ! command -v vim >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends vim
+          rm -rf /var/lib/apt/lists/*
+        fi
+        for profile in john mario gaston; do
+          profile_dir="/home/hermeswebui/.hermes/profiles/$${profile}"
+          if [ ! -s "$${profile_dir}/config.yaml" ]; then
+            echo "Profil manquant ou non configure : $${profile_dir}/config.yaml" >&2
+            exit 1
+          fi
+        done
+        for profile in john mario gaston; do
+          profile_dir="/home/hermeswebui/.hermes/profiles/$${profile}"
+          mkdir -p "$${profile_dir}/node"
+          npm install --global --prefix "$${profile_dir}/node" \
+            --ignore-scripts 'agent-browser@^0.26.0'
+          chown -R 1000:1000 "$${profile_dir}"
+        done
+        mkdir -p /workspace
+        chown 1000:1000 /workspace
+    volumes:
+      - hermes-home:/home/hermeswebui/.hermes
+      - hermes-workspace:/workspace
+  hermes-webui:
+    image: ghcr.io/nesquena/hermes-webui:0.51.92
+    user: root
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 400
+    depends_on:
+      hermes-agent:
+        condition: service_started
+      hermes-browser:
+        condition: service_healthy
+      hermes-browser-init:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        if ! command -v vim >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends vim
+          rm -rf /var/lib/apt/lists/*
+        fi
+        export PATH="/home/hermeswebui/.hermes/profiles/gaston/node/bin:$$PATH"
+        # CDP passe directement par le proxy HTTP/WebSocket du service navigateur.
+        exec /hermeswebui_init.bash
+    environment:
+      - SERVICE_URL_HERMESWEBUI_8787
+      - HERMES_WEBUI_HOST=0.0.0.0
+      - HERMES_WEBUI_PORT=8787
+      - HERMES_HOME=/home/hermeswebui/.hermes
+      - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui
+      - WANTED_UID=1000
+      - WANTED_GID=1000
+      - HERMES_WEBUI_PASSWORD=${SERVICE_PASSWORD_HERMESWEBUI}
+      - BROWSER_CDP_URL=http://hermes-browser:9222
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+    volumes:
+      - hermes-home:/home/hermeswebui/.hermes
+      - hermes-agent-src:/home/hermeswebui/.hermes/hermes-agent:ro
+      - hermes-workspace:/workspace
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://127.0.0.1:8787/health
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
+
+  # Coffre unique, stockage Raft local chiffre. Pas de mode developpement.
+  # Le domaine HTTPS Coolify doit cibler le port interne 8200.
+  openbao:
+    image: openbao/openbao:2.7.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    # Limite RAM+swap egale a la RAM : pas de swap pour ce conteneur.
+    memswap_limit: 1g
+    mem_swappiness: 0
+    pids_limit: 100
+    ulimits:
+      core: 0
+    command: [server]
+    environment:
+      SERVICE_URL_OPENBAO_8200: null
+      BAO_ADDR: http://127.0.0.1:8200
+      BAO_API_ADDR: ${OPENBAO_PUBLIC_URL:?Configurer le domaine HTTPS public du coffre}
+      BAO_LOCAL_CONFIG: |
+        {
+          "ui": true,
+          "storage": {
+            "raft": {
+              "path": "/openbao/file",
+              "node_id": "hermes-secrets-1"
+            }
+          },
+          "listener": [{
+            "tcp": {
+              "address": "0.0.0.0:8200",
+              "tls_disable": true
+            }
+          }],
+          "cluster_addr": "https://127.0.0.1:8201",
+          "default_lease_ttl": "1h",
+          "max_lease_ttl": "24h"
+        }
+    volumes:
+      - openbao-data:/openbao/file
+      - openbao-audit:/openbao/logs
+    networks:
+      - secrets-access
+    # TLS termine par Coolify sur le meme hote : aucun port publie sur l'hote.
+    # Ce controle de VIE accepte l'etat scelle/non initialise pour permettre
+    # l'acces UI d'initialisation via le proxy. Il ne valide PAS la disponibilite
+    # des secrets. GET /v1/sys/health sans options doit retourner 200 apres unseal.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'bao status >/dev/null 2>&1; status=$$?; [ "$$status" -eq 0 ] || [ "$$status" -eq 2 ]'
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  hermes-home: null
+  hermes-agent-src: null
+  hermes-workspace: null
+  openbao-data: null
+  openbao-audit: null
+
+networks:
+  default: {}
+  # Reseau distinct de celui des agents ; Coolify doit y rattacher son proxy.
+  secrets-access: {}

@@ -56,6 +56,7 @@ fun ProfileEnvDialog(
     onSaveProviderKey: (providerId: String, apiKey: String, onFinished: (Boolean, String?) -> Unit) -> Unit,
     onDeleteProviderKey: (providerId: String, onFinished: ((Boolean, String?) -> Unit)?) -> Unit,
     onRefresh: () -> Unit,
+    onOpenOpenbao: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     LaunchedEffect(Unit) {
@@ -156,8 +157,22 @@ fun ProfileEnvDialog(
                         Text(
                             text = "Variables isolées dans le .env du profil « $activeProfile ».",
                             style = MaterialTheme.typography.labelSmall,
-                            color = HermesTextSecondary
+                            color = HermesTextSecondary,
+                            modifier = Modifier.weight(1f)
                         )
+                        if (onOpenOpenbao != null) {
+                            TextButton(
+                                onClick = {
+                                    onDismiss()
+                                    onOpenOpenbao()
+                                },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.Lock, contentDescription = null, tint = HermesSecondary, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("OpenBao", style = MaterialTheme.typography.labelSmall, color = HermesSecondary)
+                            }
+                        }
                     }
                 }
 

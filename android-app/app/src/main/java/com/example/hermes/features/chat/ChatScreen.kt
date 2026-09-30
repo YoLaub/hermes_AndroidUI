@@ -46,6 +46,7 @@ fun ChatScreen(
     var showProfilesSheet by remember { mutableStateOf(false) }
     var showCreateProfileDialog by remember { mutableStateOf(false) }
     var showProfileEnvDialog by remember { mutableStateOf(false) }
+    var showOpenBaoDialog by remember { mutableStateOf(false) }
     var showSkillsDialog by remember { mutableStateOf(false) }
     var showMemoryDialog by remember { mutableStateOf(false) }
     var showWorkspaceDialog by remember { mutableStateOf(false) }
@@ -506,6 +507,11 @@ fun ChatScreen(
                         viewModel.loadProviders()
                         showProfileEnvDialog = true
                     },
+                    onOpenOpenbao = {
+                        showProfilesSheet = false
+                        viewModel.loadOpenbaoSecrets()
+                        showOpenBaoDialog = true
+                    },
                     onDismiss = { showProfilesSheet = false },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -584,7 +590,53 @@ fun ChatScreen(
                     viewModel.loadProfileEnv()
                     viewModel.loadProviders()
                 },
+                onOpenOpenbao = {
+                    viewModel.loadOpenbaoSecrets()
+                    showOpenBaoDialog = true
+                },
                 onDismiss = { showProfileEnvDialog = false }
+            )
+        }
+
+        // OpenBao Vault Dialog (HashiCorp / OpenBao Secrets Management)
+        if (showOpenBaoDialog) {
+            OpenBaoVaultDialog(
+                activeProfile = state.activeProfile,
+                openbaoUrl = state.openbaoUrl,
+                openbaoToken = state.openbaoToken,
+                openbaoMount = state.openbaoMount,
+                health = state.openbaoHealth,
+                secrets = state.openbaoSecrets,
+                isLoading = state.isOpenbaoLoading,
+                errorMessage = state.openbaoError,
+                onSaveConfig = { url, token, mount, onFinished ->
+                    viewModel.saveOpenbaoConfig(url, token, mount, onFinished)
+                },
+                onSaveSecret = { key, value, onFinished ->
+                    viewModel.saveOpenbaoSecret(key, value, state.activeProfile) { success, err ->
+                        onFinished(success, err)
+                        if (success) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Secret $key enregistré dans OpenBao (hermes/${state.activeProfile})")
+                            }
+                        }
+                    }
+                },
+                onDeleteSecret = { key, onFinished ->
+                    viewModel.deleteOpenbaoSecret(key, state.activeProfile) { success, err ->
+                        onFinished(success, err)
+                        if (success) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Secret $key supprimé d'OpenBao")
+                            }
+                        }
+                    }
+                },
+                onRefresh = {
+                    viewModel.loadOpenbaoHealth()
+                    viewModel.loadOpenbaoSecrets()
+                },
+                onDismiss = { showOpenBaoDialog = false }
             )
         }
 

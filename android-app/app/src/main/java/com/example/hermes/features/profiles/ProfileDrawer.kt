@@ -33,6 +33,7 @@ fun ProfileDrawerContent(
     onOpenMemory: () -> Unit,
     onOpenWorkspaces: () -> Unit,
     onOpenEnv: () -> Unit,
+    onOpenOpenbao: () -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -301,6 +302,26 @@ fun ProfileDrawerContent(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Variables .env", fontSize = 11.sp)
                     }
+                }
+
+                // OpenBao Vault Button
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenOpenbao()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = HermesSecondaryContainer.copy(alpha = 0.25f),
+                        contentColor = HermesSecondary
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HermesSecondary.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = HermesSecondary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Coffre OpenBao (Secrets)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

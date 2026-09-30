@@ -20,7 +20,11 @@ class HermesPreferences(private val context: Context) {
         val KEY_ACTIVE_PROFILE = stringPreferencesKey("active_profile")
         val KEY_LAST_SESSION_ID = stringPreferencesKey("last_session_id")
         val KEY_LAST_WORKSPACE = stringPreferencesKey("last_workspace")
+        val KEY_OPENBAO_URL = stringPreferencesKey("openbao_url")
+        val KEY_OPENBAO_TOKEN = stringPreferencesKey("openbao_token")
+        val KEY_OPENBAO_MOUNT = stringPreferencesKey("openbao_mount")
         const val DEFAULT_SERVER_URL = "http://10.0.2.2:8000"
+        const val DEFAULT_OPENBAO_MOUNT = "secret"
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { preferences ->
@@ -45,6 +49,18 @@ class HermesPreferences(private val context: Context) {
 
     val lastWorkspace: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[KEY_LAST_WORKSPACE]
+    }
+
+    val openbaoUrl: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_OPENBAO_URL] ?: ""
+    }
+
+    val openbaoToken: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_OPENBAO_TOKEN]
+    }
+
+    val openbaoMount: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_OPENBAO_MOUNT] ?: DEFAULT_OPENBAO_MOUNT
     }
 
     suspend fun setServerUrl(url: String) {
@@ -103,6 +119,30 @@ class HermesPreferences(private val context: Context) {
             } else {
                 preferences.remove(KEY_LAST_WORKSPACE)
             }
+        }
+    }
+
+    suspend fun setOpenbaoUrl(url: String) {
+        val cleanUrl = url.trim().removeSuffix("/")
+        context.dataStore.edit { preferences ->
+            preferences[KEY_OPENBAO_URL] = cleanUrl
+        }
+    }
+
+    suspend fun setOpenbaoToken(token: String?) {
+        context.dataStore.edit { preferences ->
+            if (token != null && token.isNotBlank()) {
+                preferences[KEY_OPENBAO_TOKEN] = token.trim()
+            } else {
+                preferences.remove(KEY_OPENBAO_TOKEN)
+            }
+        }
+    }
+
+    suspend fun setOpenbaoMount(mount: String) {
+        val cleanMount = mount.trim().trim('/')
+        context.dataStore.edit { preferences ->
+            preferences[KEY_OPENBAO_MOUNT] = cleanMount.ifBlank { DEFAULT_OPENBAO_MOUNT }
         }
     }
 

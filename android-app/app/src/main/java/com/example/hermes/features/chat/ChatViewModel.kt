@@ -51,6 +51,13 @@ data class ChatUiState(
     val isEnvLoading: Boolean = false,
     val isEnvFallback: Boolean = false,
     val envPath: String = "",
+    val openbaoUrl: String = "",
+    val openbaoToken: String = "",
+    val openbaoMount: String = "secret",
+    val isOpenbaoLoading: Boolean = false,
+    val openbaoHealth: OpenBaoHealth? = null,
+    val openbaoSecrets: List<OpenBaoSecretItem> = emptyList(),
+    val openbaoError: String? = null,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -75,6 +82,21 @@ class ChatViewModel(
             // 0. Load server URL
             val savedUrl = repository.serverUrl.first()
             _uiState.update { it.copy(serverUrl = savedUrl) }
+
+            // 0.1 Load OpenBao configuration
+            val obUrl = repository.openbaoUrl.first()
+            val obToken = repository.openbaoToken.first()
+            val obMount = repository.openbaoMount.first()
+            _uiState.update {
+                it.copy(
+                    openbaoUrl = obUrl,
+                    openbaoToken = obToken ?: "",
+                    openbaoMount = obMount
+                )
+            }
+            if (obUrl.isNotBlank()) {
+                loadOpenbaoHealth()
+            }
 
             // 1. Load active profile
             val currentProfile = repository.activeProfile.first()
@@ -424,6 +446,102 @@ class ChatViewModel(
             } else {
                 val errorMsg = res.exceptionOrNull()?.message ?: "Erreur de suppression de la clé"
                 onComplete?.invoke(false, errorMsg)
+            }
+        }
+    }
+
+    // ── OpenBao Secrets Management ──
+    fun loadOpenbaoHealth(onComplete: ((Boolean, String?) -> Unit)? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOpenbaoLoading = true, openbaoError = null) }
+            val res = repository.checkOpenbaoHealth()
+            if (res.isSuccess) {
+                val health = res.getOrThrow()
+                _uiState.update { it.copy(openbaoHealth = health, isOpenbaoLoading = false) }
+                onComplete?.invoke(true, null)
+            } else {
+                val err = res.exceptionOrNull()?.localizedMessage ?: "Erreur de connexion à OpenBao"
+                _uiState.update { it.copy(openbaoHealth = null, isOpenbaoLoading = false, openbaoError = err) }
+                onComplete?.invoke(false, err)
+            }
+        }
+    }
+
+    fun saveOpenbaoConfig(url: String, token: String, mount: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.setOpenbaoConfig(url.trim(), token.trim(), mount.trim().ifBlank { "secret" })
+            _uiState.update {
+                it.copy(
+                    openbaoUrl = url.trim(),
+                    openbaoToken = token.trim(),
+                    openbaoMount = mount.trim().ifBlank { "secret" }
+                )
+            }
+            loadOpenbaoHealth { success, err ->
+                if (success) {
+                    loadOpenbaoSecrets()
+                }
+                onComplete?.invoke(success, err)
+            }
+        }
+    }
+
+    fun loadOpenbaoSecrets(profile: String? = null) {
+        val targetProfile = profile ?: _uiState.value.activeProfile
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOpenbaoLoading = true, openbaoError = null) }
+            val res = repository.getOpenbaoSecrets(targetProfile)
+            if (res.isSuccess) {
+                val secretMap = res.getOrThrow()
+                val secretItems = secretMap.map { (k, v) -> OpenBaoSecretItem(key = k, value = v) }.sortedBy { it.key }
+                _uiState.update {
+                    it.copy(
+                        openbaoSecrets = secretItems,
+                        isOpenbaoLoading = false
+                    )
+                }
+            } else {
+                val err = res.exceptionOrNull()?.localizedMessage ?: "Erreur de lecture des secrets"
+                _uiState.update {
+                    it.copy(
+                        isOpenbaoLoading = false,
+                        openbaoError = err
+                    )
+                }
+            }
+        }
+    }
+
+    fun saveOpenbaoSecret(key: String, value: String, profile: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        val targetProfile = profile ?: _uiState.value.activeProfile
+        val formattedKey = key.trim().uppercase()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOpenbaoLoading = true) }
+            val res = repository.saveOpenbaoSecret(targetProfile, formattedKey, value.trim())
+            if (res.isSuccess) {
+                loadOpenbaoSecrets(targetProfile)
+                onComplete?.invoke(true, null)
+            } else {
+                _uiState.update { it.copy(isOpenbaoLoading = false) }
+                val err = res.exceptionOrNull()?.localizedMessage ?: "Erreur d'enregistrement"
+                onComplete?.invoke(false, err)
+            }
+        }
+    }
+
+    fun deleteOpenbaoSecret(key: String, profile: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        val targetProfile = profile ?: _uiState.value.activeProfile
+        val formattedKey = key.trim().uppercase()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOpenbaoLoading = true) }
+            val res = repository.deleteOpenbaoSecret(targetProfile, formattedKey)
+            if (res.isSuccess) {
+                loadOpenbaoSecrets(targetProfile)
+                onComplete?.invoke(true, null)
+            } else {
+                _uiState.update { it.copy(isOpenbaoLoading = false) }
+                val err = res.exceptionOrNull()?.localizedMessage ?: "Erreur de suppression"
+                onComplete?.invoke(false, err)
             }
         }
     }
