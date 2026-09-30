@@ -190,7 +190,7 @@ class HermesRepository(
         if (rawError.contains("404")) {
             return Result.failure(
                 java.io.IOException(
-                    "HTTP 404 : Le serveur distant n'a pas encore le module /api/profile/env pour les variables personnalisées ($key). Seules les clés de providers IA standards sont configurables sans mise à jour du conteneur."
+                    "L'API officielle Hermes WebUI ne permet que la configuration des clés de providers IA (OpenAI, Anthropic, Gemini, Groq, OpenRouter, Mistral, DeepSeek...). Les variables tierces ($key) pour services, comptes ou MCP doivent être définies dans la section environment de votre docker-compose.yml."
                 )
             )
         }

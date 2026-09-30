@@ -32,17 +32,16 @@ import com.example.hermes.core.model.ProviderInfo
 import com.example.hermes.theme.*
 
 private val SUGGESTED_ENV_VARS = listOf(
-    "TELEGRAM_BOT_TOKEN",
-    "DISCORD_TOKEN",
-    "CRM_API_KEY",
-    "SERPAPI_API_KEY",
-    "TAVILY_API_KEY",
-    "GITHUB_TOKEN",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
     "GROQ_API_KEY",
-    "DATABASE_URL"
+    "OPENROUTER_API_KEY",
+    "MISTRAL_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "TOGETHER_API_KEY",
+    "PERPLEXITY_API_KEY",
+    "XAI_API_KEY"
 )
 
 @Composable
@@ -63,7 +62,7 @@ fun ProfileEnvDialog(
         onRefresh()
     }
 
-    var selectedTab by remember { mutableStateOf(0) } // 0 = All .env vars, 1 = AI Providers
+    var selectedTab by remember(isEnvFallback) { mutableStateOf(if (isEnvFallback) 1 else 0) }
     var showAddVarDialog by remember { mutableStateOf(false) }
     var editingVarKey by remember { mutableStateOf<String?>(null) }
     var editingVarValue by remember { mutableStateOf("") }
@@ -224,7 +223,7 @@ fun ProfileEnvDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Serveur en mode restreint : le conteneur distant n'a pas encore le module /api/profile/env. Seules les clés IA configurées sont lues. Pour vos variables de services/MCP, montez webui-backend sur Docker.",
+                                        text = "Mode officiel Hermes WebUI : le serveur officiel gère les clés des providers IA (OpenAI, Anthropic, Gemini, Groq...). Les variables de services, comptes ou MCP doivent être définies dans la section 'environment' du docker-compose.yml.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFFFEF08A),
                                         fontSize = 11.sp
