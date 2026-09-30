@@ -35,6 +35,7 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     onNavigateToSettings: () -> Unit,
     onNavigateToKanban: () -> Unit = {},
+    onNavigateToWorkspace: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -220,6 +221,15 @@ fun ChatScreen(
                                 imageVector = Icons.Default.ViewKanban,
                                 contentDescription = "Tableau Kanban",
                                 tint = HermesPrimary
+                            )
+                        }
+
+                        // Zone Commune (Notes & Audio, Calendrier, Forum)
+                        IconButton(onClick = onNavigateToWorkspace) {
+                            Icon(
+                                imageVector = Icons.Default.Hub,
+                                contentDescription = "Zone Commune (Notes, Audio, Forum)",
+                                tint = HermesTertiary
                             )
                         }
 

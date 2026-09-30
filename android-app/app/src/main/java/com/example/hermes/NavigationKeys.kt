@@ -6,3 +6,4 @@ import kotlinx.serialization.Serializable
 @Serializable data object AuthRoute : NavKey
 @Serializable data object ChatRoute : NavKey
 @Serializable data object KanbanRoute : NavKey
+@Serializable data object WorkspaceRoute : NavKey
