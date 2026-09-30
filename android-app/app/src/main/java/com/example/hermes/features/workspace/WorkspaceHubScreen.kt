@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.features.workspace.calendar.CalendarScreen
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
+import com.example.hermes.features.workspace.forum.ForumScreen
+import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesScreen
 import com.example.hermes.features.workspace.notes.NotesViewModel
 import com.example.hermes.theme.*
@@ -32,6 +34,7 @@ enum class WorkspaceTab(val title: String, val icon: ImageVector) {
 fun WorkspaceHubScreen(
     notesViewModel: NotesViewModel,
     calendarViewModel: CalendarViewModel,
+    forumViewModel: ForumViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -132,36 +135,7 @@ fun WorkspaceHubScreen(
                     CalendarScreen(viewModel = calendarViewModel)
                 }
                 WorkspaceTab.FORUM -> {
-                    // Placeholder for Forum Module (Step 3)
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Forum,
-                                contentDescription = null,
-                                tint = HermesTertiary,
-                                modifier = Modifier.size(54.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "🏛️ Forum de Discussion Multi-Agents",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = HermesTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Salons collaboratifs entre vous et vos profils sélectionnés (Mario, Gaston, etc.) (Étape 3).",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = HermesTextSecondary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                    }
+                    ForumScreen(viewModel = forumViewModel)
                 }
             }
         }

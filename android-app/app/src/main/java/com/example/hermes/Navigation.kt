@@ -9,6 +9,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.example.hermes.core.audio.AudioPlayerManager
 import com.example.hermes.core.audio.SpeechRecognitionManager
 import com.example.hermes.core.data.CalendarRepository
+import com.example.hermes.core.data.ForumRepository
 import com.example.hermes.core.data.HermesPreferences
 import com.example.hermes.core.data.HermesRepository
 import com.example.hermes.core.data.NotesRepository
@@ -20,6 +21,7 @@ import com.example.hermes.features.kanban.KanbanScreen
 import com.example.hermes.features.kanban.KanbanViewModel
 import com.example.hermes.features.workspace.WorkspaceHubScreen
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
+import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
 
 @Composable
@@ -29,6 +31,7 @@ fun MainNavigation() {
     val repository = remember { HermesRepository(preferences) }
     val notesRepository = remember { NotesRepository(context) }
     val calendarRepository = remember { CalendarRepository(context) }
+    val forumRepository = remember { ForumRepository(context) }
     val speechManager = remember { SpeechRecognitionManager(context) }
     val audioPlayer = remember { AudioPlayerManager(context) }
 
@@ -37,6 +40,7 @@ fun MainNavigation() {
     val kanbanViewModel = remember { KanbanViewModel(repository) }
     val notesViewModel = remember { NotesViewModel(notesRepository, speechManager, audioPlayer) }
     val calendarViewModel = remember { CalendarViewModel(calendarRepository) }
+    val forumViewModel = remember { ForumViewModel(forumRepository) }
 
     val backStack = rememberNavBackStack(AuthRoute)
 
@@ -67,6 +71,7 @@ fun MainNavigation() {
                         backStack.add(WorkspaceRoute)
                         notesViewModel.loadNotes()
                         calendarViewModel.loadCalendarData()
+                        forumViewModel.loadData()
                     }
                 )
             }
@@ -82,6 +87,7 @@ fun MainNavigation() {
                 WorkspaceHubScreen(
                     notesViewModel = notesViewModel,
                     calendarViewModel = calendarViewModel,
+                    forumViewModel = forumViewModel,
                     onNavigateBack = {
                         backStack.removeLastOrNull()
                     }
