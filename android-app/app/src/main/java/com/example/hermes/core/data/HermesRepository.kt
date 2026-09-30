@@ -139,7 +139,8 @@ class HermesRepository(
                     ProfileEnvResponse(
                         ok = true,
                         profile = preferences.activeProfile.first(),
-                        entries = entries
+                        entries = entries,
+                        isFallback = directRes.isFailure
                     )
                 )
             }
@@ -152,7 +153,7 @@ class HermesRepository(
         if (directRes.isSuccess) {
             return directRes
         }
-        // Fallback: If key matches a known provider, route to /api/providers
+        // Fallback: If key matches a known standard AI provider, route to /api/providers
         val providerSlug = when (key.trim().uppercase()) {
             "OPENAI_API_KEY", "OPENAI_KEY" -> "openai"
             "ANTHROPIC_API_KEY", "ANTHROPIC_KEY" -> "anthropic"
@@ -167,7 +168,7 @@ class HermesRepository(
             "XAI_API_KEY" -> "xai"
             "PERPLEXITY_API_KEY" -> "perplexity"
             "NOUS_API_KEY" -> "nous"
-            else -> if (key.endsWith("_API_KEY")) key.removeSuffix("_API_KEY").lowercase() else null
+            else -> null
         }
         if (providerSlug != null) {
             val provRes = if (value != null) {
@@ -184,6 +185,14 @@ class HermesRepository(
                     )
                 )
             }
+        }
+        val rawError = directRes.exceptionOrNull()?.message ?: ""
+        if (rawError.contains("404")) {
+            return Result.failure(
+                java.io.IOException(
+                    "HTTP 404 : Le serveur distant n'a pas encore le module /api/profile/env pour les variables personnalisées ($key). Seules les clés de providers IA standards sont configurables sans mise à jour du conteneur."
+                )
+            )
         }
         return directRes
     }

@@ -537,47 +537,53 @@ fun ChatScreen(
                 envEntries = state.envEntries,
                 providers = state.providers,
                 isLoading = state.isProvidersLoading || state.isEnvLoading,
-                onSaveEnvVar = { key, value ->
-                    viewModel.setProfileEnvVar(key, value) { success ->
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                if (success) "Variable $key enregistrée dans le .env du profil ${state.activeProfile}"
-                                else "Échec de l'enregistrement de $key"
-                            )
+                isEnvFallback = state.isEnvFallback,
+                onSaveEnvVar = { key, value, onFinished ->
+                    viewModel.setProfileEnvVar(key, value) { success, errorMsg ->
+                        onFinished(success, errorMsg)
+                        if (success) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Variable $key enregistrée dans le .env du profil ${state.activeProfile}")
+                            }
                         }
                     }
                 },
-                onDeleteEnvVar = { key ->
-                    viewModel.deleteProfileEnvVar(key) { success ->
+                onDeleteEnvVar = { key, onFinished ->
+                    viewModel.deleteProfileEnvVar(key) { success, errorMsg ->
+                        onFinished?.invoke(success, errorMsg)
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 if (success) "Variable $key supprimée du .env"
-                                else "Échec de la suppression de $key"
+                                else "Échec de la suppression de $key : ${errorMsg ?: ""}"
                             )
                         }
                     }
                 },
-                onSaveProviderKey = { providerId, apiKey ->
-                    viewModel.setProviderKey(providerId, apiKey) { success ->
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                if (success) "Clé $providerId enregistrée dans le .env du profil ${state.activeProfile}"
-                                else "Échec de l'enregistrement de la clé"
-                            )
+                onSaveProviderKey = { providerId, apiKey, onFinished ->
+                    viewModel.setProviderKey(providerId, apiKey) { success, errorMsg ->
+                        onFinished(success, errorMsg)
+                        if (success) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Clé $providerId enregistrée dans le .env du profil ${state.activeProfile}")
+                            }
                         }
                     }
                 },
-                onDeleteProviderKey = { providerId ->
-                    viewModel.deleteProviderKey(providerId) { success ->
+                onDeleteProviderKey = { providerId, onFinished ->
+                    viewModel.deleteProviderKey(providerId) { success, errorMsg ->
+                        onFinished?.invoke(success, errorMsg)
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 if (success) "Clé $providerId supprimée du .env"
-                                else "Échec de la suppression"
+                                else "Échec de la suppression : ${errorMsg ?: ""}"
                             )
                         }
                     }
                 },
-                onRefresh = { viewModel.loadProviders() },
+                onRefresh = {
+                    viewModel.loadProfileEnv()
+                    viewModel.loadProviders()
+                },
                 onDismiss = { showProfileEnvDialog = false }
             )
         }

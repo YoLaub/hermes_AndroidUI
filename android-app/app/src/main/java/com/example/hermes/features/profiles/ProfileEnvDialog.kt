@@ -20,6 +20,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -48,10 +51,11 @@ fun ProfileEnvDialog(
     envEntries: List<ProfileEnvEntry>,
     providers: List<ProviderInfo>,
     isLoading: Boolean,
-    onSaveEnvVar: (key: String, value: String) -> Unit,
-    onDeleteEnvVar: (key: String) -> Unit,
-    onSaveProviderKey: (providerId: String, apiKey: String) -> Unit,
-    onDeleteProviderKey: (providerId: String) -> Unit,
+    isEnvFallback: Boolean = false,
+    onSaveEnvVar: (key: String, value: String, onFinished: (Boolean, String?) -> Unit) -> Unit,
+    onDeleteEnvVar: (key: String, onFinished: ((Boolean, String?) -> Unit)?) -> Unit,
+    onSaveProviderKey: (providerId: String, apiKey: String, onFinished: (Boolean, String?) -> Unit) -> Unit,
+    onDeleteProviderKey: (providerId: String, onFinished: ((Boolean, String?) -> Unit)?) -> Unit,
     onRefresh: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -199,9 +203,39 @@ fun ProfileEnvDialog(
                 } else if (selectedTab == 0) {
                     // ── Tab 0: Generic .env Variables ──
                     Column(modifier = Modifier.weight(1f)) {
+                        if (isEnvFallback) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF2E2205),
+                                border = CardDefaults.outlinedCardBorder().copy(
+                                    brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFEAB308))
+                                ),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Icon(
+                                        Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEAB308),
+                                        modifier = Modifier.size(16.dp).padding(top = 1.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Serveur en mode restreint : le conteneur distant n'a pas encore le module /api/profile/env. Seules les clés IA configurées sont lues. Pour vos variables de services/MCP, montez webui-backend sur Docker.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFFEF08A),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+
                         Button(
                             onClick = {
-                                editingVarKey = ""
+                                editingVarKey = null
                                 editingVarValue = ""
                                 showAddVarDialog = true
                             },
@@ -329,7 +363,7 @@ fun ProfileEnvDialog(
                                                     )
                                                 }
                                                 IconButton(
-                                                    onClick = { onDeleteEnvVar(entry.key) },
+                                                    onClick = { onDeleteEnvVar(entry.key, null) },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(
@@ -417,7 +451,7 @@ fun ProfileEnvDialog(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (provider.hasKey) {
                                                 IconButton(
-                                                    onClick = { onDeleteProviderKey(provider.id) },
+                                                    onClick = { onDeleteProviderKey(provider.id, null) },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(
@@ -460,18 +494,37 @@ fun ProfileEnvDialog(
 
     // ── Generic Add / Edit .env Variable Dialog ──
     if (showAddVarDialog) {
-        var inputKey by remember { mutableStateOf(editingVarKey ?: "") }
-        var inputValue by remember { mutableStateOf(editingVarValue) }
+        var inputKey by remember(editingVarKey) { mutableStateOf(editingVarKey?.uppercase() ?: "") }
+        var inputValue by remember(editingVarKey, editingVarValue) { mutableStateOf(editingVarValue) }
         var varShowPassword by remember { mutableStateOf(false) }
+        var isSubmitting by remember { mutableStateOf(false) }
+        var submitError by remember { mutableStateOf<String?>(null) }
+
+        val isEditMode = !editingVarKey.isNullOrBlank()
 
         AlertDialog(
-            onDismissRequest = { showAddVarDialog = false },
+            onDismissRequest = {
+                if (!isSubmitting) {
+                    showAddVarDialog = false
+                    editingVarKey = null
+                    editingVarValue = ""
+                }
+            },
             title = {
-                Text(
-                    text = if (editingVarKey.isNullOrBlank()) "Ajouter une variable (.env)" else "Modifier $editingVarKey",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = HermesTextPrimary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Edit else Icons.Default.AddCircleOutline,
+                        contentDescription = null,
+                        tint = HermesPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isEditMode) "Modifier $editingVarKey" else "Ajouter une variable (.env)",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = HermesTextPrimary
+                    )
+                }
             },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -482,44 +535,60 @@ fun ProfileEnvDialog(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Suggested Presets Chips
-                    Text(
-                        text = "Suggestions rapides :",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = HermesTextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        SUGGESTED_ENV_VARS.forEach { suggestion ->
-                            SuggestionChip(
-                                onClick = { inputKey = suggestion },
-                                label = { Text(suggestion, fontSize = 10.sp) },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = OnyxDarkBackground,
-                                    labelColor = HermesPrimary
-                                ),
-                                border = SuggestionChipDefaults.suggestionChipBorder(
-                                    enabled = true,
-                                    borderColor = OnyxBorder
+                    if (!isEditMode) {
+                        // Suggested Presets Chips
+                        Text(
+                            text = "Suggestions rapides :",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = HermesTextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            SUGGESTED_ENV_VARS.forEach { suggestion ->
+                                SuggestionChip(
+                                    onClick = {
+                                        inputKey = suggestion.uppercase()
+                                        submitError = null
+                                    },
+                                    label = { Text(suggestion, fontSize = 10.sp) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = OnyxDarkBackground,
+                                        labelColor = HermesPrimary
+                                    ),
+                                    border = SuggestionChipDefaults.suggestionChipBorder(
+                                        enabled = true,
+                                        borderColor = OnyxBorder
+                                    )
                                 )
-                            )
+                            }
                         }
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Variable Name Field (Automatically UpperCase)
+                    // Variable Name Field (Automatically UpperCase & Underscores)
                     OutlinedTextField(
                         value = inputKey,
-                        onValueChange = { inputKey = it.uppercase().replace(" ", "_") },
-                        label = { Text("Nom de la variable (EN MAJUSCULES)") },
+                        onValueChange = { raw ->
+                            val sanitized = raw.uppercase()
+                                .replace(" ", "_")
+                                .replace("-", "_")
+                                .filter { it.isLetterOrDigit() || it == '_' }
+                            inputKey = sanitized
+                            submitError = null
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Next
+                        ),
+                        label = { Text("Nom de la variable (MAJUSCULES)") },
                         placeholder = { Text("EX: CRM_API_KEY, TELEGRAM_BOT_TOKEN") },
                         singleLine = true,
+                        enabled = !isSubmitting,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -535,10 +604,14 @@ fun ProfileEnvDialog(
                     // Variable Value Field
                     OutlinedTextField(
                         value = inputValue,
-                        onValueChange = { inputValue = it },
+                        onValueChange = {
+                            inputValue = it
+                            submitError = null
+                        },
                         label = { Text("Valeur / Clé / Paramètre") },
                         placeholder = { Text("sk-... ou https://... ou jeton") },
                         singleLine = true,
+                        enabled = !isSubmitting,
                         visualTransformation = if (varShowPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { varShowPassword = !varShowPassword }) {
@@ -558,25 +631,85 @@ fun ProfileEnvDialog(
                             unfocusedBorderColor = OnyxBorder
                         )
                     )
+
+                    // Inline Error Display (Never dismissed on failure so user can read it!)
+                    if (submitError != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF3F1313),
+                            border = CardDefaults.outlinedCardBorder().copy(
+                                brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFEF4444))
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(18.dp).padding(top = 1.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = submitError ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFFCA5A5),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         val finalKey = inputKey.trim().uppercase()
-                        if (finalKey.isNotBlank() && inputValue.isNotBlank()) {
-                            onSaveEnvVar(finalKey, inputValue.trim())
-                            showAddVarDialog = false
+                        val finalValue = inputValue.trim()
+                        if (finalKey.isNotBlank() && finalValue.isNotBlank()) {
+                            isSubmitting = true
+                            submitError = null
+                            onSaveEnvVar(finalKey, finalValue) { success, errorMsg ->
+                                isSubmitting = false
+                                if (success) {
+                                    showAddVarDialog = false
+                                    editingVarKey = null
+                                    editingVarValue = ""
+                                } else {
+                                    submitError = errorMsg ?: "Échec de l'enregistrement de la variable."
+                                }
+                            }
                         }
                     },
-                    enabled = inputKey.isNotBlank() && inputValue.isNotBlank(),
+                    enabled = inputKey.isNotBlank() && inputValue.isNotBlank() && !isSubmitting,
                     colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
                 ) {
-                    Text("Enregistrer dans .env")
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Enregistrement...", fontSize = 12.sp)
+                    } else {
+                        Text("Enregistrer dans .env", fontSize = 12.sp)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddVarDialog = false }) {
+                TextButton(
+                    onClick = {
+                        showAddVarDialog = false
+                        editingVarKey = null
+                        editingVarValue = ""
+                    },
+                    enabled = !isSubmitting
+                ) {
                     Text("Annuler")
                 }
             },
@@ -586,8 +719,15 @@ fun ProfileEnvDialog(
 
     // ── Edit Provider Key Sub-dialog ──
     selectedProviderForEdit?.let { provider ->
+        var isSubmittingKey by remember { mutableStateOf(false) }
+        var providerError by remember { mutableStateOf<String?>(null) }
+
         AlertDialog(
-            onDismissRequest = { selectedProviderForEdit = null },
+            onDismissRequest = {
+                if (!isSubmittingKey) {
+                    selectedProviderForEdit = null
+                }
+            },
             title = {
                 Text(
                     text = "Configurer ${provider.displayName}",
@@ -605,10 +745,14 @@ fun ProfileEnvDialog(
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = apiKeyInput,
-                        onValueChange = { apiKeyInput = it },
+                        onValueChange = {
+                            apiKeyInput = it
+                            providerError = null
+                        },
                         label = { Text("Clé d'API") },
                         placeholder = { Text("sk-...") },
                         singleLine = true,
+                        enabled = !isSubmittingKey,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { showPassword = !showPassword }) {
@@ -628,24 +772,76 @@ fun ProfileEnvDialog(
                             unfocusedBorderColor = OnyxBorder
                         )
                     )
+
+                    if (providerError != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF3F1313),
+                            border = CardDefaults.outlinedCardBorder().copy(
+                                brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFEF4444))
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(18.dp).padding(top = 1.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = providerError ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFFCA5A5),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (apiKeyInput.isNotBlank()) {
-                            onSaveProviderKey(provider.id, apiKeyInput.trim())
-                            selectedProviderForEdit = null
+                            isSubmittingKey = true
+                            providerError = null
+                            onSaveProviderKey(provider.id, apiKeyInput.trim()) { success, errorMsg ->
+                                isSubmittingKey = false
+                                if (success) {
+                                    selectedProviderForEdit = null
+                                } else {
+                                    providerError = errorMsg ?: "Échec de l'enregistrement de la clé."
+                                }
+                            }
                         }
                     },
-                    enabled = apiKeyInput.isNotBlank(),
+                    enabled = apiKeyInput.isNotBlank() && !isSubmittingKey,
                     colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
                 ) {
-                    Text("Enregistrer dans .env")
+                    if (isSubmittingKey) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Enregistrement...", fontSize = 12.sp)
+                    } else {
+                        Text("Enregistrer dans .env", fontSize = 12.sp)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { selectedProviderForEdit = null }) {
+                TextButton(
+                    onClick = { selectedProviderForEdit = null },
+                    enabled = !isSubmittingKey
+                ) {
                     Text("Annuler")
                 }
             },

@@ -150,7 +150,8 @@ data class ProfileEnvResponse(
     @SerialName("env_path") val envPath: String = "",
     val env: Map<String, String> = emptyMap(),
     val entries: List<ProfileEnvEntry> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val isFallback: Boolean = false
 )
 
 @Serializable

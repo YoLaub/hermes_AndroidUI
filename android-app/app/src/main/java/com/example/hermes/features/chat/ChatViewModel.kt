@@ -49,6 +49,7 @@ data class ChatUiState(
     val isProvidersLoading: Boolean = false,
     val envEntries: List<ProfileEnvEntry> = emptyList(),
     val isEnvLoading: Boolean = false,
+    val isEnvFallback: Boolean = false,
     val envPath: String = "",
     val isLoading: Boolean = false,
     val error: String? = null
@@ -361,7 +362,8 @@ class ChatViewModel(
                     it.copy(
                         envEntries = data.entries,
                         envPath = data.envPath,
-                        isEnvLoading = false
+                        isEnvLoading = false,
+                        isEnvFallback = data.isFallback
                     )
                 }
             } else {
@@ -370,54 +372,58 @@ class ChatViewModel(
         }
     }
 
-    fun setProfileEnvVar(key: String, value: String?, onComplete: ((Boolean) -> Unit)? = null) {
+    fun setProfileEnvVar(key: String, value: String?, onComplete: ((Boolean, String?) -> Unit)? = null) {
         viewModelScope.launch {
             val res = repository.setProfileEnvVar(key.trim().uppercase(), value)
             if (res.isSuccess) {
                 loadProfileEnv()
                 loadProviders()
-                onComplete?.invoke(true)
+                onComplete?.invoke(true, null)
             } else {
-                onComplete?.invoke(false)
+                val errorMsg = res.exceptionOrNull()?.message ?: "Erreur d'enregistrement"
+                onComplete?.invoke(false, errorMsg)
             }
         }
     }
 
-    fun deleteProfileEnvVar(key: String, onComplete: ((Boolean) -> Unit)? = null) {
+    fun deleteProfileEnvVar(key: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
         viewModelScope.launch {
             val res = repository.deleteProfileEnvVar(key.trim().uppercase())
             if (res.isSuccess) {
                 loadProfileEnv()
                 loadProviders()
-                onComplete?.invoke(true)
+                onComplete?.invoke(true, null)
             } else {
-                onComplete?.invoke(false)
+                val errorMsg = res.exceptionOrNull()?.message ?: "Erreur de suppression"
+                onComplete?.invoke(false, errorMsg)
             }
         }
     }
 
-    fun setProviderKey(provider: String, apiKey: String?, onComplete: ((Boolean) -> Unit)? = null) {
+    fun setProviderKey(provider: String, apiKey: String?, onComplete: ((Boolean, String?) -> Unit)? = null) {
         viewModelScope.launch {
             val res = repository.setProviderKey(provider, apiKey)
             if (res.isSuccess) {
                 loadProviders()
                 loadProfileEnv()
-                onComplete?.invoke(true)
+                onComplete?.invoke(true, null)
             } else {
-                onComplete?.invoke(false)
+                val errorMsg = res.exceptionOrNull()?.message ?: "Erreur d'enregistrement de la clé"
+                onComplete?.invoke(false, errorMsg)
             }
         }
     }
 
-    fun deleteProviderKey(provider: String, onComplete: ((Boolean) -> Unit)? = null) {
+    fun deleteProviderKey(provider: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
         viewModelScope.launch {
             val res = repository.deleteProviderKey(provider)
             if (res.isSuccess) {
                 loadProviders()
                 loadProfileEnv()
-                onComplete?.invoke(true)
+                onComplete?.invoke(true, null)
             } else {
-                onComplete?.invoke(false)
+                val errorMsg = res.exceptionOrNull()?.message ?: "Erreur de suppression de la clé"
+                onComplete?.invoke(false, errorMsg)
             }
         }
     }
