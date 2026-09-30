@@ -110,36 +110,24 @@ fun ChatScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = state.sessionTitle,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = HermesTextPrimary,
-                                maxLines = 1
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(if (state.isStreaming) HermesWarning else HermesSecondary)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (state.isStreaming) "Agent running" else "Connected",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = HermesTextMuted
+                    title = {},
+                    navigationIcon = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
+                            IconButton(onClick = { scope.launch { sessionsDrawerState.open() } }) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Conversations",
+                                    tint = HermesTextPrimary
                                 )
                             }
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { sessionsDrawerState.open() } }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Conversations",
-                                tint = HermesTextPrimary
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (state.isStreaming) HermesWarning else HermesSecondary)
                             )
                         }
                     },
