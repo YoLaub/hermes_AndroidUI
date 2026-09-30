@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -148,6 +150,8 @@ fun ToolCallCard(
                         .clip(RoundedCornerShape(6.dp))
                         .background(HermesCodeBackground)
                         .padding(8.dp)
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     toolCall.args?.let { args ->
                         Text(

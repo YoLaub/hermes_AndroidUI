@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -25,7 +27,7 @@ fun ReasoningCard(
     isStreaming: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember { mutableStateOf(isStreaming) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -80,17 +82,22 @@ fun ReasoningCard(
 
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = HermesTextMuted,
                     modifier = Modifier.size(18.dp)
                 )
             }
 
             AnimatedVisibility(visible = expanded) {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(HermesCodeBackground)
+                        .padding(8.dp)
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     Text(
                         text = reasoning,

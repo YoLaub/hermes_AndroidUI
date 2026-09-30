@@ -102,8 +102,14 @@ fun MessageBubble(
                         }
                     }
 
+                    // Extract any inline <think>...</think> from content if reasoning is not set
+                    val (extractedReasoning, displayContent) = parseContentAndReasoning(
+                        content = message.content,
+                        explicitReasoning = message.reasoning
+                    )
+
                     // Reasoning Trace if present (assistant)
-                    message.reasoning?.takeIf { it.isNotBlank() }?.let { reasoning ->
+                    extractedReasoning?.takeIf { it.isNotBlank() }?.let { reasoning ->
                         ReasoningCard(reasoning = reasoning, isStreaming = false)
                         Spacer(modifier = Modifier.height(6.dp))
                     }
@@ -116,10 +122,10 @@ fun MessageBubble(
                         Spacer(modifier = Modifier.height(6.dp))
                     }
 
-                    // Message Content
-                    if (message.content.isNotBlank()) {
+                    // Cleaned Message Content
+                    if (displayContent.isNotBlank()) {
                         MarkdownText(
-                            text = message.content,
+                            text = displayContent,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -147,4 +153,46 @@ fun MessageBubble(
             }
         }
     }
+}
+
+private fun parseContentAndReasoning(
+    content: String,
+    explicitReasoning: String?
+): Pair<String?, String> {
+    var raw = content
+    // Strip XML tool calling syntax (<function_calls>...</function_calls>)
+    if (raw.contains("function_calls", ignoreCase = true)) {
+        raw = raw.replace(Regex("<(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls>[\\s\\S]*?</(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls>", RegexOption.IGNORE_CASE), "")
+        raw = raw.replace(Regex("<(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls(?:>|$)[\\s\\S]*$", RegexOption.IGNORE_CASE), "")
+        raw = raw.replace(Regex("<\\s*｜\\s*DSML\\s*[｜|]\\s*", RegexOption.IGNORE_CASE), "")
+    }
+
+    if (!explicitReasoning.isNullOrBlank()) {
+        // Also strip any redundant <think> tags from content if reasoning was already provided
+        val stripped = raw.replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<\\|channel>thought\\n[\\s\\S]*?<channel\\|>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<\\|turn\\|>thinking\\n[\\s\\S]*?<turn\\|>", RegexOption.IGNORE_CASE), "")
+            .trim()
+        return Pair(explicitReasoning, stripped)
+    }
+
+    // Check for inline think blocks
+    val thinkRegex = Regex("<think>([\\s\\S]*?)</think>", RegexOption.IGNORE_CASE)
+    val match = thinkRegex.find(raw)
+    if (match != null) {
+        val extracted = match.groupValues[1].trim()
+        val remaining = raw.removeRange(match.range).trim()
+        return Pair(extracted.ifBlank { null }, remaining)
+    }
+
+    // Gemma/other channel thought format
+    val channelRegex = Regex("<\\|channel>thought\\n([\\s\\S]*?)<channel\\|>", RegexOption.IGNORE_CASE)
+    val channelMatch = channelRegex.find(raw)
+    if (channelMatch != null) {
+        val extracted = channelMatch.groupValues[1].trim()
+        val remaining = raw.removeRange(channelMatch.range).trim()
+        return Pair(extracted.ifBlank { null }, remaining)
+    }
+
+    return Pair(null, raw.trim())
 }
