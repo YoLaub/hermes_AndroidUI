@@ -319,6 +319,127 @@ class ModelsSerializationTest {
         assertTrue(res.boards[0].isCurrent)
         assertEquals(12, res.boards[0].total)
     }
+
+    @Test
+    fun testKanbanBoardWithObjectAgeSecondsAndNulls() {
+        val kanbanJson = """
+            {
+              "columns": [
+                {
+                  "name": "done",
+                  "tasks": [
+                    {
+                      "id": "task_xyz",
+                      "title": "Complex task with object age",
+                      "body": null,
+                      "status": "done",
+                      "priority": 0,
+                      "assignee": null,
+                      "tenant": null,
+                      "progress": null,
+                      "age_seconds": {
+                        "created_age_sec": 7200.0,
+                        "updated_age_sec": 120.0
+                      },
+                      "link_counts": null,
+                      "comment_count": 0
+                    }
+                  ]
+                }
+              ],
+              "tenants": [],
+              "assignees": [],
+              "latest_event_id": 99,
+              "changed": true,
+              "read_only": false
+            }
+        """.trimIndent()
+        val board = json.decodeFromString<KanbanBoardResponse>(kanbanJson)
+        assertEquals(1, board.columns.size)
+        val task = board.columns[0].tasks[0]
+        assertEquals("task_xyz", task.id)
+        assertNotNull(task.ageSeconds)
+        assertEquals(7200.0, task.ageSeconds!!, 0.001)
+    }
+
+    @Test
+    fun testSessionsResponseWithMixedDateFormats() {
+        val sessionsJson = """
+            {
+              "sessions": [
+                {
+                  "session_id": "sid_1",
+                  "title": "Chat 1",
+                  "created_at": "2026-09-30T07:12:00Z",
+                  "updated_at": "2026-09-30 08:30:00",
+                  "last_message_at": 1727500000.0,
+                  "message_count": 5
+                },
+                {
+                  "session_id": "sid_2",
+                  "title": "Chat 2",
+                  "created_at": 1727400000,
+                  "updated_at": 1727450000.5,
+                  "last_message_at": "2026-09-29T10:00:00Z",
+                  "message_count": 2
+                }
+              ],
+              "other_profile_count": 1
+            }
+        """.trimIndent()
+        val res = json.decodeFromString<SessionsResponse>(sessionsJson)
+        assertEquals(2, res.sessions.size)
+        assertTrue(res.sessions[0].createdAt > 0)
+        assertTrue(res.sessions[0].updatedAt > 0)
+        assertEquals(1727500000.0, res.sessions[0].lastMessageAt!!, 0.001)
+        assertTrue(res.sessions[1].lastMessageAt!! > 0)
+    }
+
+    @Test
+    fun testSessionDetailWithComplexToolCallsAndReasoning() {
+        val detailJson = """
+            {
+              "session_id": "sid_complex",
+              "title": "Complex Session",
+              "created_at": "2026-09-30 07:00:00",
+              "updated_at": 1727670000.0,
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "reasoning": {
+                    "text": "Thinking about the query..."
+                  },
+                  "tool_calls": [
+                    {
+                      "name": "bash",
+                      "output": {
+                        "status": "success",
+                        "code": 0
+                      },
+                      "duration": {
+                        "seconds": 1.25
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+        val detail = json.decodeFromString<SessionDetail>(detailJson)
+        assertEquals("sid_complex", detail.sessionId)
+        assertEquals(1, detail.messages.size)
+        val msg = detail.messages[0]
+        assertEquals("", msg.content)
+        assertNotNull(msg.reasoning)
+        assertTrue(msg.reasoning!!.contains("Thinking about the query"))
+        val tc = msg.toolCalls?.firstOrNull()
+        assertNotNull(tc)
+        assertEquals("bash", tc?.name)
+        assertNotNull(tc?.output)
+        assertTrue(tc!!.output!!.contains("success"))
+        assertEquals(1.25, tc.duration ?: 0.0, 0.001)
+    }
 }
 
 

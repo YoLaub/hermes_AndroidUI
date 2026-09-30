@@ -239,7 +239,8 @@ class ChatViewModel(
                 }
                 fetchYoloStatus(detail.sessionId)
             } else {
-                _uiState.update { it.copy(isLoading = false, error = "Failed to load session history") }
+                val errMsg = detailResult.exceptionOrNull()?.localizedMessage ?: "Erreur inconnue"
+                _uiState.update { it.copy(isLoading = false, error = "Impossible de charger la conversation : $errMsg") }
             }
         }
     }

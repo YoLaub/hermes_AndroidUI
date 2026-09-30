@@ -1,3 +1,4 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 package com.example.hermes.core.model
 
 import kotlinx.serialization.KSerializer
@@ -131,40 +132,7 @@ data class ProviderKeyResponse(
     val message: String? = null
 )
 
-// ── Session Models ──────────────────────────────────────────────────────────
-
-@Serializable
-data class SessionSummary(
-    @SerialName("session_id") val sessionId: String,
-    val title: String = "New Chat",
-    val workspace: String? = null,
-    val model: String? = null,
-    @SerialName("model_provider") val modelProvider: String? = null,
-    @SerialName("message_count") val messageCount: Int = 0,
-    @SerialName("created_at") val createdAt: Double = 0.0,
-    @SerialName("updated_at") val updatedAt: Double = 0.0,
-    @SerialName("last_message_at") val lastMessageAt: Double? = null,
-    val pinned: Boolean = false,
-    val archived: Boolean = false,
-    val profile: String? = null
-)
-
-@Serializable
-data class SessionsResponse(
-    val sessions: List<SessionSummary> = emptyList(),
-    @SerialName("other_profile_count") val otherProfileCount: Int = 0
-)
-
-@Serializable
-data class ToolCall(
-    val id: String? = null,
-    val name: String,
-    val args: JsonElement? = null,
-    val output: String? = null,
-    val duration: Double? = null,
-    @SerialName("is_error") val isError: Boolean = false
-)
-
+// ── Resilient Serializers ───────────────────────────────────────────────────
 
 object FlexibleStringSerializer : KSerializer<String> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleString", PrimitiveKind.STRING)
@@ -172,6 +140,7 @@ object FlexibleStringSerializer : KSerializer<String> {
     override fun deserialize(decoder: Decoder): String {
         return if (decoder is JsonDecoder) {
             when (val element = decoder.decodeJsonElement()) {
+                is JsonNull -> ""
                 is JsonPrimitive -> element.content
                 is JsonArray -> {
                     element.joinToString("\n") { item ->
@@ -187,7 +156,6 @@ object FlexibleStringSerializer : KSerializer<String> {
                 is JsonObject -> {
                     (element["text"] as? JsonPrimitive)?.content ?: element.toString()
                 }
-                else -> element.toString()
             }
         } else {
             decoder.decodeString()
@@ -198,6 +166,186 @@ object FlexibleStringSerializer : KSerializer<String> {
         encoder.encodeString(value)
     }
 }
+
+object FlexibleNullableStringSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleNullableString", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String? {
+        return if (decoder is JsonDecoder) {
+            when (val element = decoder.decodeJsonElement()) {
+                is JsonNull -> null
+                is JsonPrimitive -> element.content
+                is JsonArray -> element.toString()
+                is JsonObject -> {
+                    (element["text"] as? JsonPrimitive)?.content
+                        ?: (element["message"] as? JsonPrimitive)?.content
+                        ?: (element["output"] as? JsonPrimitive)?.content
+                        ?: element.toString()
+                }
+            }
+        } else {
+            try { decoder.decodeString() } catch (_: Exception) { null }
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value)
+    }
+}
+
+private fun parseDateStringToEpoch(str: String): Double? {
+    val s = str.trim()
+    if (s.isEmpty() || s == "null") return null
+    return try {
+        // Try parsing ISO-8601 (e.g. 2026-09-30T07:12:00Z)
+        java.time.Instant.parse(s).toEpochMilli() / 1000.0
+    } catch (_: Exception) {
+        try {
+            // Try standard SQL datetime (e.g. 2026-09-30 07:12:00)
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+            val ldt = java.time.LocalDateTime.parse(s.take(19), formatter)
+            ldt.toEpochSecond(java.time.ZoneOffset.UTC).toDouble()
+        } catch (_: Exception) {
+            try {
+                // Try epoch number as string (e.g. "1727679800" or "1727679800000")
+                val num = s.toDoubleOrNull()
+                if (num != null && num > 1e11) num / 1000.0 else num
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+}
+
+object FlexibleTimestampSerializer : KSerializer<Double?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleTimestamp", PrimitiveKind.DOUBLE)
+
+    override fun deserialize(decoder: Decoder): Double? {
+        if (decoder !is JsonDecoder) {
+            return try { decoder.decodeDouble() } catch (_: Exception) { null }
+        }
+        return when (val element = decoder.decodeJsonElement()) {
+            is JsonNull -> null
+            is JsonPrimitive -> {
+                val d = element.doubleOrNull
+                if (d != null) {
+                    if (d > 1e11) d / 1000.0 else d
+                } else {
+                    parseDateStringToEpoch(element.content)
+                }
+            }
+            is JsonObject -> {
+                element["timestamp"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["created_at"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["time"]?.jsonPrimitive?.doubleOrNull
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: Double?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeDouble(value)
+    }
+}
+
+object FlexibleRequiredTimestampSerializer : KSerializer<Double> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleRequiredTimestamp", PrimitiveKind.DOUBLE)
+
+    override fun deserialize(decoder: Decoder): Double {
+        if (decoder !is JsonDecoder) {
+            return try { decoder.decodeDouble() } catch (_: Exception) { 0.0 }
+        }
+        return when (val element = decoder.decodeJsonElement()) {
+            is JsonNull -> 0.0
+            is JsonPrimitive -> {
+                val d = element.doubleOrNull
+                if (d != null) {
+                    if (d > 1e11) d / 1000.0 else d
+                } else {
+                    parseDateStringToEpoch(element.content) ?: 0.0
+                }
+            }
+            is JsonObject -> {
+                element["timestamp"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["created_at"]?.jsonPrimitive?.doubleOrNull
+                    ?: 0.0
+            }
+            else -> 0.0
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: Double) {
+        encoder.encodeDouble(value)
+    }
+}
+
+object FlexibleAgeSecondsSerializer : KSerializer<Double?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleAgeSeconds", PrimitiveKind.DOUBLE)
+
+    override fun deserialize(decoder: Decoder): Double? {
+        if (decoder !is JsonDecoder) return null
+        return when (val element = decoder.decodeJsonElement()) {
+            is JsonNull -> null
+            is JsonPrimitive -> {
+                element.doubleOrNull ?: element.content.toDoubleOrNull()
+            }
+            is JsonObject -> {
+                // Backend can send: {"created_age_sec": 123.4, ...}
+                element["created_age_sec"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["created_age_seconds"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["age"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["seconds"]?.jsonPrimitive?.doubleOrNull
+                    ?: element.values.firstNotNullOfOrNull {
+                        (it as? JsonPrimitive)?.doubleOrNull ?: (it as? JsonPrimitive)?.content?.toDoubleOrNull()
+                    }
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: Double?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeDouble(value)
+    }
+}
+
+// ── Session Models ──────────────────────────────────────────────────────────
+
+@Serializable
+data class SessionSummary(
+    @SerialName("session_id") val sessionId: String,
+    val title: String = "New Chat",
+    val workspace: String? = null,
+    val model: String? = null,
+    @SerialName("model_provider") val modelProvider: String? = null,
+    @SerialName("message_count") val messageCount: Int = 0,
+    @Serializable(with = FlexibleRequiredTimestampSerializer::class)
+    @SerialName("created_at") val createdAt: Double = 0.0,
+    @Serializable(with = FlexibleRequiredTimestampSerializer::class)
+    @SerialName("updated_at") val updatedAt: Double = 0.0,
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    @SerialName("last_message_at") val lastMessageAt: Double? = null,
+    val pinned: Boolean = false,
+    val archived: Boolean = false,
+    val profile: String? = null
+)
+
+@Serializable
+data class SessionsResponse(
+    val sessions: List<SessionSummary> = emptyList(),
+    @SerialName("other_profile_count") val otherProfileCount: Int = 0
+)
+
+@Serializable
+data class ToolCall(
+    val id: String? = null,
+    val name: String = "",
+    val args: JsonElement? = null,
+    @Serializable(with = FlexibleNullableStringSerializer::class)
+    val output: String? = null,
+    @Serializable(with = FlexibleAgeSecondsSerializer::class)
+    val duration: Double? = null,
+    @SerialName("is_error") val isError: Boolean = false
+)
 
 @Serializable
 data class ChatAttachment(
@@ -213,11 +361,15 @@ data class ChatMessage(
     val role: String = "assistant", // "user", "assistant", "system"
     @Serializable(with = FlexibleStringSerializer::class)
     val content: String = "",
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     @SerialName("created_at") val createdAt: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     @SerialName("_ts") val ts: Double? = null,
     @SerialName("tool_calls") val toolCalls: List<ToolCall>? = null,
     val attachments: List<ChatAttachment>? = null,
+    @Serializable(with = FlexibleNullableStringSerializer::class)
     val reasoning: String? = null
 )
 
@@ -229,7 +381,9 @@ data class SessionDetail(
     val model: String? = null,
     @SerialName("model_provider") val modelProvider: String? = null,
     val profile: String? = null,
+    @Serializable(with = FlexibleRequiredTimestampSerializer::class)
     @SerialName("created_at") val createdAt: Double = 0.0,
+    @Serializable(with = FlexibleRequiredTimestampSerializer::class)
     @SerialName("updated_at") val updatedAt: Double = 0.0,
     val messages: List<ChatMessage> = emptyList(),
     val pinned: Boolean = false,
@@ -551,15 +705,17 @@ data class SessionRepairResponse(
 @Serializable
 data class KanbanTask(
     val id: String,
-    val title: String,
+    val title: String = "",
     val body: String? = null,
     val status: String = "todo",
     val priority: Int = 0,
     val assignee: String? = null,
     val tenant: String? = null,
+    @Serializable(with = FlexibleAgeSecondsSerializer::class)
     @SerialName("age_seconds") val ageSeconds: Double? = null,
+    @Serializable(with = FlexibleAgeSecondsSerializer::class)
     val progress: Double? = null,
-    @SerialName("link_counts") val linkCounts: Map<String, Int> = emptyMap(),
+    @SerialName("link_counts") val linkCounts: Map<String, Int>? = emptyMap(),
     @SerialName("comment_count") val commentCount: Int = 0
 )
 

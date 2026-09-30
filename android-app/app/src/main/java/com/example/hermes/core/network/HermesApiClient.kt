@@ -4,7 +4,7 @@ import com.example.hermes.core.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -151,9 +151,21 @@ class HermesApiClient(
             .get()
             .build()
         try {
-            val response: SessionDetailResponse = executeRequestInternal(request)
-            Result.success(response.session)
+            okHttpClient.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP ${response.code}: $bodyString")
+                }
+                val element = json.parseToJsonElement(bodyString)
+                val detail = if (element is JsonObject && element.containsKey("session")) {
+                    json.decodeFromJsonElement<SessionDetail>(element["session"]!!)
+                } else {
+                    json.decodeFromJsonElement<SessionDetail>(element)
+                }
+                Result.success(detail)
+            }
         } catch (e: Exception) {
+            android.util.Log.e("HermesApiClient", "Failed to parse session $sessionId", e)
             Result.failure(e)
         }
     }
