@@ -2156,9 +2156,78 @@ def _clean_provider_key_from_config(provider_id: str) -> None:
 
 
 def get_profile_env() -> dict[str, Any]:
-    """Return all environment variables stored in the active profile's .env file."""
-    env_path = _get_hermes_home() / ".env"
-    values = _load_env_file(env_path)
+    """Return all environment variables for the active profile, merging
+    profile-specific .env, base .env, config.yaml credentials, and server process env.
+    """
+    home = _get_hermes_home()
+    env_path = home / ".env"
+    values: dict[str, str] = {}
+
+    # 1. Base ~/.hermes/.env file
+    try:
+        from api.profiles import _resolve_base_hermes_home
+        base_home = _resolve_base_hermes_home()
+    except Exception:
+        base_home = Path.home() / ".hermes"
+    base_env_path = base_home / ".env"
+    if base_env_path.exists():
+        for k, v in _load_env_file(base_env_path).items():
+            if v:
+                values[k] = v
+
+    # 2. Server process environment variables (Docker / OS env)
+    # Include all known provider env vars, tokens, keys, URLs, and integrations
+    _EXCLUDE_ENV_KEYS = {
+        "PATH", "PWD", "HOME", "SHLVL", "TERM", "USER", "LOGNAME", "SHELL",
+        "HOSTNAME", "PYTHONPATH", "PYTHONHOME", "LANG", "LC_ALL", "DEBIAN_FRONTEND"
+    }
+    for k, v in os.environ.items():
+        if k in _EXCLUDE_ENV_KEYS or not v:
+            continue
+        # Known provider env vars
+        if k in _PROVIDER_ENV_VAR.values():
+            values[k] = v
+        # Custom integrations (Tokens, Keys, Secrets, URLs, Webhooks)
+        elif any(k.endswith(sfx) for sfx in ("_API_KEY", "_TOKEN", "_SECRET", "_KEY", "_URL", "_PASSWORD", "_PASS", "_WEBHOOK", "_BOT_TOKEN", "_CONN")):
+            values[k] = v
+        # Service-specific prefixes
+        elif any(k.startswith(pfx) for pfx in ("HERMES_", "TELEGRAM_", "DISCORD_", "SLACK_", "CRM_", "OPENAI_", "ANTHROPIC_", "GROQ_", "MISTRAL_", "SERPAPI_", "TAVILY_", "GITHUB_", "OLLAMA_", "LLM_")):
+            if not k.startswith("HERMES_INTERNAL_") and k not in {"HERMES_UID", "HERMES_GID", "HERMES_PORT", "HERMES_WEBUI_HOST"}:
+                values[k] = v
+
+    # 3. Keys configured in config.yaml
+    try:
+        cfg = get_config()
+        model_cfg = cfg.get("model", {})
+        if isinstance(model_cfg, dict):
+            m_key = model_cfg.get("api_key")
+            m_prov = model_cfg.get("provider")
+            if m_key and m_prov:
+                env_name = _PROVIDER_ENV_VAR.get(str(m_prov).lower(), f"{str(m_prov).upper()}_API_KEY")
+                if str(m_key).strip():
+                    values[env_name] = str(m_key).strip()
+        providers_cfg = cfg.get("providers", {})
+        if isinstance(providers_cfg, dict):
+            for pid, pcfg in providers_cfg.items():
+                if isinstance(pcfg, dict) and pcfg.get("api_key"):
+                    env_name = _PROVIDER_ENV_VAR.get(pid, f"{pid.upper()}_API_KEY")
+                    if str(pcfg["api_key"]).strip():
+                        values[env_name] = str(pcfg["api_key"]).strip()
+        custom_providers_cfg = cfg.get("custom_providers", [])
+        if isinstance(custom_providers_cfg, list):
+            for cp in custom_providers_cfg:
+                if isinstance(cp, dict) and cp.get("name") and cp.get("api_key"):
+                    cp_name = str(cp["name"]).strip().upper()
+                    values[f"{cp_name}_API_KEY"] = str(cp["api_key"]).strip()
+    except Exception:
+        pass
+
+    # 4. Profile-specific .env (Highest priority overrides)
+    if env_path.exists():
+        for k, v in _load_env_file(env_path).items():
+            if v is not None:
+                values[k] = v
+
     entries = []
     for k, v in sorted(values.items()):
         entries.append({
@@ -2166,11 +2235,13 @@ def get_profile_env() -> dict[str, Any]:
             "value": v,
             "has_value": bool(v),
         })
+
     try:
         from api.profiles import get_active_profile_name
         profile_name = get_active_profile_name()
     except Exception:
         profile_name = "default"
+
     return {
         "ok": True,
         "profile": profile_name,
