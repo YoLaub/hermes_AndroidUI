@@ -207,41 +207,58 @@ fun ChatScreen(
                         )
 
                         // New Chat
-                        IconButton(onClick = { viewModel.createNewSession() }) {
+                        IconButton(
+                            onClick = { viewModel.createNewSession() },
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.AddComment,
                                 contentDescription = "New Chat",
-                                tint = HermesPrimary
+                                tint = HermesPrimary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
                         // Kanban Board
-                        IconButton(onClick = onNavigateToKanban) {
+                        IconButton(
+                            onClick = onNavigateToKanban,
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.ViewKanban,
                                 contentDescription = "Tableau Kanban",
-                                tint = HermesPrimary
+                                tint = HermesPrimary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
                         // Zone Commune (Notes & Audio, Calendrier, Forum)
-                        IconButton(onClick = onNavigateToWorkspace) {
+                        IconButton(
+                            onClick = onNavigateToWorkspace,
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Hub,
                                 contentDescription = "Zone Commune (Notes, Audio, Forum)",
-                                tint = HermesTertiary
+                                tint = HermesTertiary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
                         // Settings / Server Config & Tools
-                        IconButton(onClick = { showSettingsDialog = true }) {
+                        IconButton(
+                            onClick = { showSettingsDialog = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "Paramètres & Outils",
-                                tint = HermesTextSecondary
+                                tint = HermesTextSecondary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     },
+                    windowInsets = WindowInsets.statusBars,
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = OnyxDarkSurface
                     )
@@ -396,7 +413,7 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 12.dp),
-                        contentPadding = PaddingValues(vertical = 12.dp)
+                        contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp)
                     ) {
                         items(state.messages) { msg ->
                             MessageBubble(message = msg)

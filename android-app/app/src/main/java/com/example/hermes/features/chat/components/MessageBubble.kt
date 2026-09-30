@@ -28,7 +28,7 @@ fun MessageBubble(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = 3.dp),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {
@@ -160,6 +160,10 @@ private fun parseContentAndReasoning(
     explicitReasoning: String?
 ): Pair<String?, String> {
     var raw = content
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .trim()
+
     // Strip XML tool calling syntax (<function_calls>...</function_calls>)
     if (raw.contains("function_calls", ignoreCase = true)) {
         raw = raw.replace(Regex("<(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls>[\\s\\S]*?</(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls>", RegexOption.IGNORE_CASE), "")
@@ -173,7 +177,7 @@ private fun parseContentAndReasoning(
             .replace(Regex("<\\|channel>thought\\n[\\s\\S]*?<channel\\|>", RegexOption.IGNORE_CASE), "")
             .replace(Regex("<\\|turn\\|>thinking\\n[\\s\\S]*?<turn\\|>", RegexOption.IGNORE_CASE), "")
             .trim()
-        return Pair(explicitReasoning, stripped)
+        return Pair(explicitReasoning.trim(), stripped)
     }
 
     // Check for inline think blocks

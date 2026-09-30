@@ -40,15 +40,22 @@ fun MarkdownText(
 
     // Cache the parsed blocks so we don't re-parse markdown on every recomposition
     val blocks = remember(text, color) {
-        val parts = text.split("```")
-        parts.mapIndexed { index, part ->
+        val cleanText = text
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .trim()
+
+        val parts = cleanText.split("```")
+        parts.mapIndexedNotNull { index, part ->
             if (index % 2 == 1) {
                 val lines = part.lines()
                 val lang = lines.firstOrNull()?.trim() ?: ""
                 val code = if (lines.size > 1) lines.drop(1).joinToString("\n") else part
                 MarkdownBlock.Code(lang = lang.ifEmpty { "code" }, code = code.trimEnd())
             } else {
-                MarkdownBlock.Content(annotatedText = parseInlineMarkdown(part, color))
+                val trimmedPart = part.trim('\r', '\n')
+                if (trimmedPart.isEmpty() && parts.size > 1) null
+                else MarkdownBlock.Content(annotatedText = parseInlineMarkdown(trimmedPart, color))
             }
         }
     }

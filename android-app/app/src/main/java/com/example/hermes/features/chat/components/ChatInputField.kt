@@ -38,12 +38,14 @@ fun ChatInputField(
     Surface(
         color = OnyxDarkSurface,
         tonalElevation = 6.dp,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(start = 12.dp, top = 6.dp, end = 12.dp, bottom = 12.dp)
         ) {
             // Attachment preview chips if any
             if (pendingAttachments.isNotEmpty()) {
