@@ -68,6 +68,37 @@ fun ProfileEnvDialog(
     var showPassword by remember { mutableStateOf(false) }
     var revealedKeys by remember { mutableStateOf(setOf<String>()) }
 
+    // Fallback: If custom env endpoint is empty/unreachable, synthesize env entries from configured providers
+    val effectiveEnvEntries = remember(envEntries, providers) {
+        if (envEntries.isNotEmpty()) {
+            envEntries
+        } else {
+            providers.filter { it.hasKey }.map { prov ->
+                val envKey = when (prov.id.lowercase()) {
+                    "openai" -> "OPENAI_API_KEY"
+                    "anthropic" -> "ANTHROPIC_API_KEY"
+                    "openrouter" -> "OPENROUTER_API_KEY"
+                    "google", "gemini" -> "GEMINI_API_KEY"
+                    "groq" -> "GROQ_API_KEY"
+                    "mistral" -> "MISTRAL_API_KEY"
+                    "deepseek" -> "DEEPSEEK_API_KEY"
+                    "together" -> "TOGETHER_API_KEY"
+                    "fireworks" -> "FIREWORKS_API_KEY"
+                    "cohere" -> "COHERE_API_KEY"
+                    "xai" -> "XAI_API_KEY"
+                    "perplexity" -> "PERPLEXITY_API_KEY"
+                    "nous" -> "NOUS_API_KEY"
+                    else -> "${prov.id.uppercase()}_API_KEY"
+                }
+                ProfileEnvEntry(
+                    key = envKey,
+                    value = "Clé active (${prov.keySource})",
+                    hasValue = true
+                )
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -142,7 +173,7 @@ fun ProfileEnvDialog(
                         onClick = { selectedTab = 0 },
                         text = {
                             Text(
-                                text = "Variables .env (${envEntries.size})",
+                                text = "Variables .env (${effectiveEnvEntries.size})",
                                 fontSize = 12.sp,
                                 fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
                             )
@@ -161,7 +192,7 @@ fun ProfileEnvDialog(
                     )
                 }
 
-                if (isLoading) {
+                if (isLoading && effectiveEnvEntries.isEmpty() && providers.isEmpty()) {
                     Box(modifier = Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = HermesPrimary)
                     }
@@ -185,7 +216,7 @@ fun ProfileEnvDialog(
                             Text("Ajouter une variable (.env)", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
 
-                        if (envEntries.isEmpty()) {
+                        if (effectiveEnvEntries.isEmpty()) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -216,7 +247,7 @@ fun ProfileEnvDialog(
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                items(envEntries, key = { it.key }) { entry ->
+                                items(effectiveEnvEntries, key = { it.key }) { entry ->
                                     val isRevealed = revealedKeys.contains(entry.key)
                                     Card(
                                         colors = CardDefaults.cardColors(containerColor = OnyxDarkBackground),

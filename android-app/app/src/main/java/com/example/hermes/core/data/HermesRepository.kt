@@ -103,15 +103,93 @@ class HermesRepository(
     }
 
     suspend fun getProfileEnv(): Result<ProfileEnvResponse> {
-        return apiClient.getProfileEnv(getBaseUrl())
+        val directRes = apiClient.getProfileEnv(getBaseUrl())
+        if (directRes.isSuccess && directRes.getOrThrow().entries.isNotEmpty()) {
+            return directRes
+        }
+        // Fallback: Query getProviders() and convert configured server providers into env entries
+        val providersRes = apiClient.getProviders(getBaseUrl())
+        if (providersRes.isSuccess) {
+            val providers = providersRes.getOrThrow().providers
+            val entries = providers.filter { it.hasKey }.map { prov ->
+                val envKey = when (prov.id.lowercase()) {
+                    "openai" -> "OPENAI_API_KEY"
+                    "anthropic" -> "ANTHROPIC_API_KEY"
+                    "openrouter" -> "OPENROUTER_API_KEY"
+                    "google", "gemini" -> "GEMINI_API_KEY"
+                    "groq" -> "GROQ_API_KEY"
+                    "mistral" -> "MISTRAL_API_KEY"
+                    "deepseek" -> "DEEPSEEK_API_KEY"
+                    "together" -> "TOGETHER_API_KEY"
+                    "fireworks" -> "FIREWORKS_API_KEY"
+                    "cohere" -> "COHERE_API_KEY"
+                    "xai" -> "XAI_API_KEY"
+                    "perplexity" -> "PERPLEXITY_API_KEY"
+                    "nous" -> "NOUS_API_KEY"
+                    else -> "${prov.id.uppercase()}_API_KEY"
+                }
+                ProfileEnvEntry(
+                    key = envKey,
+                    value = "Clé active (${prov.keySource})",
+                    hasValue = true
+                )
+            }
+            if (entries.isNotEmpty() || directRes.isFailure) {
+                return Result.success(
+                    ProfileEnvResponse(
+                        ok = true,
+                        profile = preferences.activeProfile.first(),
+                        entries = entries
+                    )
+                )
+            }
+        }
+        return directRes
     }
 
     suspend fun setProfileEnvVar(key: String, value: String?): Result<SetProfileEnvVarResponse> {
-        return apiClient.setProfileEnvVar(getBaseUrl(), key, value)
+        val directRes = apiClient.setProfileEnvVar(getBaseUrl(), key, value)
+        if (directRes.isSuccess) {
+            return directRes
+        }
+        // Fallback: If key matches a known provider, route to /api/providers
+        val providerSlug = when (key.trim().uppercase()) {
+            "OPENAI_API_KEY", "OPENAI_KEY" -> "openai"
+            "ANTHROPIC_API_KEY", "ANTHROPIC_KEY" -> "anthropic"
+            "OPENROUTER_API_KEY" -> "openrouter"
+            "GEMINI_API_KEY", "GOOGLE_API_KEY" -> "google"
+            "GROQ_API_KEY" -> "groq"
+            "MISTRAL_API_KEY" -> "mistral"
+            "DEEPSEEK_API_KEY" -> "deepseek"
+            "TOGETHER_API_KEY" -> "together"
+            "FIREWORKS_API_KEY" -> "fireworks"
+            "COHERE_API_KEY" -> "cohere"
+            "XAI_API_KEY" -> "xai"
+            "PERPLEXITY_API_KEY" -> "perplexity"
+            "NOUS_API_KEY" -> "nous"
+            else -> if (key.endsWith("_API_KEY")) key.removeSuffix("_API_KEY").lowercase() else null
+        }
+        if (providerSlug != null) {
+            val provRes = if (value != null) {
+                apiClient.setProviderKey(getBaseUrl(), providerSlug, value)
+            } else {
+                apiClient.deleteProviderKey(getBaseUrl(), providerSlug)
+            }
+            if (provRes.isSuccess) {
+                return Result.success(
+                    SetProfileEnvVarResponse(
+                        ok = true,
+                        key = key,
+                        action = if (value != null) "updated" else "deleted"
+                    )
+                )
+            }
+        }
+        return directRes
     }
 
     suspend fun deleteProfileEnvVar(key: String): Result<SetProfileEnvVarResponse> {
-        return apiClient.deleteProfileEnvVar(getBaseUrl(), key)
+        return setProfileEnvVar(key, null)
     }
 
     suspend fun setProviderKey(provider: String, apiKey: String?): Result<ProviderKeyResponse> {
