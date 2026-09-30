@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.hermes.features.workspace.calendar.CalendarScreen
+import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.notes.NotesScreen
 import com.example.hermes.features.workspace.notes.NotesViewModel
 import com.example.hermes.theme.*
@@ -29,6 +31,7 @@ enum class WorkspaceTab(val title: String, val icon: ImageVector) {
 @Composable
 fun WorkspaceHubScreen(
     notesViewModel: NotesViewModel,
+    calendarViewModel: CalendarViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -126,36 +129,7 @@ fun WorkspaceHubScreen(
                     NotesScreen(viewModel = notesViewModel)
                 }
                 WorkspaceTab.CALENDAR -> {
-                    // Placeholder for Calendar Module (Step 2)
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(54.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "📅 Calendrier Multi-Agents",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = HermesTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Gestion des plannings isolés par agent, vue globale et réservation de rendez-vous (Étape 2).",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = HermesTextSecondary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                    }
+                    CalendarScreen(viewModel = calendarViewModel)
                 }
                 WorkspaceTab.FORUM -> {
                     // Placeholder for Forum Module (Step 3)
