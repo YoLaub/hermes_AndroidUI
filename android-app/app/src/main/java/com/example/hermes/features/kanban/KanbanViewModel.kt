@@ -168,8 +168,13 @@ class KanbanViewModel(
 
     fun moveTask(taskId: String, newStatus: String) {
         viewModelScope.launch {
-            val req = KanbanUpdateTaskRequest(status = newStatus)
-            val result = repository.updateKanbanTask(taskId, req, _uiState.value.currentBoard)
+            val task = _uiState.value.columns.flatMap { it.tasks }.find { it.id == taskId }
+            val result = if (task?.status == "blocked" && newStatus != "blocked") {
+                repository.unblockKanbanTask(taskId, _uiState.value.currentBoard)
+            } else {
+                val req = KanbanUpdateTaskRequest(status = newStatus)
+                repository.updateKanbanTask(taskId, req, _uiState.value.currentBoard)
+            }
             if (result.isSuccess) {
                 _uiState.update {
                     it.copy(messageNotice = "Statut mis à jour vers $newStatus")

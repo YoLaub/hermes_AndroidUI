@@ -420,7 +420,14 @@ class HermesApiClient(
 
     suspend fun createKanbanTask(baseUrl: String, req: KanbanCreateTaskRequest, board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
         val url = if (board != null) "$baseUrl/api/kanban/tasks?board=$board" else "$baseUrl/api/kanban/tasks"
-        val body = json.encodeToString(req).toRequestBody(jsonMediaType)
+        val payload = buildJsonObject {
+            put("title", req.title)
+            req.body?.let { put("body", it) }
+            req.status?.let { put("status", it) }
+            put("priority", req.priority)
+            req.assignee?.let { put("assignee", it) }
+        }
+        val body = payload.toString().toRequestBody(jsonMediaType)
         val request = Request.Builder()
             .url(url)
             .post(body)
@@ -430,7 +437,15 @@ class HermesApiClient(
 
     suspend fun updateKanbanTask(baseUrl: String, taskId: String, req: KanbanUpdateTaskRequest, board: String? = null): Result<KanbanTaskResponse> = withContext(Dispatchers.IO) {
         val url = if (board != null) "$baseUrl/api/kanban/tasks/$taskId/patch?board=$board" else "$baseUrl/api/kanban/tasks/$taskId/patch"
-        val body = json.encodeToString(req).toRequestBody(jsonMediaType)
+        val payload = buildJsonObject {
+            req.title?.let { put("title", it) }
+            req.body?.let { put("body", it) }
+            req.status?.let { put("status", it) }
+            req.priority?.let { put("priority", it) }
+            req.assignee?.let { put("assignee", it) }
+            req.reason?.let { put("reason", it) }
+        }
+        val body = payload.toString().toRequestBody(jsonMediaType)
         val request = Request.Builder()
             .url(url)
             .post(body)

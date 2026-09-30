@@ -772,7 +772,7 @@ data class KanbanUpdateTaskRequest(
 
 @Serializable
 data class KanbanTaskResponse(
-    val task: KanbanTask,
+    val task: KanbanTask? = null,
     @SerialName("read_only") val readOnly: Boolean = false
 )
 
