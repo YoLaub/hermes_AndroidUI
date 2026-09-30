@@ -454,16 +454,46 @@ class ChatViewModel(
     private fun listenToStream(streamId: String) {
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
+            val tokenBuffer = StringBuilder()
+            val reasoningBuffer = StringBuilder()
+            var lastFlushTime = 0L
+
+            fun flushBuffers(force: Boolean = false) {
+                val now = System.currentTimeMillis()
+                if (force || now - lastFlushTime >= 40) {
+                    if (tokenBuffer.isNotEmpty() || reasoningBuffer.isNotEmpty()) {
+                        val newTokens = tokenBuffer.toString()
+                        val newReasoning = reasoningBuffer.toString()
+                        tokenBuffer.clear()
+                        reasoningBuffer.clear()
+                        _uiState.update { current ->
+                            current.copy(
+                                streamingTokens = if (newTokens.isNotEmpty()) current.streamingTokens + newTokens else current.streamingTokens,
+                                streamingReasoning = if (newReasoning.isNotEmpty()) current.streamingReasoning + newReasoning else current.streamingReasoning
+                            )
+                        }
+                        lastFlushTime = now
+                    }
+                }
+            }
+
             try {
                 repository.streamChatEvents(streamId).collect { event ->
                     when (event) {
                         is HermesSseEvent.Token -> {
-                            _uiState.update { it.copy(streamingTokens = it.streamingTokens + event.text) }
+                            tokenBuffer.append(event.text)
+                            if (event.text.contains("\n") || tokenBuffer.length > 300 || System.currentTimeMillis() - lastFlushTime >= 40) {
+                                flushBuffers(force = true)
+                            }
                         }
                         is HermesSseEvent.Reasoning -> {
-                            _uiState.update { it.copy(streamingReasoning = it.streamingReasoning + event.text) }
+                            reasoningBuffer.append(event.text)
+                            if (event.text.contains("\n") || reasoningBuffer.length > 300 || System.currentTimeMillis() - lastFlushTime >= 40) {
+                                flushBuffers(force = true)
+                            }
                         }
                         is HermesSseEvent.ToolStarted -> {
+                            flushBuffers(force = true)
                             val tc = ToolCall(
                                 name = event.name,
                                 args = event.args,
@@ -474,6 +504,7 @@ class ChatViewModel(
                             _uiState.update { it.copy(streamingToolCalls = it.streamingToolCalls + tc) }
                         }
                         is HermesSseEvent.ToolCompleted -> {
+                            flushBuffers(force = true)
                             _uiState.update { state ->
                                 val updated = state.streamingToolCalls.toMutableList()
                                 val idx = updated.indexOfLast { tc -> event.name == null || tc.name == event.name }
@@ -489,9 +520,11 @@ class ChatViewModel(
                             }
                         }
                         is HermesSseEvent.ApprovalRequested -> {
+                            flushBuffers(force = true)
                             _uiState.update { it.copy(pendingApproval = event.payload) }
                         }
                         is HermesSseEvent.ClarifyRequested -> {
+                            flushBuffers(force = true)
                             _uiState.update { it.copy(pendingClarify = event.payload) }
                         }
                         is HermesSseEvent.Compressing -> {
@@ -501,17 +534,21 @@ class ChatViewModel(
                             _uiState.update { it.copy(warningNotice = event.message) }
                         }
                         is HermesSseEvent.Done -> {
+                            flushBuffers(force = true)
                             event.session?.let { finalSession ->
                                 _uiState.update { it.copy(messages = finalSession.messages) }
                             }
                         }
                         is HermesSseEvent.StreamEnd -> {
+                            flushBuffers(force = true)
                             finalizeStreamingMessage()
                         }
                         is HermesSseEvent.Cancelled -> {
+                            flushBuffers(force = true)
                             finalizeStreamingMessage()
                         }
                         is HermesSseEvent.Error -> {
+                            flushBuffers(force = true)
                             _uiState.update { it.copy(isStreaming = false, error = event.message) }
                             finalizeStreamingMessage()
                         }
@@ -519,8 +556,10 @@ class ChatViewModel(
                     }
                 }
             } catch (e: Exception) {
+                flushBuffers(force = true)
                 _uiState.update { it.copy(isStreaming = false, error = e.localizedMessage) }
             } finally {
+                flushBuffers(force = true)
                 if (_uiState.value.isStreaming) {
                     finalizeStreamingMessage()
                 }
