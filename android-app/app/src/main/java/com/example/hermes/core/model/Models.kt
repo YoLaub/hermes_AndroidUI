@@ -110,10 +110,14 @@ data class ProviderInfo(
     @SerialName("has_key") val hasKey: Boolean = false,
     val configurable: Boolean = true,
     @SerialName("key_source") val keySource: String = "none",
-    val models: List<String> = emptyList()
+    @Serializable(with = FlexibleStringListSerializer::class)
+    val models: List<String> = emptyList(),
+    @SerialName("is_oauth") val isOAuth: Boolean = false,
+    @SerialName("models_total") val modelsTotal: Int = 0,
+    @SerialName("auth_error") val authError: String? = null
 )
 
-@Serializable
+@Serializable(with = FlexibleProvidersResponseSerializer::class)
 data class ProvidersResponse(
     val providers: List<ProviderInfo> = emptyList(),
     @SerialName("active_profile") val activeProfile: String? = null
@@ -190,6 +194,107 @@ object FlexibleNullableStringSerializer : KSerializer<String?> {
 
     override fun serialize(encoder: Encoder, value: String?) {
         if (value == null) encoder.encodeNull() else encoder.encodeString(value)
+    }
+}
+
+object FlexibleStringListSerializer : KSerializer<List<String>> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleStringList", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): List<String> {
+        return if (decoder is JsonDecoder) {
+            when (val element = decoder.decodeJsonElement()) {
+                is JsonArray -> {
+                    element.mapNotNull { item ->
+                        when (item) {
+                            is JsonPrimitive -> item.content
+                            is JsonObject -> {
+                                (item["id"] as? JsonPrimitive)?.content
+                                    ?: (item["label"] as? JsonPrimitive)?.content
+                                    ?: (item["name"] as? JsonPrimitive)?.content
+                                    ?: item.toString()
+                            }
+                            else -> null
+                        }
+                    }
+                }
+                is JsonPrimitive -> listOf(element.content)
+                else -> emptyList()
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<String>) {
+        val array = buildJsonArray {
+            value.forEach { add(JsonPrimitive(it)) }
+        }
+        if (encoder is JsonEncoder) {
+            encoder.encodeJsonElement(array)
+        } else {
+            encoder.encodeString(value.joinToString(","))
+        }
+    }
+}
+
+object FlexibleProvidersResponseSerializer : KSerializer<ProvidersResponse> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleProvidersResponse", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): ProvidersResponse {
+        return if (decoder is JsonDecoder) {
+            val json = decoder.json
+            when (val element = decoder.decodeJsonElement()) {
+                is JsonObject -> {
+                    val provArray = element["providers"] as? JsonArray
+                    val providersList = provArray?.mapNotNull { item ->
+                        try {
+                            json.decodeFromJsonElement<ProviderInfo>(item)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    } ?: emptyList()
+                    val activeProfile = (element["active_profile"] as? JsonPrimitive)?.content
+                    ProvidersResponse(providers = providersList, activeProfile = activeProfile)
+                }
+                is JsonArray -> {
+                    val providersList = element.mapNotNull { item ->
+                        try {
+                            json.decodeFromJsonElement<ProviderInfo>(item)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    ProvidersResponse(providers = providersList)
+                }
+                else -> ProvidersResponse()
+            }
+        } else {
+            ProvidersResponse()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: ProvidersResponse) {
+        val json = buildJsonObject {
+            put("providers", buildJsonArray {
+                value.providers.forEach { prov ->
+                    add(buildJsonObject {
+                        put("id", JsonPrimitive(prov.id))
+                        put("display_name", JsonPrimitive(prov.displayName))
+                        put("has_key", JsonPrimitive(prov.hasKey))
+                        put("configurable", JsonPrimitive(prov.configurable))
+                        put("key_source", JsonPrimitive(prov.keySource))
+                        put("is_oauth", JsonPrimitive(prov.isOAuth))
+                        put("models_total", JsonPrimitive(prov.modelsTotal))
+                    })
+                }
+            })
+            value.activeProfile?.let { put("active_profile", JsonPrimitive(it)) }
+        }
+        if (encoder is JsonEncoder) {
+            encoder.encodeJsonElement(json)
+        } else {
+            encoder.encodeString(value.providers.size.toString())
+        }
     }
 }
 

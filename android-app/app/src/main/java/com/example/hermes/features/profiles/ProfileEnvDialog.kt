@@ -105,12 +105,34 @@ fun ProfileEnvDialog(
                         CircularProgressIndicator(color = HermesPrimary)
                     }
                 } else if (providers.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudOff,
+                            contentDescription = null,
+                            tint = HermesTextMuted,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Aucun provider détecté par le serveur",
+                            text = "Aucune variable / provider trouvé pour ce profil",
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = onRefresh,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Actualiser", fontSize = 12.sp)
+                        }
                     }
                 } else {
                     LazyColumn(
