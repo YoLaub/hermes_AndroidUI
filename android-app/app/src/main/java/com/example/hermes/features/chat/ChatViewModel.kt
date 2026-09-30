@@ -47,6 +47,9 @@ data class ChatUiState(
     val isRepairingSessions: Boolean = false,
     val providers: List<ProviderInfo> = emptyList(),
     val isProvidersLoading: Boolean = false,
+    val envEntries: List<ProfileEnvEntry> = emptyList(),
+    val isEnvLoading: Boolean = false,
+    val envPath: String = "",
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -331,6 +334,7 @@ class ChatViewModel(
     }
 
     fun loadProviders() {
+        loadProfileEnv()
         viewModelScope.launch {
             _uiState.update { it.copy(isProvidersLoading = true) }
             val res = repository.getProviders()
@@ -347,11 +351,57 @@ class ChatViewModel(
         }
     }
 
+    fun loadProfileEnv() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isEnvLoading = true) }
+            val res = repository.getProfileEnv()
+            if (res.isSuccess) {
+                val data = res.getOrThrow()
+                _uiState.update {
+                    it.copy(
+                        envEntries = data.entries,
+                        envPath = data.envPath,
+                        isEnvLoading = false
+                    )
+                }
+            } else {
+                _uiState.update { it.copy(isEnvLoading = false) }
+            }
+        }
+    }
+
+    fun setProfileEnvVar(key: String, value: String?, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            val res = repository.setProfileEnvVar(key.trim().uppercase(), value)
+            if (res.isSuccess) {
+                loadProfileEnv()
+                loadProviders()
+                onComplete?.invoke(true)
+            } else {
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
+    fun deleteProfileEnvVar(key: String, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            val res = repository.deleteProfileEnvVar(key.trim().uppercase())
+            if (res.isSuccess) {
+                loadProfileEnv()
+                loadProviders()
+                onComplete?.invoke(true)
+            } else {
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
     fun setProviderKey(provider: String, apiKey: String?, onComplete: ((Boolean) -> Unit)? = null) {
         viewModelScope.launch {
             val res = repository.setProviderKey(provider, apiKey)
             if (res.isSuccess) {
                 loadProviders()
+                loadProfileEnv()
                 onComplete?.invoke(true)
             } else {
                 onComplete?.invoke(false)
@@ -364,6 +414,7 @@ class ChatViewModel(
             val res = repository.deleteProviderKey(provider)
             if (res.isSuccess) {
                 loadProviders()
+                loadProfileEnv()
                 onComplete?.invoke(true)
             } else {
                 onComplete?.invoke(false)

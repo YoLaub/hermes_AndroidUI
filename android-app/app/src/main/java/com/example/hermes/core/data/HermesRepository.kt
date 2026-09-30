@@ -102,6 +102,18 @@ class HermesRepository(
         return apiClient.getProviders(getBaseUrl())
     }
 
+    suspend fun getProfileEnv(): Result<ProfileEnvResponse> {
+        return apiClient.getProfileEnv(getBaseUrl())
+    }
+
+    suspend fun setProfileEnvVar(key: String, value: String?): Result<SetProfileEnvVarResponse> {
+        return apiClient.setProfileEnvVar(getBaseUrl(), key, value)
+    }
+
+    suspend fun deleteProfileEnvVar(key: String): Result<SetProfileEnvVarResponse> {
+        return apiClient.deleteProfileEnvVar(getBaseUrl(), key)
+    }
+
     suspend fun setProviderKey(provider: String, apiKey: String?): Result<ProviderKeyResponse> {
         return apiClient.setProviderKey(getBaseUrl(), provider, apiKey)
     }

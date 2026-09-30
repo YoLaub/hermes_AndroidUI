@@ -534,9 +534,30 @@ fun ChatScreen(
         if (showProfileEnvDialog) {
             ProfileEnvDialog(
                 activeProfile = state.activeProfile,
+                envEntries = state.envEntries,
                 providers = state.providers,
-                isLoading = state.isProvidersLoading,
-                onSaveKey = { providerId, apiKey ->
+                isLoading = state.isProvidersLoading || state.isEnvLoading,
+                onSaveEnvVar = { key, value ->
+                    viewModel.setProfileEnvVar(key, value) { success ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (success) "Variable $key enregistrée dans le .env du profil ${state.activeProfile}"
+                                else "Échec de l'enregistrement de $key"
+                            )
+                        }
+                    }
+                },
+                onDeleteEnvVar = { key ->
+                    viewModel.deleteProfileEnvVar(key) { success ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (success) "Variable $key supprimée du .env"
+                                else "Échec de la suppression de $key"
+                            )
+                        }
+                    }
+                },
+                onSaveProviderKey = { providerId, apiKey ->
                     viewModel.setProviderKey(providerId, apiKey) { success ->
                         scope.launch {
                             snackbarHostState.showSnackbar(
@@ -546,7 +567,7 @@ fun ChatScreen(
                         }
                     }
                 },
-                onDeleteKey = { providerId ->
+                onDeleteProviderKey = { providerId ->
                     viewModel.deleteProviderKey(providerId) { success ->
                         scope.launch {
                             snackbarHostState.showSnackbar(

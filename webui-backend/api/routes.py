@@ -2250,7 +2250,15 @@ from api.run_journal import (
     read_run_events,
     stale_interrupted_event,
 )
-from api.providers import get_providers, get_provider_quota, get_provider_cost_history, set_provider_key, remove_provider_key
+from api.providers import (
+    get_providers,
+    get_provider_quota,
+    get_provider_cost_history,
+    set_provider_key,
+    remove_provider_key,
+    get_profile_env,
+    set_profile_env_var,
+)
 from api.onboarding import (
     apply_onboarding_setup,
     get_onboarding_status,
@@ -3543,6 +3551,10 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/providers":
         return j(handler, get_providers())
 
+    # ── Profile .env variables (GET) ──
+    if parsed.path == "/api/profile/env":
+        return j(handler, get_profile_env())
+
     # ── Plugins/hooks visibility (read-only, no callback/source internals) ──
     if parsed.path == "/api/plugins":
         return _handle_plugins(handler, parsed)
@@ -4611,6 +4623,32 @@ def handle_post(handler, parsed) -> bool:
         if not provider_id:
             return bad(handler, "provider is required")
         result = remove_provider_key(provider_id)
+        if not result.get("ok"):
+            return bad(handler, result.get("error", "Unknown error"))
+        return j(handler, result)
+
+    # ── Profile .env variables (POST / DELETE) ──
+    if parsed.path == "/api/profile/env":
+        key = (body.get("key") or body.get("name") or "").strip()
+        value = body.get("value")
+        if not key:
+            updates = body.get("updates")
+            if isinstance(updates, dict):
+                from api.providers import _write_env_file, _get_hermes_home
+                env_path = _get_hermes_home() / ".env"
+                _write_env_file(env_path, updates)
+                return j(handler, {"ok": True, "updated": list(updates.keys())})
+            return bad(handler, "key is required")
+        result = set_profile_env_var(key, value)
+        if not result.get("ok"):
+            return bad(handler, result.get("error", "Unknown error"))
+        return j(handler, result)
+
+    if parsed.path == "/api/profile/env/delete":
+        key = (body.get("key") or body.get("name") or "").strip()
+        if not key:
+            return bad(handler, "key is required")
+        result = set_profile_env_var(key, None)
         if not result.get("ok"):
             return bad(handler, result.get("error", "Unknown error"))
         return j(handler, result)

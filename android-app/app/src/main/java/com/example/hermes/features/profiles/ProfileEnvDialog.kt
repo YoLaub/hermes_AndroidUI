@@ -2,9 +2,12 @@ package com.example.hermes.features.profiles
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,21 +18,40 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.hermes.core.model.ProfileEnvEntry
 import com.example.hermes.core.model.ProviderInfo
 import com.example.hermes.theme.*
+
+private val SUGGESTED_ENV_VARS = listOf(
+    "TELEGRAM_BOT_TOKEN",
+    "DISCORD_TOKEN",
+    "CRM_API_KEY",
+    "SERPAPI_API_KEY",
+    "TAVILY_API_KEY",
+    "GITHUB_TOKEN",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "DATABASE_URL"
+)
 
 @Composable
 fun ProfileEnvDialog(
     activeProfile: String,
+    envEntries: List<ProfileEnvEntry>,
     providers: List<ProviderInfo>,
     isLoading: Boolean,
-    onSaveKey: (providerId: String, apiKey: String) -> Unit,
-    onDeleteKey: (providerId: String) -> Unit,
+    onSaveEnvVar: (key: String, value: String) -> Unit,
+    onDeleteEnvVar: (key: String) -> Unit,
+    onSaveProviderKey: (providerId: String, apiKey: String) -> Unit,
+    onDeleteProviderKey: (providerId: String) -> Unit,
     onRefresh: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -37,9 +59,14 @@ fun ProfileEnvDialog(
         onRefresh()
     }
 
+    var selectedTab by remember { mutableStateOf(0) } // 0 = All .env vars, 1 = AI Providers
+    var showAddVarDialog by remember { mutableStateOf(false) }
+    var editingVarKey by remember { mutableStateOf<String?>(null) }
+    var editingVarValue by remember { mutableStateOf("") }
     var selectedProviderForEdit by remember { mutableStateOf<ProviderInfo?>(null) }
     var apiKeyInput by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var revealedKeys by remember { mutableStateOf(setOf<String>()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -70,7 +97,7 @@ fun ProfileEnvDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 440.dp)
+                    .heightIn(max = 500.dp)
             ) {
                 // Info banner explaining profile isolation
                 Surface(
@@ -79,132 +106,310 @@ fun ProfileEnvDialog(
                     border = CardDefaults.outlinedCardBorder().copy(
                         brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
                     ),
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             Icons.Default.VpnKey,
                             contentDescription = null,
                             tint = HermesSecondary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Les clés sont stockées dans le .env étanche de ce profil ($activeProfile) et ne fuient pas vers les autres agents.",
+                            text = "Variables isolées dans le .env du profil « $activeProfile ».",
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary
                         )
                     }
                 }
 
+                // Tabs: All .env vars vs AI Providers
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = OnyxDarkBackground,
+                    contentColor = HermesPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = {
+                            Text(
+                                text = "Variables .env (${envEntries.size})",
+                                fontSize = 12.sp,
+                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = {
+                            Text(
+                                text = "Providers IA (${providers.count { it.hasKey }})",
+                                fontSize = 12.sp,
+                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    )
+                }
+
                 if (isLoading) {
-                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = HermesPrimary)
                     }
-                } else if (providers.isEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudOff,
-                            contentDescription = null,
-                            tint = HermesTextMuted,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Aucune variable / provider trouvé pour ce profil",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = HermesTextMuted
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedButton(
-                            onClick = onRefresh,
-                            shape = RoundedCornerShape(8.dp)
+                } else if (selectedTab == 0) {
+                    // ── Tab 0: Generic .env Variables ──
+                    Column(modifier = Modifier.weight(1f)) {
+                        Button(
+                            onClick = {
+                                editingVarKey = ""
+                                editingVarValue = ""
+                                showAddVarDialog = true
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Actualiser", fontSize = 12.sp)
+                            Text("Ajouter une variable (.env)", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        }
+
+                        if (envEntries.isEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyOff,
+                                    contentDescription = null,
+                                    tint = HermesTextMuted,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Aucune variable dans le .env de ce profil",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = HermesTextMuted
+                                )
+                                Text(
+                                    text = "Cliquez sur « Ajouter une variable » ci-dessus",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = HermesTextMuted
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(envEntries, key = { it.key }) { entry ->
+                                    val isRevealed = revealedKeys.contains(entry.key)
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = OnyxDarkBackground),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = CardDefaults.outlinedCardBorder().copy(
+                                            brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = entry.key,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = FontFamily.Monospace
+                                                    ),
+                                                    color = HermesTextPrimary,
+                                                    fontSize = 13.sp
+                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                ) {
+                                                    val displayVal = if (isRevealed) {
+                                                        entry.value.ifBlank { "(vide)" }
+                                                    } else {
+                                                        if (entry.value.length > 8) {
+                                                            entry.value.take(4) + "••••••••" + entry.value.takeLast(4)
+                                                        } else {
+                                                            "••••••••"
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = displayVal,
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontFamily = FontFamily.Monospace
+                                                        ),
+                                                        color = HermesTextSecondary,
+                                                        fontSize = 11.sp
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Icon(
+                                                        imageVector = if (isRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                        contentDescription = "Toggle visibilité",
+                                                        tint = HermesTextMuted,
+                                                        modifier = Modifier
+                                                            .size(14.dp)
+                                                            .clickable {
+                                                                revealedKeys = if (isRevealed) {
+                                                                    revealedKeys - entry.key
+                                                                } else {
+                                                                    revealedKeys + entry.key
+                                                                }
+                                                            }
+                                                    )
+                                                }
+                                            }
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(
+                                                    onClick = {
+                                                        editingVarKey = entry.key
+                                                        editingVarValue = entry.value
+                                                        showAddVarDialog = true
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "Modifier",
+                                                        tint = HermesPrimary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                                IconButton(
+                                                    onClick = { onDeleteEnvVar(entry.key) },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.DeleteOutline,
+                                                        contentDescription = "Supprimer",
+                                                        tint = HermesTextMuted,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(providers, key = { it.id }) { provider ->
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = OnyxDarkBackground),
-                                shape = RoundedCornerShape(10.dp),
-                                border = CardDefaults.outlinedCardBorder().copy(
-                                    brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                    // ── Tab 1: AI Providers ──
+                    if (providers.isEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = HermesTextMuted,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Aucun provider détecté",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HermesTextMuted
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            items(providers, key = { it.id }) { provider ->
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = OnyxDarkBackground),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = CardDefaults.outlinedCardBorder().copy(
+                                        brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
+                                    )
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = provider.displayName.ifBlank { provider.id.replaceFirstChar { it.uppercase() } },
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                            color = HermesTextPrimary
-                                        )
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .clip(CircleShape)
-                                                    .background(if (provider.hasKey) Color(0xFF10B981) else Color(0xFF6B7280))
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = if (provider.hasKey) "Clé configurée (${provider.keySource})" else "Aucune clé",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (provider.hasKey) Color(0xFF10B981) else HermesTextMuted
+                                                text = provider.displayName.ifBlank { provider.id.replaceFirstChar { it.uppercase() } },
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = HermesTextPrimary
                                             )
-                                        }
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (provider.hasKey) {
-                                            IconButton(
-                                                onClick = { onDeleteKey(provider.id) },
-                                                modifier = Modifier.size(32.dp)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(top = 2.dp)
                                             ) {
-                                                Icon(
-                                                    Icons.Default.DeleteOutline,
-                                                    contentDescription = "Supprimer clé",
-                                                    tint = HermesTextMuted,
-                                                    modifier = Modifier.size(18.dp)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (provider.hasKey) Color(0xFF10B981) else Color(0xFF6B7280))
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = if (provider.hasKey) "Clé active (${provider.keySource})" else "Non configuré",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (provider.hasKey) Color(0xFF10B981) else HermesTextMuted
                                                 )
                                             }
                                         }
 
-                                        FilledTonalButton(
-                                            onClick = {
-                                                selectedProviderForEdit = provider
-                                                apiKeyInput = ""
-                                                showPassword = false
-                                            },
-                                            shape = RoundedCornerShape(6.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                            modifier = Modifier.height(30.dp)
-                                        ) {
-                                            Text(if (provider.hasKey) "Modifier" else "Ajouter", fontSize = 11.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (provider.hasKey) {
+                                                IconButton(
+                                                    onClick = { onDeleteProviderKey(provider.id) },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.DeleteOutline,
+                                                        contentDescription = "Supprimer clé",
+                                                        tint = HermesTextMuted,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            FilledTonalButton(
+                                                onClick = {
+                                                    selectedProviderForEdit = provider
+                                                    apiKeyInput = ""
+                                                    showPassword = false
+                                                },
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(30.dp)
+                                            ) {
+                                                Text(if (provider.hasKey) "Modifier" else "Ajouter", fontSize = 11.sp)
+                                            }
                                         }
                                     }
                                 }
@@ -222,13 +427,139 @@ fun ProfileEnvDialog(
         containerColor = OnyxDarkSurface
     )
 
-    // Edit key sub-dialog
+    // ── Generic Add / Edit .env Variable Dialog ──
+    if (showAddVarDialog) {
+        var inputKey by remember { mutableStateOf(editingVarKey ?: "") }
+        var inputValue by remember { mutableStateOf(editingVarValue) }
+        var varShowPassword by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showAddVarDialog = false },
+            title = {
+                Text(
+                    text = if (editingVarKey.isNullOrBlank()) "Ajouter une variable (.env)" else "Modifier $editingVarKey",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = HermesTextPrimary
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "La variable sera enregistrée dans le .env du profil $activeProfile.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HermesTextMuted
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Suggested Presets Chips
+                    Text(
+                        text = "Suggestions rapides :",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = HermesTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        SUGGESTED_ENV_VARS.forEach { suggestion ->
+                            SuggestionChip(
+                                onClick = { inputKey = suggestion },
+                                label = { Text(suggestion, fontSize = 10.sp) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = OnyxDarkBackground,
+                                    labelColor = HermesPrimary
+                                ),
+                                border = SuggestionChipDefaults.suggestionChipBorder(
+                                    enabled = true,
+                                    borderColor = OnyxBorder
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Variable Name Field (Automatically UpperCase)
+                    OutlinedTextField(
+                        value = inputKey,
+                        onValueChange = { inputKey = it.uppercase().replace(" ", "_") },
+                        label = { Text("Nom de la variable (EN MAJUSCULES)") },
+                        placeholder = { Text("EX: CRM_API_KEY, TELEGRAM_BOT_TOKEN") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = OnyxDarkBackground,
+                            unfocusedContainerColor = OnyxDarkBackground,
+                            focusedBorderColor = HermesPrimary,
+                            unfocusedBorderColor = OnyxBorder
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Variable Value Field
+                    OutlinedTextField(
+                        value = inputValue,
+                        onValueChange = { inputValue = it },
+                        label = { Text("Valeur / Clé / Paramètre") },
+                        placeholder = { Text("sk-... ou https://... ou jeton") },
+                        singleLine = true,
+                        visualTransformation = if (varShowPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { varShowPassword = !varShowPassword }) {
+                                Icon(
+                                    imageVector = if (varShowPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = HermesTextMuted
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = OnyxDarkBackground,
+                            unfocusedContainerColor = OnyxDarkBackground,
+                            focusedBorderColor = HermesPrimary,
+                            unfocusedBorderColor = OnyxBorder
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val finalKey = inputKey.trim().uppercase()
+                        if (finalKey.isNotBlank() && inputValue.isNotBlank()) {
+                            onSaveEnvVar(finalKey, inputValue.trim())
+                            showAddVarDialog = false
+                        }
+                    },
+                    enabled = inputKey.isNotBlank() && inputValue.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
+                ) {
+                    Text("Enregistrer dans .env")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddVarDialog = false }) {
+                    Text("Annuler")
+                }
+            },
+            containerColor = OnyxDarkSurface
+        )
+    }
+
+    // ── Edit Provider Key Sub-dialog ──
     selectedProviderForEdit?.let { provider ->
         AlertDialog(
             onDismissRequest = { selectedProviderForEdit = null },
             title = {
                 Text(
-                    text = "Configurer la clé ${provider.displayName}",
+                    text = "Configurer ${provider.displayName}",
                     style = MaterialTheme.typography.titleMedium,
                     color = HermesTextPrimary
                 )
@@ -272,7 +603,7 @@ fun ProfileEnvDialog(
                 Button(
                     onClick = {
                         if (apiKeyInput.isNotBlank()) {
-                            onSaveKey(provider.id, apiKeyInput.trim())
+                            onSaveProviderKey(provider.id, apiKeyInput.trim())
                             selectedProviderForEdit = null
                         }
                     },

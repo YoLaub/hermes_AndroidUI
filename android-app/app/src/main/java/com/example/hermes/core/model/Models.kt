@@ -136,6 +136,37 @@ data class ProviderKeyResponse(
     val message: String? = null
 )
 
+@Serializable
+data class ProfileEnvEntry(
+    val key: String,
+    val value: String = "",
+    @SerialName("has_value") val hasValue: Boolean = true
+)
+
+@Serializable
+data class ProfileEnvResponse(
+    val ok: Boolean = true,
+    val profile: String = "",
+    @SerialName("env_path") val envPath: String = "",
+    val env: Map<String, String> = emptyMap(),
+    val entries: List<ProfileEnvEntry> = emptyList(),
+    val error: String? = null
+)
+
+@Serializable
+data class SetProfileEnvVarRequest(
+    val key: String,
+    val value: String? = null
+)
+
+@Serializable
+data class SetProfileEnvVarResponse(
+    val ok: Boolean = false,
+    val key: String? = null,
+    val action: String? = null,
+    val error: String? = null
+)
+
 // ── Resilient Serializers ───────────────────────────────────────────────────
 
 object FlexibleStringSerializer : KSerializer<String> {

@@ -117,6 +117,32 @@ class HermesApiClient(
         executeRequest(request)
     }
 
+    suspend fun getProfileEnv(baseUrl: String): Result<ProfileEnvResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/profile/env")
+            .get()
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun setProfileEnvVar(baseUrl: String, key: String, value: String?): Result<SetProfileEnvVarResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(SetProfileEnvVarRequest(key, value)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/profile/env")
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun deleteProfileEnvVar(baseUrl: String, key: String): Result<SetProfileEnvVarResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(mapOf("key" to key)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/profile/env/delete")
+            .post(body)
+            .build()
+        executeRequest(request)
+    }
+
     suspend fun setProviderKey(baseUrl: String, provider: String, apiKey: String?): Result<ProviderKeyResponse> = withContext(Dispatchers.IO) {
         val body = json.encodeToString(SetProviderKeyRequest(provider, apiKey)).toRequestBody(jsonMediaType)
         val request = Request.Builder()

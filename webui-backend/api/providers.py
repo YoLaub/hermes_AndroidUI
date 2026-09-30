@@ -2153,3 +2153,66 @@ def _clean_provider_key_from_config(provider_id: str) -> None:
             reload_config()
     except Exception:
         logger.exception("Failed to clean provider key from config.yaml for %s", provider_id)
+
+
+def get_profile_env() -> dict[str, Any]:
+    """Return all environment variables stored in the active profile's .env file."""
+    env_path = _get_hermes_home() / ".env"
+    values = _load_env_file(env_path)
+    entries = []
+    for k, v in sorted(values.items()):
+        entries.append({
+            "key": k,
+            "value": v,
+            "has_value": bool(v),
+        })
+    try:
+        from api.profiles import get_active_profile_name
+        profile_name = get_active_profile_name()
+    except Exception:
+        profile_name = "default"
+    return {
+        "ok": True,
+        "profile": profile_name,
+        "env_path": str(env_path),
+        "env": values,
+        "entries": entries,
+    }
+
+
+def set_profile_env_var(key: str, value: str | None) -> dict[str, Any]:
+    """Set or delete a custom environment variable in the active profile's .env."""
+    key = str(key or "").strip()
+    if not key:
+        return {"ok": False, "error": "Variable name is required."}
+
+    import re
+    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', key):
+        return {"ok": False, "error": "Variable name must contain only letters, numbers, and underscores."}
+
+    key = key.upper()
+
+    if value is not None:
+        value = str(value).strip()
+        if not value:
+            value = None
+
+    if value is not None:
+        if "\n" in value or "\r" in value:
+            return {"ok": False, "error": "Value must not contain newline characters."}
+
+    env_path = _get_hermes_home() / ".env"
+    try:
+        _write_env_file(env_path, {key: value})
+    except Exception as exc:
+        logger.exception("Failed to write env file for %s", key)
+        return {"ok": False, "error": f"Failed to save variable: {exc}"}
+
+    invalidate_models_cache()
+
+    return {
+        "ok": True,
+        "key": key,
+        "action": "updated" if value is not None else "deleted",
+    }
+
