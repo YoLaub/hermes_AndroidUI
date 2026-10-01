@@ -924,4 +924,42 @@ data class KanbanDispatchResponse(
     val message: String? = null
 )
 
+// ── Slash Commands & Gateway Lifecycle Models ───────────────────────────────
+
+@Serializable
+data class CommandInfo(
+    val name: String,
+    val description: String = "",
+    val usage: String? = null,
+    val args: String? = null,
+    @SerialName("cli_only") val cliOnly: Boolean = false
+)
+
+@Serializable
+data class CommandsResponse(
+    val commands: List<CommandInfo> = emptyList()
+)
+
+@Serializable
+data class GatewayRestartRequest(
+    val profile: String? = null
+)
+
+@Serializable
+data class GatewayRestartResponse(
+    val ok: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+    val status: String? = null
+)
+
+@Serializable
+data class GatewayStatusResponse(
+    val ok: Boolean = false,
+    val running: Boolean = false,
+    val pid: Int? = null,
+    val profile: String? = null,
+    val error: String? = null
+)
+
 

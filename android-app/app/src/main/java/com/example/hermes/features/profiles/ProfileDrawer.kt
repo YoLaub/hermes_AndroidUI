@@ -34,6 +34,7 @@ fun ProfileDrawerContent(
     onOpenWorkspaces: () -> Unit,
     onOpenEnv: () -> Unit,
     onOpenOpenbao: () -> Unit = {},
+    onRestartGateway: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -322,6 +323,28 @@ fun ProfileDrawerContent(
                     Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = HermesSecondary)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Coffre OpenBao (Secrets)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Restart Gateway Button
+                if (onRestartGateway != null) {
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            onRestartGateway()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = HermesPrimaryContainer.copy(alpha = 0.25f),
+                            contentColor = HermesPrimary
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, HermesPrimary.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(14.dp), tint = HermesPrimary)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Redémarrer la passerelle ($activeProfile)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }

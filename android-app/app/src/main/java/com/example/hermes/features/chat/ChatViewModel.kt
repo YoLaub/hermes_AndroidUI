@@ -53,11 +53,14 @@ data class ChatUiState(
     val envPath: String = "",
     val openbaoUrl: String = "",
     val openbaoToken: String = "",
-    val openbaoMount: String = "secret",
+    val openbaoMount: String = "hermes",
     val isOpenbaoLoading: Boolean = false,
     val openbaoHealth: OpenBaoHealth? = null,
     val openbaoSecrets: List<OpenBaoSecretItem> = emptyList(),
     val openbaoError: String? = null,
+    val commands: List<CommandInfo> = emptyList(),
+    val isRestartingGateway: Boolean = false,
+    val gatewayStatus: GatewayStatusResponse? = null,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -101,6 +104,9 @@ class ChatViewModel(
             // 1. Load active profile
             val currentProfile = repository.activeProfile.first()
             _uiState.update { it.copy(activeProfile = currentProfile) }
+
+            // 1.1 Load available slash commands
+            loadCommands()
 
             // 2. Load profiles list
             val profilesResult = repository.getProfiles()
@@ -546,6 +552,37 @@ class ChatViewModel(
         }
     }
 
+    // ── Commands & Gateway Restart ──
+    fun loadCommands() {
+        viewModelScope.launch {
+            val res = repository.getCommands()
+            if (res.isSuccess) {
+                _uiState.update { it.copy(commands = res.getOrThrow()) }
+            }
+        }
+    }
+
+    fun restartGateway(profile: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        val targetProfile = profile ?: _uiState.value.activeProfile
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRestartingGateway = true) }
+            val res = repository.restartGateway(targetProfile)
+            _uiState.update { it.copy(isRestartingGateway = false) }
+            if (res.isSuccess) {
+                val data = res.getOrThrow()
+                val restartNotice = ChatMessage(
+                    role = "assistant",
+                    content = "🔄 **Passerelle redémarrée ($targetProfile)** : Les variables d'environnement et secrets OpenBao ont été rechargés avec succès."
+                )
+                _uiState.update { it.copy(messages = it.messages + restartNotice) }
+                onComplete?.invoke(true, data.message ?: "Passerelle redémarrée")
+            } else {
+                val err = res.exceptionOrNull()?.localizedMessage ?: "Échec du redémarrage"
+                onComplete?.invoke(false, err)
+            }
+        }
+    }
+
     fun onInputTextChanged(text: String) {
         _uiState.update { it.copy(inputText = text) }
     }
@@ -561,6 +598,12 @@ class ChatViewModel(
         val text = state.inputText.trim()
         if (text.isBlank() && state.pendingAttachments.isEmpty()) return
         if (state.isStreaming) return
+
+        if (text.equals("/restart", ignoreCase = true)) {
+            _uiState.update { it.copy(inputText = "") }
+            restartGateway()
+            return
+        }
 
         viewModelScope.launch {
             var sid = _uiState.value.sessionId

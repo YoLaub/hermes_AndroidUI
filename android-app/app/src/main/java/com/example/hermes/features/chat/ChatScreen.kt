@@ -261,7 +261,15 @@ fun ChatScreen(
                     onCancelStream = { viewModel.cancelStream() },
                     isStreaming = state.isStreaming,
                     pendingAttachments = state.pendingAttachments,
-                    onRemoveAttachment = { viewModel.removeAttachment(it) }
+                    availableCommands = state.commands,
+                    onRemoveAttachment = { viewModel.removeAttachment(it) },
+                    onCommandSelected = { cmd ->
+                        if (cmd.equals("/restart", ignoreCase = true)) {
+                            viewModel.restartGateway()
+                        } else {
+                            viewModel.onInputTextChanged(cmd)
+                        }
+                    }
                 )
             },
             containerColor = OnyxDarkBackground
@@ -512,6 +520,10 @@ fun ChatScreen(
                         viewModel.loadOpenbaoSecrets()
                         showOpenBaoDialog = true
                     },
+                    onRestartGateway = {
+                        showProfilesSheet = false
+                        viewModel.restartGateway()
+                    },
                     onDismiss = { showProfilesSheet = false },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -636,6 +648,10 @@ fun ChatScreen(
                     viewModel.loadOpenbaoHealth()
                     viewModel.loadOpenbaoSecrets()
                 },
+                onRestartGateway = {
+                    viewModel.restartGateway()
+                },
+                isRestartingGateway = state.isRestartingGateway,
                 onDismiss = { showOpenBaoDialog = false }
             )
         }

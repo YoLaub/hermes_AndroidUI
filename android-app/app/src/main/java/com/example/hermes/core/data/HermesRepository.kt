@@ -444,5 +444,23 @@ class HermesRepository(
         if (token.isBlank()) return Result.failure(java.io.IOException("Token OpenBao manquant"))
         return openbaoClient.deleteSecretKey(url, token, mount, "$prof/runtime", key.trim().uppercase())
     }
+
+    // ── Slash Commands & Gateway Lifecycle ──
+    suspend fun getCommands(): Result<List<CommandInfo>> {
+        val url = preferences.serverUrl.first()
+        return apiClient.getCommands(url)
+    }
+
+    suspend fun restartGateway(profile: String? = null): Result<GatewayRestartResponse> {
+        val url = preferences.serverUrl.first()
+        val prof = profile ?: preferences.activeProfile.first()
+        return apiClient.restartGateway(url, prof)
+    }
+
+    suspend fun getGatewayStatus(profile: String? = null): Result<GatewayStatusResponse> {
+        val url = preferences.serverUrl.first()
+        val prof = profile ?: preferences.activeProfile.first()
+        return apiClient.getGatewayStatus(url, prof)
+    }
 }
 

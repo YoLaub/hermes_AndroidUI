@@ -70,6 +70,8 @@ fun OpenBaoVaultDialog(
     onSaveSecret: (key: String, value: String, onFinished: (Boolean, String?) -> Unit) -> Unit,
     onDeleteSecret: (key: String, onFinished: (Boolean, String?) -> Unit) -> Unit,
     onRefresh: () -> Unit,
+    onRestartGateway: (() -> Unit)? = null,
+    isRestartingGateway: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -262,22 +264,52 @@ fun OpenBaoVaultDialog(
                     color = HermesPrimaryContainer.copy(alpha = 0.2f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, HermesPrimary.copy(alpha = 0.35f))
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = HermesPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Les agents chargent leurs secrets au démarrage. Après ajout ou modification, redémarrez le conteneur du profil (sans toucher à OpenBao).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = HermesTextPrimary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = HermesPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Les agents chargent leurs secrets au démarrage. Après ajout ou modification, redémarrez le conteneur du profil (sans toucher à OpenBao).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HermesTextPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        if (onRestartGateway != null) {
+                            OutlinedButton(
+                                onClick = onRestartGateway,
+                                enabled = !isRestartingGateway,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = HermesPrimaryContainer.copy(alpha = 0.35f),
+                                    contentColor = HermesPrimary
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, HermesPrimary.copy(alpha = 0.5f))
+                            ) {
+                                if (isRestartingGateway) {
+                                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = HermesPrimary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Redémarrage en cours...", fontSize = 12.sp)
+                                } else {
+                                    Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(15.dp), tint = HermesPrimary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Redémarrer la passerelle (${activeProfile.replaceFirstChar { it.uppercase() }})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
                     }
                 }
 

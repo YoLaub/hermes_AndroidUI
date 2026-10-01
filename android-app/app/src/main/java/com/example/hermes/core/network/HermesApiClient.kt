@@ -512,6 +512,112 @@ class HermesApiClient(
         executeRequest(request)
     }
 
+    val DEFAULT_BUILTIN_COMMANDS = listOf(
+        CommandInfo(name = "/restart", description = "Redémarrer la passerelle et recharger secrets et configuration"),
+        CommandInfo(name = "/help", description = "Afficher l'aide et les commandes disponibles"),
+        CommandInfo(name = "/clear", description = "Effacer l'historique de la conversation"),
+        CommandInfo(name = "/model", description = "Changer ou afficher le modèle actuel"),
+        CommandInfo(name = "/skills", description = "Lister les compétences actives du profil"),
+        CommandInfo(name = "/memory", description = "Consulter et éditer la mémoire persistante"),
+        CommandInfo(name = "/workspace", description = "Changer ou consulter le dossier de travail"),
+        CommandInfo(name = "/undo", description = "Annuler le dernier tour de conversation"),
+        CommandInfo(name = "/reasoning", description = "Afficher ou basculer l'effort de raisonnement"),
+        CommandInfo(name = "/goal", description = "Gérer les objectifs et tâches de fond"),
+        CommandInfo(name = "/new", description = "Démarrer une nouvelle session propre")
+    )
+
+    suspend fun getCommands(baseUrl: String): Result<List<CommandInfo>> = withContext(Dispatchers.IO) {
+        val endpoints = listOf("$baseUrl/api/commands", "$baseUrl/api/command", "$baseUrl/commands")
+        for (url in endpoints) {
+            val request = Request.Builder().url(url).get().build()
+            try {
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val bodyString = response.body?.string() ?: ""
+                        val element = json.parseToJsonElement(bodyString)
+                        val fetchedList = when (element) {
+                            is JsonArray -> {
+                                element.mapNotNull { item ->
+                                    try {
+                                        json.decodeFromJsonElement<CommandInfo>(item)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                            }
+                            is JsonObject -> {
+                                if (element.containsKey("commands") && element["commands"] is JsonArray) {
+                                    json.decodeFromJsonElement<CommandsResponse>(element).commands
+                                } else {
+                                    element.map { (key, value) ->
+                                        val cmdName = if (key.startsWith("/")) key else "/$key"
+                                        if (value is JsonObject) {
+                                            val desc = value["description"]?.jsonPrimitive?.content ?: ""
+                                            val usage = value["usage"]?.jsonPrimitive?.content
+                                            val cliOnly = value["cli_only"]?.jsonPrimitive?.booleanOrNull ?: false
+                                            CommandInfo(name = cmdName, description = desc, usage = usage, cliOnly = cliOnly)
+                                        } else {
+                                            CommandInfo(name = cmdName, description = value.jsonPrimitive.content)
+                                        }
+                                    }
+                                }
+                            }
+                            else -> emptyList()
+                        }
+                        if (fetchedList.isNotEmpty()) {
+                            val fetchedNames = fetchedList.map { it.name.lowercase() }.toSet()
+                            val merged = fetchedList.toMutableList()
+                            for (builtin in DEFAULT_BUILTIN_COMMANDS) {
+                                if (!fetchedNames.contains(builtin.name.lowercase())) {
+                                    merged.add(builtin)
+                                }
+                            }
+                            return@withContext Result.success(merged.sortedBy { it.name })
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Try next endpoint
+            }
+        }
+        Result.success(DEFAULT_BUILTIN_COMMANDS)
+    }
+
+    suspend fun restartGateway(baseUrl: String, profile: String? = null): Result<GatewayRestartResponse> = withContext(Dispatchers.IO) {
+        val payload = buildJsonObject {
+            profile?.let { put("profile", it) }
+        }
+        val endpoints = listOf("$baseUrl/api/gateway/restart", "$baseUrl/api/profile/restart")
+        for (url in endpoints) {
+            val request = Request.Builder()
+                .url(url)
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+            try {
+                okHttpClient.newCall(request).execute().use { response ->
+                    val bodyString = response.body?.string() ?: ""
+                    if (response.isSuccessful) {
+                        val parsed = try {
+                            json.decodeFromString<GatewayRestartResponse>(bodyString)
+                        } catch (e: Exception) {
+                            GatewayRestartResponse(ok = true, message = "Passerelle redémarrée")
+                        }
+                        return@withContext Result.success(parsed)
+                    }
+                }
+            } catch (e: Exception) {
+                // Try next
+            }
+        }
+        Result.failure(IOException("Impossible d'appeler /api/gateway/restart sur le serveur"))
+    }
+
+    suspend fun getGatewayStatus(baseUrl: String, profile: String? = null): Result<GatewayStatusResponse> = withContext(Dispatchers.IO) {
+        val url = if (profile != null) "$baseUrl/api/gateway/status?profile=$profile" else "$baseUrl/api/gateway/status"
+        val request = Request.Builder().url(url).get().build()
+        executeRequest(request)
+    }
+
     private inline fun <reified T> executeRequest(request: Request): Result<T> {
         return try {
             val result: T = executeRequestInternal(request)
