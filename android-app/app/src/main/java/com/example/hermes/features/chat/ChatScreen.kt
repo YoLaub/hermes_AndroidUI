@@ -617,7 +617,7 @@ fun ChatScreen(
                         onFinished(success, err)
                         if (success) {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Secret $key enregistré dans OpenBao (hermes/${state.activeProfile})")
+                                snackbarHostState.showSnackbar("Secret $key enregistré dans OpenBao. Redémarrez le conteneur ${state.activeProfile} pour appliquer.")
                             }
                         }
                     }
@@ -627,7 +627,7 @@ fun ChatScreen(
                         onFinished(success, err)
                         if (success) {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Secret $key supprimé d'OpenBao")
+                                snackbarHostState.showSnackbar("Secret $key supprimé d'OpenBao. Redémarrez le conteneur ${state.activeProfile} pour appliquer.")
                             }
                         }
                     }

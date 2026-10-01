@@ -151,7 +151,12 @@ class OpenBaoClient(
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         val existing = getSecrets(baseUrl, token, mount, path).getOrElse { emptyMap() }
         val updated = existing.toMutableMap()
-        updated[key.trim().uppercase()] = value.trim()
+        // Ensure TEST_CONNECTION=ok is always preserved for gateway startup checks
+        if (updated["TEST_CONNECTION"] != "ok") {
+            updated["TEST_CONNECTION"] = "ok"
+        }
+        val formattedKey = key.trim().uppercase()
+        updated[formattedKey] = value.trim()
         writeAllSecrets(baseUrl, token, mount, path, updated)
     }
 
@@ -162,9 +167,19 @@ class OpenBaoClient(
         path: String,
         key: String
     ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val formattedKey = key.trim().uppercase()
+        if (formattedKey == "TEST_CONNECTION") {
+            return@withContext Result.failure(
+                IllegalArgumentException("TEST_CONNECTION=ok est obligatoire pour le démarrage de la gateway et ne peut pas être supprimé.")
+            )
+        }
         val existing = getSecrets(baseUrl, token, mount, path).getOrElse { emptyMap() }
         val updated = existing.toMutableMap()
-        updated.remove(key.trim().uppercase())
+        // Ensure TEST_CONNECTION=ok is maintained
+        if (updated["TEST_CONNECTION"] != "ok") {
+            updated["TEST_CONNECTION"] = "ok"
+        }
+        updated.remove(formattedKey)
         writeAllSecrets(baseUrl, token, mount, path, updated)
     }
 

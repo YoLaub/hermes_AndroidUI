@@ -146,7 +146,7 @@ fun OpenBaoVaultDialog(
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "hermes/$activeProfile",
+                                text = "${openbaoMount.ifBlank { "hermes" }}/${activeProfile.lowercase()}/runtime",
                                 style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
                                 color = HermesSecondary
                             )
@@ -255,7 +255,33 @@ fun OpenBaoVaultDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                // ── Gateway Runtime Info Banner ──
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = HermesPrimaryContainer.copy(alpha = 0.2f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HermesPrimary.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = HermesPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Les agents chargent leurs secrets au démarrage. Après ajout ou modification, redémarrez le conteneur du profil (sans toucher à OpenBao).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HermesTextPrimary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // ── Collapsible Configuration Card ──
                 Surface(
@@ -306,7 +332,7 @@ fun OpenBaoVaultDialog(
                                     value = configUrlInput,
                                     onValueChange = { configUrlInput = it },
                                     label = { Text("URL du serveur OpenBao") },
-                                    placeholder = { Text("https://openbao.votre-domaine.com") },
+                                    placeholder = { Text("https://hermes-bao.john-world.store") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -318,8 +344,15 @@ fun OpenBaoVaultDialog(
                                 OutlinedTextField(
                                     value = configTokenInput,
                                     onValueChange = { configTokenInput = it },
-                                    label = { Text("Token d'accès (Vault Token)") },
-                                    placeholder = { Text("s.xxxxxxxx ou hvs.xxxxxxxx") },
+                                    label = { Text("Token utilisateur dédié (droits restreints)") },
+                                    placeholder = { Text("hvs.xxxxxxxx (Ne pas utiliser de Root Token)") },
+                                    supportingText = {
+                                        Text(
+                                            "Utilisez un token utilisateur dédié avec accès limité à ${configMountInput.ifBlank { "hermes" }}/data/${activeProfile.lowercase()}/runtime.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = HermesTextMuted
+                                        )
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     visualTransformation = if (showTokenPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -341,8 +374,8 @@ fun OpenBaoVaultDialog(
                                 OutlinedTextField(
                                     value = configMountInput,
                                     onValueChange = { configMountInput = it },
-                                    label = { Text("Point de montage KV") },
-                                    placeholder = { Text("secret") },
+                                    label = { Text("Point de montage KV v2") },
+                                    placeholder = { Text("hermes") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -484,7 +517,7 @@ fun OpenBaoVaultDialog(
                                 color = HermesTextSecondary
                             )
                             Text(
-                                text = "Chemin sécurisé : ${openbaoMount.ifBlank { "secret" }}/hermes/$activeProfile",
+                                text = "Chemin sécurisé : ${openbaoMount.ifBlank { "hermes" }}/${activeProfile.lowercase()}/runtime",
                                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                                 color = HermesTextMuted
                             )
@@ -592,16 +625,31 @@ fun OpenBaoVaultDialog(
                                             )
                                         }
 
-                                        // Delete
-                                        IconButton(
-                                            onClick = { secretToDelete = item.key }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Supprimer",
-                                                tint = HermesError,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                        // Delete (protected for system marker TEST_CONNECTION)
+                                        if (item.key != "TEST_CONNECTION") {
+                                            IconButton(
+                                                onClick = { secretToDelete = item.key }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Supprimer",
+                                                    tint = HermesError,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        } else {
+                                            IconButton(
+                                                onClick = {
+                                                    Toast.makeText(context, "TEST_CONNECTION=ok est requis pour le démarrage de la passerelle", Toast.LENGTH_SHORT).show()
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Lock,
+                                                    contentDescription = "Système requis",
+                                                    tint = HermesTextMuted,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }

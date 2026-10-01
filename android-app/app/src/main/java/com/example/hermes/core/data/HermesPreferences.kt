@@ -24,7 +24,8 @@ class HermesPreferences(private val context: Context) {
         val KEY_OPENBAO_TOKEN = stringPreferencesKey("openbao_token")
         val KEY_OPENBAO_MOUNT = stringPreferencesKey("openbao_mount")
         const val DEFAULT_SERVER_URL = "http://10.0.2.2:8000"
-        const val DEFAULT_OPENBAO_MOUNT = "secret"
+        const val DEFAULT_OPENBAO_URL = "https://hermes-bao.john-world.store"
+        const val DEFAULT_OPENBAO_MOUNT = "hermes"
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { preferences ->
@@ -52,7 +53,7 @@ class HermesPreferences(private val context: Context) {
     }
 
     val openbaoUrl: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_OPENBAO_URL] ?: ""
+        preferences[KEY_OPENBAO_URL] ?: DEFAULT_OPENBAO_URL
     }
 
     val openbaoToken: Flow<String?> = context.dataStore.data.map { preferences ->

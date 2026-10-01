@@ -128,7 +128,100 @@ services:
           echo "Navigateur CDP indisponible" >&2
           exit 1
         fi
-        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+        # Lecture au demarrage : changement de cle => recreer/re demarrer John.
+        exec /opt/hermes/.venv/bin/python - <<'PY_OPENBAO'
+        import json
+        import os
+        import re
+        import ssl
+        import sys
+        import urllib.error
+        import urllib.request
+        
+        BASE = 'https://hermes-bao.john-world.store'
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), NoRedirect(),
+            urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+        stage = 'configuration'
+        
+        def request(path, payload=None, token=None):
+            headers = {'Accept': 'application/json'}
+            if token:
+                headers['X-Vault-Token'] = token
+            data = None
+            if payload is not None:
+                data = json.dumps(payload).encode()
+                headers['Content-Type'] = 'application/json'
+            req = urllib.request.Request(BASE + path, data=data, headers=headers)
+            with opener.open(req, timeout=10) as response:
+                raw = response.read(1048577)
+                if len(raw) > 1048576:
+                    raise ValueError('response too large')
+                return json.loads(raw) if raw else {}
+        
+        try:
+            role_id = os.environ.pop('OPENBAO_JOHN_ROLE_ID', '')
+            secret_id = os.environ.pop('OPENBAO_JOHN_SECRET_ID', '')
+            if not role_id or not secret_id or os.environ.get('HERMES_RUN_PROFILE') != 'john':
+                raise ValueError('configuration missing')
+            stage = 'authentification AppRole'
+            login = request('/v1/auth/approle/login', {'role_id': role_id, 'secret_id': secret_id})
+            token = login['auth']['client_token']
+            if not isinstance(token, str) or not token:
+                raise ValueError('invalid token')
+            stage = 'lecture hermes/john/runtime'
+            values = request('/v1/hermes/data/john/runtime', token=token)['data']['data']
+            # Ajouter des secrets sans modifier le Compose : noms de credentials uniquement.
+            credential_suffixes = ('_API_KEY', '_TOKEN', '_SECRET', '_PASSWORD',
+                                   '_ACCESS_KEY', '_ACCESS_KEY_ID', '_PRIVATE_KEY')
+            reserved_prefixes = ('HERMES_', 'OPENBAO_', 'BAO_', 'VAULT_',
+                                 'PYTHON', 'LD_', 'NODE_', 'BASH', 'NPM_',
+                                 'SSL_', 'CURL_', 'GIT_', 'S6_', 'HTTP_', 'HTTPS_')
+            def allowed_name(name):
+                if not isinstance(name, str) or not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}', name):
+                    return False
+                # Autorisation Telegram configurable dans le coffre, sans ouvrir tous les *_USERS.
+                if name in ('TEST_CONNECTION', 'TELEGRAM_ALLOWED_USERS'):
+                    return True
+                return (not name.startswith(reserved_prefixes)
+                        and name.endswith(credential_suffixes))
+            stage = 'validation des variables runtime autorisees'
+            if not isinstance(values, dict) or not values:
+                raise ValueError('empty runtime')
+            for name, value in values.items():
+                if not allowed_name(name) or not isinstance(value, str) or not value or '\x00' in value:
+                    raise ValueError('invalid runtime variable')
+            if values.get('TEST_CONNECTION') != 'ok':
+                raise ValueError('missing test marker')
+            stage = 'verification du refus hors profil'
+            for other in ('mario', 'gaston'):
+                try:
+                    request('/v1/hermes/data/' + other + '/test', token=token)
+                except urllib.error.HTTPError as error:
+                    if error.code != 403:
+                        raise
+                else:
+                    raise ValueError('unexpected access outside profile')
+            stage = 'revocation du jeton de test'
+            request('/v1/auth/token/revoke-self', {}, token)
+            os.environ.update(values)
+            # Ne transmettre ni le Secret ID ni le jeton temporaire au processus Hermes.
+            del secret_id, role_id, token, login
+            print('[openbao] John : runtime charge ; ' + str(len(values)) + ' variable(s) autorisee(s) injectee(s) ; acces Mario/Gaston refuse ; jeton revoque.', flush=True)
+            stage = 'lancement Hermes'
+            os.execvpe('hermes', ['hermes', '--profile', 'john', 'gateway', 'run', '--no-supervise'], os.environ.copy())
+        except urllib.error.HTTPError as error:
+            print('[openbao] ECHEC ' + stage + ' : HTTP ' + str(error.code) + '. John ne demarre pas.', file=sys.stderr)
+            sys.exit(1)
+        except Exception as error:
+            # Aucun corps de reponse, credential ou message d'exception potentiellement sensible.
+            print('[openbao] ECHEC ' + stage + ' (' + type(error).__name__ + '). John ne demarre pas.', file=sys.stderr)
+            sys.exit(1)
+        PY_OPENBAO
     volumes:
       - hermes-home:/home/hermeswebui/.hermes
       - hermes-agent-src:/opt/hermes
@@ -145,6 +238,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - HERMES_RUN_PROFILE=john
+      - OPENBAO_JOHN_ROLE_ID=${OPENBAO_JOHN_ROLE_ID:?Configurer Role ID John}
+      - OPENBAO_JOHN_SECRET_ID=${OPENBAO_JOHN_SECRET_ID:?Configurer Secret ID John}
   gateway-mario:
     image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
     user: 0:0
@@ -201,7 +296,101 @@ services:
           echo "Navigateur CDP indisponible" >&2
           exit 1
         fi
-        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+        # Charge uniquement les noms autorises depuis mario/runtime.
+        # Lecture au demarrage : changement de cle => recreer/re demarrer Mario.
+        exec /opt/hermes/.venv/bin/python - <<'PY_OPENBAO'
+        import json
+        import os
+        import re
+        import ssl
+        import sys
+        import urllib.error
+        import urllib.request
+        
+        BASE = 'https://hermes-bao.john-world.store'
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), NoRedirect(),
+            urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+        stage = 'configuration'
+        
+        def request(path, payload=None, token=None):
+            headers = {'Accept': 'application/json'}
+            if token:
+                headers['X-Vault-Token'] = token
+            data = None
+            if payload is not None:
+                data = json.dumps(payload).encode()
+                headers['Content-Type'] = 'application/json'
+            req = urllib.request.Request(BASE + path, data=data, headers=headers)
+            with opener.open(req, timeout=10) as response:
+                raw = response.read(1048577)
+                if len(raw) > 1048576:
+                    raise ValueError('response too large')
+                return json.loads(raw) if raw else {}
+        
+        try:
+            role_id = os.environ.pop('OPENBAO_MARIO_ROLE_ID', '')
+            secret_id = os.environ.pop('OPENBAO_MARIO_SECRET_ID', '')
+            if not role_id or not secret_id or os.environ.get('HERMES_RUN_PROFILE') != 'mario':
+                raise ValueError('configuration missing')
+            stage = 'authentification AppRole'
+            login = request('/v1/auth/approle/login', {'role_id': role_id, 'secret_id': secret_id})
+            token = login['auth']['client_token']
+            if not isinstance(token, str) or not token:
+                raise ValueError('invalid token')
+            stage = 'lecture hermes/mario/runtime'
+            values = request('/v1/hermes/data/mario/runtime', token=token)['data']['data']
+            # Ajouter des secrets sans modifier le Compose : noms de credentials uniquement.
+            credential_suffixes = ('_API_KEY', '_TOKEN', '_SECRET', '_PASSWORD',
+                                   '_ACCESS_KEY', '_ACCESS_KEY_ID', '_PRIVATE_KEY')
+            reserved_prefixes = ('HERMES_', 'OPENBAO_', 'BAO_', 'VAULT_',
+                                 'PYTHON', 'LD_', 'NODE_', 'BASH', 'NPM_',
+                                 'SSL_', 'CURL_', 'GIT_', 'S6_', 'HTTP_', 'HTTPS_')
+            def allowed_name(name):
+                if not isinstance(name, str) or not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}', name):
+                    return False
+                # Autorisation Telegram configurable dans le coffre, sans ouvrir tous les *_USERS.
+                if name in ('TEST_CONNECTION', 'TELEGRAM_ALLOWED_USERS'):
+                    return True
+                return (not name.startswith(reserved_prefixes)
+                        and name.endswith(credential_suffixes))
+            stage = 'validation des variables runtime autorisees'
+            if not isinstance(values, dict) or not values:
+                raise ValueError('empty runtime')
+            for name, value in values.items():
+                if not allowed_name(name) or not isinstance(value, str) or not value or '\x00' in value:
+                    raise ValueError('invalid runtime variable')
+            if values.get('TEST_CONNECTION') != 'ok':
+                raise ValueError('missing test marker')
+            stage = 'verification du refus hors profil'
+            for other in ('gaston', 'john'):
+                try:
+                    request('/v1/hermes/data/' + other + '/test', token=token)
+                except urllib.error.HTTPError as error:
+                    if error.code != 403:
+                        raise
+                else:
+                    raise ValueError('unexpected access outside profile')
+            stage = 'revocation du jeton de test'
+            request('/v1/auth/token/revoke-self', {}, token)
+            os.environ.update(values)
+            # Ne transmettre ni le Secret ID ni le jeton temporaire au processus Hermes.
+            del secret_id, role_id, token, login
+            print('[openbao] Mario : runtime charge ; ' + str(len(values)) + ' variable(s) autorisee(s) injectee(s) ; acces Gaston/John refuse ; jeton revoque.', flush=True)
+            stage = 'lancement Hermes'
+            os.execvpe('hermes', ['hermes', '--profile', 'mario', 'gateway', 'run', '--no-supervise'], os.environ.copy())
+        except urllib.error.HTTPError as error:
+            print('[openbao] ECHEC ' + stage + ' : HTTP ' + str(error.code) + '. Mario ne demarre pas.', file=sys.stderr)
+            sys.exit(1)
+        except Exception as error:
+            # Aucun corps de reponse, credential ou message d'exception potentiellement sensible.
+            print('[openbao] ECHEC ' + stage + ' (' + type(error).__name__ + '). Mario ne demarre pas.', file=sys.stderr)
+            sys.exit(1)
+        PY_OPENBAO
     volumes:
       - hermes-home:/home/hermeswebui/.hermes
       - hermes-agent-src:/opt/hermes
@@ -218,6 +407,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - HERMES_RUN_PROFILE=mario
+      - OPENBAO_MARIO_ROLE_ID=${OPENBAO_MARIO_ROLE_ID:?Configurer Role ID Mario}
+      - OPENBAO_MARIO_SECRET_ID=${OPENBAO_MARIO_SECRET_ID:?Configurer Secret ID Mario}
   gateway-gaston:
     image: nousresearch/hermes-agent@sha256:2f1f2f1725e5dc9a61cf6a2dea5aca52a776ec4d022cb29679e6aa3ff303e77a
     user: 0:0
@@ -274,7 +465,100 @@ services:
           echo "Navigateur CDP indisponible" >&2
           exit 1
         fi
-        exec hermes --profile "$${HERMES_RUN_PROFILE}" gateway run --no-supervise
+        # Lecture au demarrage : changement de cle => recreer/re demarrer Gaston.
+        exec /opt/hermes/.venv/bin/python - <<'PY_OPENBAO'
+        import json
+        import os
+        import re
+        import ssl
+        import sys
+        import urllib.error
+        import urllib.request
+        
+        BASE = 'https://hermes-bao.john-world.store'
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), NoRedirect(),
+            urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+        stage = 'configuration'
+        
+        def request(path, payload=None, token=None):
+            headers = {'Accept': 'application/json'}
+            if token:
+                headers['X-Vault-Token'] = token
+            data = None
+            if payload is not None:
+                data = json.dumps(payload).encode()
+                headers['Content-Type'] = 'application/json'
+            req = urllib.request.Request(BASE + path, data=data, headers=headers)
+            with opener.open(req, timeout=10) as response:
+                raw = response.read(1048577)
+                if len(raw) > 1048576:
+                    raise ValueError('response too large')
+                return json.loads(raw) if raw else {}
+        
+        try:
+            role_id = os.environ.pop('OPENBAO_GASTON_ROLE_ID', '')
+            secret_id = os.environ.pop('OPENBAO_GASTON_SECRET_ID', '')
+            if not role_id or not secret_id or os.environ.get('HERMES_RUN_PROFILE') != 'gaston':
+                raise ValueError('configuration missing')
+            stage = 'authentification AppRole'
+            login = request('/v1/auth/approle/login', {'role_id': role_id, 'secret_id': secret_id})
+            token = login['auth']['client_token']
+            if not isinstance(token, str) or not token:
+                raise ValueError('invalid token')
+            stage = 'lecture hermes/gaston/runtime'
+            values = request('/v1/hermes/data/gaston/runtime', token=token)['data']['data']
+            # Ajouter des secrets sans modifier le Compose : noms de credentials uniquement.
+            credential_suffixes = ('_API_KEY', '_TOKEN', '_SECRET', '_PASSWORD',
+                                   '_ACCESS_KEY', '_ACCESS_KEY_ID', '_PRIVATE_KEY')
+            reserved_prefixes = ('HERMES_', 'OPENBAO_', 'BAO_', 'VAULT_',
+                                 'PYTHON', 'LD_', 'NODE_', 'BASH', 'NPM_',
+                                 'SSL_', 'CURL_', 'GIT_', 'S6_', 'HTTP_', 'HTTPS_')
+            def allowed_name(name):
+                if not isinstance(name, str) or not re.fullmatch(r'[A-Z][A-Z0-9_]{0,127}', name):
+                    return False
+                # Autorisation Telegram configurable dans le coffre, sans ouvrir tous les *_USERS.
+                if name in ('TEST_CONNECTION', 'TELEGRAM_ALLOWED_USERS'):
+                    return True
+                return (not name.startswith(reserved_prefixes)
+                        and name.endswith(credential_suffixes))
+            stage = 'validation des variables runtime autorisees'
+            if not isinstance(values, dict) or not values:
+                raise ValueError('empty runtime')
+            for name, value in values.items():
+                if not allowed_name(name) or not isinstance(value, str) or not value or '\x00' in value:
+                    raise ValueError('invalid runtime variable')
+            if values.get('TEST_CONNECTION') != 'ok':
+                raise ValueError('missing test marker')
+            stage = 'verification du refus hors profil'
+            for other in ('mario', 'john'):
+                try:
+                    request('/v1/hermes/data/' + other + '/test', token=token)
+                except urllib.error.HTTPError as error:
+                    if error.code != 403:
+                        raise
+                else:
+                    raise ValueError('unexpected access outside profile')
+            stage = 'revocation du jeton de test'
+            request('/v1/auth/token/revoke-self', {}, token)
+            os.environ.update(values)
+            # Ne transmettre ni le Secret ID ni le jeton temporaire au processus Hermes.
+            del secret_id, role_id, token, login
+            print('[openbao] Gaston : runtime charge ; ' + str(len(values)) + ' variable(s) autorisee(s) injectee(s) ; acces Mario/John refuse ; jeton revoque.', flush=True)
+            stage = 'lancement Hermes'
+            os.execvpe('hermes', ['hermes', '--profile', 'gaston', 'gateway', 'run', '--no-supervise'], os.environ.copy())
+        except urllib.error.HTTPError as error:
+            print('[openbao] ECHEC ' + stage + ' : HTTP ' + str(error.code) + '. Gaston ne demarre pas.', file=sys.stderr)
+            sys.exit(1)
+        except Exception as error:
+            # Aucun corps de reponse, credential ou message d'exception potentiellement sensible.
+            print('[openbao] ECHEC ' + stage + ' (' + type(error).__name__ + '). Gaston ne demarre pas.', file=sys.stderr)
+            sys.exit(1)
+        PY_OPENBAO
     volumes:
       - hermes-home:/home/hermeswebui/.hermes
       - hermes-agent-src:/opt/hermes
@@ -291,6 +575,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - HERMES_RUN_PROFILE=gaston
+      - OPENBAO_GASTON_ROLE_ID=${OPENBAO_GASTON_ROLE_ID:?Configurer Role ID Gaston}
+      - OPENBAO_GASTON_SECRET_ID=${OPENBAO_GASTON_SECRET_ID:?Configurer Secret ID Gaston}
   hermes-browser:
     image: zenika/alpine-chrome:124
     user: root

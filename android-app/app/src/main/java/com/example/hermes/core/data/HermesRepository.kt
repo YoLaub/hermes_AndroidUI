@@ -401,10 +401,10 @@ class HermesRepository(
     val openbaoToken: Flow<String?> = preferences.openbaoToken
     val openbaoMount: Flow<String> = preferences.openbaoMount
 
-    suspend fun setOpenbaoConfig(url: String, token: String?, mount: String = "secret") {
+    suspend fun setOpenbaoConfig(url: String, token: String?, mount: String = "hermes") {
         preferences.setOpenbaoUrl(url)
         preferences.setOpenbaoToken(token)
-        preferences.setOpenbaoMount(mount)
+        preferences.setOpenbaoMount(mount.ifBlank { "hermes" })
     }
 
     suspend fun checkOpenbaoHealth(customUrl: String? = null): Result<OpenBaoHealth> {
@@ -418,31 +418,31 @@ class HermesRepository(
     suspend fun getOpenbaoSecrets(profile: String? = null): Result<Map<String, String>> {
         val url = preferences.openbaoUrl.first()
         val token = preferences.openbaoToken.first() ?: ""
-        val mount = preferences.openbaoMount.first()
-        val prof = profile ?: preferences.activeProfile.first()
+        val mount = preferences.openbaoMount.first().ifBlank { "hermes" }
+        val prof = (profile ?: preferences.activeProfile.first()).lowercase().trim()
         if (url.isBlank()) return Result.failure(java.io.IOException("URL OpenBao non configurée"))
         if (token.isBlank()) return Result.failure(java.io.IOException("Token OpenBao manquant"))
-        return openbaoClient.getSecrets(url, token, mount, "hermes/$prof")
+        return openbaoClient.getSecrets(url, token, mount, "$prof/runtime")
     }
 
     suspend fun saveOpenbaoSecret(key: String, value: String, profile: String? = null): Result<Boolean> {
         val url = preferences.openbaoUrl.first()
         val token = preferences.openbaoToken.first() ?: ""
-        val mount = preferences.openbaoMount.first()
-        val prof = profile ?: preferences.activeProfile.first()
+        val mount = preferences.openbaoMount.first().ifBlank { "hermes" }
+        val prof = (profile ?: preferences.activeProfile.first()).lowercase().trim()
         if (url.isBlank()) return Result.failure(java.io.IOException("URL OpenBao non configurée"))
         if (token.isBlank()) return Result.failure(java.io.IOException("Token OpenBao manquant"))
-        return openbaoClient.saveSecretKey(url, token, mount, "hermes/$prof", key.trim().uppercase(), value.trim())
+        return openbaoClient.saveSecretKey(url, token, mount, "$prof/runtime", key.trim().uppercase(), value.trim())
     }
 
     suspend fun deleteOpenbaoSecret(key: String, profile: String? = null): Result<Boolean> {
         val url = preferences.openbaoUrl.first()
         val token = preferences.openbaoToken.first() ?: ""
-        val mount = preferences.openbaoMount.first()
-        val prof = profile ?: preferences.activeProfile.first()
+        val mount = preferences.openbaoMount.first().ifBlank { "hermes" }
+        val prof = (profile ?: preferences.activeProfile.first()).lowercase().trim()
         if (url.isBlank()) return Result.failure(java.io.IOException("URL OpenBao non configurée"))
         if (token.isBlank()) return Result.failure(java.io.IOException("Token OpenBao manquant"))
-        return openbaoClient.deleteSecretKey(url, token, mount, "hermes/$prof", key.trim().uppercase())
+        return openbaoClient.deleteSecretKey(url, token, mount, "$prof/runtime", key.trim().uppercase())
     }
 }
 
