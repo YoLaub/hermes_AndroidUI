@@ -754,7 +754,14 @@ class ChatViewModel(
                         is HermesSseEvent.Done -> {
                             flushBuffers(force = true)
                             event.session?.let { finalSession ->
-                                _uiState.update { it.copy(messages = finalSession.messages) }
+                                _uiState.update {
+                                    it.copy(
+                                        messages = finalSession.messages,
+                                        streamingTokens = "",
+                                        streamingReasoning = "",
+                                        streamingToolCalls = emptyList()
+                                    )
+                                }
                             }
                         }
                         is HermesSseEvent.StreamEnd -> {

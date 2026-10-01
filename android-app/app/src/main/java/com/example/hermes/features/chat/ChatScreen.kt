@@ -56,19 +56,27 @@ fun ChatScreen(
 
     // Auto-scroll to bottom on new message or when streaming begins/ends
     LaunchedEffect(state.messages.size, state.isStreaming) {
-        val totalItems = state.messages.size + (if (state.isStreaming) 1 else 0)
-        if (totalItems > 0) {
-            listState.animateScrollToItem(totalItems - 1)
+        try {
+            val totalItems = state.messages.size + (if (state.isStreaming) 1 else 0)
+            if (totalItems > 0) {
+                listState.animateScrollToItem(totalItems - 1)
+            }
+        } catch (_: Exception) {
+            // Ignore transient scroll races
         }
     }
 
     // Fast non-animated scroll when streaming progresses, only if user is already near bottom
-    LaunchedEffect(state.streamingTokens.length / 50) {
+    LaunchedEffect(state.streamingTokens.length / 100) {
         if (state.isStreaming) {
-            val totalItems = state.messages.size + 1
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            if (lastVisible >= totalItems - 2) {
-                listState.scrollToItem(totalItems - 1)
+            try {
+                val totalItems = state.messages.size + 1
+                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                if (lastVisible >= totalItems - 2 && totalItems > 0) {
+                    listState.scrollToItem(totalItems - 1)
+                }
+            } catch (_: Exception) {
+                // Ignore transient scroll races
             }
         }
     }

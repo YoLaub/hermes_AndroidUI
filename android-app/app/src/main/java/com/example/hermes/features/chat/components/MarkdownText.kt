@@ -138,7 +138,7 @@ private fun parseInlineMarkdown(text: String, defaultColor: androidx.compose.ui.
                 // Bold: **text**
                 text.startsWith("**", i) -> {
                     val end = text.indexOf("**", i + 2)
-                    if (end != -1) {
+                    if (end != -1 && end > i + 2) {
                         pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
                         append(text.substring(i + 2, end))
                         pop()
@@ -151,7 +151,7 @@ private fun parseInlineMarkdown(text: String, defaultColor: androidx.compose.ui.
                 // Inline code: `code`
                 text.startsWith("`", i) -> {
                     val end = text.indexOf("`", i + 1)
-                    if (end != -1) {
+                    if (end != -1 && end > i + 1) {
                         pushStyle(
                             SpanStyle(
                                 fontFamily = FontFamily.Monospace,
@@ -182,11 +182,13 @@ private fun parseInlineMarkdown(text: String, defaultColor: androidx.compose.ui.
                     }
                 }
                 else -> {
-                    // Fast slice scan: find the next delimiter (* or `) and append the slice all at once
                     val nextSpecial = text.indexOfAny(charArrayOf('*', '`'), i)
                     if (nextSpecial == -1) {
                         append(text.substring(i))
                         break
+                    } else if (nextSpecial == i) {
+                        append(text[i])
+                        i++
                     } else {
                         append(text.substring(i, nextSpecial))
                         i = nextSpecial

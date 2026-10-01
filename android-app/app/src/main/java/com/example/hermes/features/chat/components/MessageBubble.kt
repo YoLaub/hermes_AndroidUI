@@ -164,39 +164,133 @@ private fun parseContentAndReasoning(
         .replace("\\r", "\r")
         .trim()
 
-    // Strip XML tool calling syntax (<function_calls>...</function_calls>)
-    if (raw.contains("function_calls", ignoreCase = true)) {
-        raw = raw.replace(Regex("<(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls>[\\s\\S]*?</(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls>", RegexOption.IGNORE_CASE), "")
-        raw = raw.replace(Regex("<(?:\\s*｜\\s*DSML\\s*[｜|]\\s*)?function_calls(?:>|$)[\\s\\S]*$", RegexOption.IGNORE_CASE), "")
-        raw = raw.replace(Regex("<\\s*｜\\s*DSML\\s*[｜|]\\s*", RegexOption.IGNORE_CASE), "")
-    }
+    // Safely strip XML tool calling syntax (<function_calls>...</function_calls>)
+    raw = stripXmlBlock(raw, "function_calls")
 
     if (!explicitReasoning.isNullOrBlank()) {
-        // Also strip any redundant <think> tags from content if reasoning was already provided
-        val stripped = raw.replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("<\\|channel>thought\\n[\\s\\S]*?<channel\\|>", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("<\\|turn\\|>thinking\\n[\\s\\S]*?<turn\\|>", RegexOption.IGNORE_CASE), "")
-            .trim()
+        val stripped = stripAllThoughtTags(raw).trim()
         return Pair(explicitReasoning.trim(), stripped)
     }
 
-    // Check for inline think blocks
-    val thinkRegex = Regex("<think>([\\s\\S]*?)</think>", RegexOption.IGNORE_CASE)
-    val match = thinkRegex.find(raw)
-    if (match != null) {
-        val extracted = match.groupValues[1].trim()
-        val remaining = raw.removeRange(match.range).trim()
-        return Pair(extracted.ifBlank { null }, remaining)
+    // Check for standard <think>...</think> tags (both complete and streaming in-progress)
+    val thinkOpen = raw.indexOf("<think>", ignoreCase = true)
+    if (thinkOpen != -1) {
+        val thinkClose = raw.indexOf("</think>", thinkOpen + 7, ignoreCase = true)
+        if (thinkClose != -1) {
+            val extracted = raw.substring(thinkOpen + 7, thinkClose).trim()
+            val remaining = (raw.substring(0, thinkOpen) + raw.substring(thinkClose + 8)).trim()
+            return Pair(extracted.ifBlank { null }, remaining)
+        } else {
+            // In-progress think block (streaming)
+            val extracted = raw.substring(thinkOpen + 7).trim()
+            val remaining = raw.substring(0, thinkOpen).trim()
+            return Pair(extracted.ifBlank { null }, remaining)
+        }
     }
 
-    // Gemma/other channel thought format
-    val channelRegex = Regex("<\\|channel>thought\\n([\\s\\S]*?)<channel\\|>", RegexOption.IGNORE_CASE)
-    val channelMatch = channelRegex.find(raw)
-    if (channelMatch != null) {
-        val extracted = channelMatch.groupValues[1].trim()
-        val remaining = raw.removeRange(channelMatch.range).trim()
-        return Pair(extracted.ifBlank { null }, remaining)
+    // Check for Gemma/other channel thought format (<|channel>thought\n ... <channel|>)
+    val channelOpenTag = "<|channel>thought"
+    val channelCloseTag = "<channel|>"
+    val channelOpen = raw.indexOf(channelOpenTag, ignoreCase = true)
+    if (channelOpen != -1) {
+        val contentStart = raw.indexOf('\n', channelOpen + channelOpenTag.length).let {
+            if (it != -1 && it < channelOpen + channelOpenTag.length + 4) it + 1 else channelOpen + channelOpenTag.length
+        }
+        val channelClose = raw.indexOf(channelCloseTag, contentStart, ignoreCase = true)
+        if (channelClose != -1) {
+            val extracted = raw.substring(contentStart, channelClose).trim()
+            val remaining = (raw.substring(0, channelOpen) + raw.substring(channelClose + channelCloseTag.length)).trim()
+            return Pair(extracted.ifBlank { null }, remaining)
+        } else {
+            val extracted = raw.substring(contentStart).trim()
+            val remaining = raw.substring(0, channelOpen).trim()
+            return Pair(extracted.ifBlank { null }, remaining)
+        }
+    }
+
+    // Check for turn thinking format (<|turn|>thinking\n ... <turn|>)
+    val turnOpenTag = "<|turn|>thinking"
+    val turnCloseTag = "<turn|>"
+    val turnOpen = raw.indexOf(turnOpenTag, ignoreCase = true)
+    if (turnOpen != -1) {
+        val contentStart = raw.indexOf('\n', turnOpen + turnOpenTag.length).let {
+            if (it != -1 && it < turnOpen + turnOpenTag.length + 4) it + 1 else turnOpen + turnOpenTag.length
+        }
+        val turnClose = raw.indexOf(turnCloseTag, contentStart, ignoreCase = true)
+        if (turnClose != -1) {
+            val extracted = raw.substring(contentStart, turnClose).trim()
+            val remaining = (raw.substring(0, turnOpen) + raw.substring(turnClose + turnCloseTag.length)).trim()
+            return Pair(extracted.ifBlank { null }, remaining)
+        } else {
+            val extracted = raw.substring(contentStart).trim()
+            val remaining = raw.substring(0, turnOpen).trim()
+            return Pair(extracted.ifBlank { null }, remaining)
+        }
     }
 
     return Pair(null, raw.trim())
+}
+
+private fun stripXmlBlock(text: String, tagBaseName: String): String {
+    var result = text
+    while (true) {
+        val openIdx = result.indexOf(tagBaseName, ignoreCase = true)
+        if (openIdx == -1) break
+        val tagStart = result.lastIndexOf('<', openIdx)
+        if (tagStart == -1) break
+        val tagOpenEnd = result.indexOf('>', openIdx)
+        if (tagOpenEnd == -1) break
+
+        val closeTag = "</$tagBaseName>"
+        val closeIdx = result.indexOf(closeTag, tagOpenEnd + 1, ignoreCase = true)
+        if (closeIdx != -1) {
+            result = result.substring(0, tagStart) + result.substring(closeIdx + closeTag.length)
+        } else {
+            // Streaming / unclosed
+            result = result.substring(0, tagStart)
+            break
+        }
+    }
+    return result
+}
+
+private fun stripAllThoughtTags(text: String): String {
+    var s = text
+    // Strip <think>...</think>
+    while (true) {
+        val o = s.indexOf("<think>", ignoreCase = true)
+        if (o == -1) break
+        val c = s.indexOf("</think>", o + 7, ignoreCase = true)
+        if (c != -1) {
+            s = s.substring(0, o) + s.substring(c + 8)
+        } else {
+            s = s.substring(0, o)
+            break
+        }
+    }
+    // Strip <|channel>thought...<channel|>
+    while (true) {
+        val o = s.indexOf("<|channel>thought", ignoreCase = true)
+        if (o == -1) break
+        val c = s.indexOf("<channel|>", o + 17, ignoreCase = true)
+        if (c != -1) {
+            s = s.substring(0, o) + s.substring(c + 10)
+        } else {
+            s = s.substring(0, o)
+            break
+        }
+    }
+    // Strip <|turn|>thinking...<turn|>
+    while (true) {
+        val o = s.indexOf("<|turn|>thinking", ignoreCase = true)
+        if (o == -1) break
+        val c = s.indexOf("<turn|>", o + 16, ignoreCase = true)
+        if (c != -1) {
+            s = s.substring(0, o) + s.substring(c + 7)
+        } else {
+            s = s.substring(0, o)
+            break
+        }
+    }
+    return s
 }

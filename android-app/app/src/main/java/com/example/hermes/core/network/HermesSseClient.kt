@@ -2,8 +2,10 @@ package com.example.hermes.core.network
 
 import android.util.Log
 import com.example.hermes.core.model.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -147,5 +149,5 @@ class HermesSseClient(
             Log.d(TAG, "Cancelling SSE event source for stream $streamId")
             eventSource.cancel()
         }
-    }
+    }.buffer(Channel.UNLIMITED)
 }
