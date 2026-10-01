@@ -28,6 +28,10 @@ Ajoutez le service suivant dans votre `docker-compose.yml` Coolify :
       - mobile-relay-data:/data
     environment:
       - MOBILE_RELAY_DB_PATH=/data/mobile_relay.db
+      - MOBILE_RELAY_ADMIN_TOKEN=${MOBILE_RELAY_ADMIN_TOKEN}
+      - MOBILE_CONTROL_TOKEN_MARIO=${MOBILE_CONTROL_TOKEN_MARIO}
+      - MOBILE_CONTROL_TOKEN_GASTON=${MOBILE_CONTROL_TOKEN_GASTON}
+      - MOBILE_CONTROL_TOKEN_JOHN=${MOBILE_CONTROL_TOKEN_JOHN}
     ports:
       - "8765:8765"
     networks:
@@ -41,7 +45,7 @@ volumes:
 
 ## 2. Configuration MCP pour le Profil Pilote Hermes (`mario`)
 
-Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config.json` de `mario`), ajoutez l'endpoint Streamable HTTP :
+Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config.json` de `mario`), ajoutez l'endpoint Streamable HTTP authentifié avec son token dédié :
 
 ```json
 {
@@ -49,7 +53,7 @@ Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config
     "mobile_control": {
       "url": "http://mobile-relay:8765/mcp",
       "headers": {
-        "X-Hermes-Profile": "mario"
+        "Authorization": "Bearer ${MOBILE_CONTROL_TOKEN_MARIO}"
       }
     }
   }

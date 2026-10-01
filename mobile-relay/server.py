@@ -1,12 +1,14 @@
 import asyncio
 import json
 import logging
+import os
 import secrets
 import time
 import uuid
-from typing import Dict, Optional, Any
+from contextlib import asynccontextmanager
+from typing import Dict, Optional, Any, Tuple
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,6 +18,9 @@ from database import (
     register_device,
     save_pairing_code,
     consume_pairing_code,
+    count_active_pairing_codes,
+    verify_admin_token,
+    verify_profile_token_in_db,
     log_audit
 )
 from models import (
@@ -31,7 +36,13 @@ from models import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("mobile-relay")
 
-app = FastAPI(title="Hermes Mobile Relay", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    logger.info("Mobile Relay service initialized successfully.")
+    yield
+
+app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,11 +52,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def on_startup():
-    init_db()
-    logger.info("Mobile Relay service initialized successfully.")
-
 # ── Active State & Connection Management (In-Memory) ─────────────────────────
 
 class ActiveSession:
@@ -54,7 +60,7 @@ class ActiveSession:
         self.device_id = device_id
         self.target_package = target_package
         self.allowed_profile = allowed_profile.lower()
-        self.mode = mode
+        self.mode = mode.lower()
         self.expires_at = expires_at
 
     @property
@@ -65,7 +71,10 @@ class DeviceConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.active_sessions: Dict[str, ActiveSession] = {} # device_id -> ActiveSession
-        self.pending_command_futures: Dict[str, asyncio.Future] = {} # command_id -> Future[MobileCommandResult]
+        # Pending commands: command_id -> (Future[MobileCommandResult], target_device_id, expires_at)
+        self.pending_commands: Dict[str, Tuple[asyncio.Future, str, float]] = {}
+        # Concurrency limit: device_id -> command_id currently in flight
+        self.device_in_flight: Dict[str, str] = {}
 
     def register_connection(self, device_id: str, websocket: WebSocket):
         self.active_connections[device_id] = websocket
@@ -74,11 +83,12 @@ class DeviceConnectionManager:
     def unregister_connection(self, device_id: str):
         self.active_connections.pop(device_id, None)
         self.active_sessions.pop(device_id, None)
+        self.device_in_flight.pop(device_id, None)
         logger.info(f"Device disconnected: {device_id}")
 
     def set_active_session(self, session: ActiveSession):
         self.active_sessions[session.device_id] = session
-        logger.info(f"Active session started on device {session.device_id}: {session.session_id} ({session.target_package}, profile: {session.allowed_profile})")
+        logger.info(f"Active session started on device {session.device_id}: {session.session_id} (target: {session.target_package}, profile: {session.allowed_profile}, mode: {session.mode})")
 
     def end_active_session(self, device_id: str, session_id: Optional[str] = None):
         current = self.active_sessions.get(device_id)
@@ -107,9 +117,23 @@ class DeviceConnectionManager:
                 message="Le téléphone n'est pas connecté au relais."
             )
 
+        # Enforce single command in flight per device
+        if device_id in self.device_in_flight:
+            current_cmd_id = self.device_in_flight[device_id]
+            logger.warning(f"Device {device_id} is busy with command {current_cmd_id}, rejecting {cmd.command_id}")
+            return MobileCommandResult(
+                command_id=cmd.command_id,
+                status="rejected",
+                error_code="CONCURRENT_COMMAND_DENIED",
+                message=f"Une commande est déjà en cours d'exécution sur cet appareil ({current_cmd_id})."
+            )
+
         loop = asyncio.get_running_loop()
         future = loop.create_future()
-        self.pending_command_futures[cmd.command_id] = future
+        expires_at = time.time() + timeout
+
+        self.device_in_flight[device_id] = cmd.command_id
+        self.pending_commands[cmd.command_id] = (future, device_id, expires_at)
 
         try:
             await ws.send_text(cmd.model_dump_json())
@@ -124,14 +148,95 @@ class DeviceConnectionManager:
                 message="Délai d'exécution dépassé sans confirmation du téléphone."
             )
         finally:
-            self.pending_command_futures.pop(cmd.command_id, None)
+            self.device_in_flight.pop(device_id, None)
+            self.pending_commands.pop(cmd.command_id, None)
 
-    def resolve_command_result(self, result: MobileCommandResult):
-        fut = self.pending_command_futures.get(result.command_id)
-        if fut and not fut.done():
-            fut.set_result(result)
+    def resolve_command_result(self, from_device_id: str, result: MobileCommandResult):
+        pending = self.pending_commands.get(result.command_id)
+        if not pending:
+            logger.warning(f"Ignoring result for unknown or expired command_id: {result.command_id} from device {from_device_id}")
+            return
+
+        future, target_device_id, _ = pending
+        # Security: Accept results ONLY from the device that the command was sent to
+        if target_device_id != from_device_id:
+            logger.error(f"SECURITY ALERT: Received result for {result.command_id} from {from_device_id} but command was sent to {target_device_id}!")
+            return
+
+        if not future.done():
+            future.set_result(result)
 
 manager = DeviceConnectionManager()
+
+# ── Authentication Helpers ───────────────────────────────────────────────────
+
+def authenticate_admin_request(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    token = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif "X-Admin-Token" in request.headers:
+        token = request.headers["X-Admin-Token"].strip()
+
+    if not token or not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing admin token.")
+
+def authenticate_hermes_profile(request: Request) -> str:
+    """
+    Validates token from Authorization or X-Hermes-Token and strictly deduces
+    the authorized profile. Never trusts user-supplied profile headers blindly.
+    """
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif "X-Hermes-Token" in request.headers:
+        token = request.headers["X-Hermes-Token"].strip()
+    elif "token" in request.query_params:
+        token = request.query_params["token"].strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Missing Hermes profile token (Authorization: Bearer <token> or X-Hermes-Token)."
+        )
+
+    # 1. Check environment profile tokens mapping
+    env_tokens_json = os.environ.get("HERMES_PROFILE_TOKENS")
+    if env_tokens_json:
+        try:
+            mapping = json.loads(env_tokens_json)
+            # supports {"token": "profile"} or {"profile": "token"}
+            for k, v in mapping.items():
+                if secrets.compare_digest(k, token):
+                    return v.lower()
+                if secrets.compare_digest(v, token):
+                    return k.lower()
+        except Exception as e:
+            logger.error(f"Failed to parse HERMES_PROFILE_TOKENS: {e}")
+
+    # 2. Check individual environment variables
+    for prof in ["mario", "gaston", "john"]:
+        env_val = os.environ.get(f"MOBILE_CONTROL_TOKEN_{prof.upper()}")
+        if env_val and secrets.compare_digest(env_val.strip(), token):
+            return prof
+
+    # 3. Check generic MOBILE_CONTROL_TOKEN (maps to default pilot profile mario)
+    generic_token = os.environ.get("MOBILE_CONTROL_TOKEN")
+    if generic_token and secrets.compare_digest(generic_token.strip(), token):
+        return "mario"
+
+    # 4. Check SQLite database profile_tokens
+    db_profile = verify_profile_token_in_db(token)
+    if db_profile:
+        return db_profile
+
+    # If test mode allows fallback test token
+    test_token = os.environ.get("MOBILE_CONTROL_TEST_TOKEN")
+    if test_token and secrets.compare_digest(test_token.strip(), token):
+        return "mario"
+
+    raise HTTPException(status_code=401, detail="Unauthorized: Invalid Hermes profile token.")
 
 # ── Health & Pairing Routes ──────────────────────────────────────────────────
 
@@ -140,10 +245,18 @@ def health():
     return {"status": "ok", "service": "hermes-mobile-relay", "connected_devices": len(manager.active_connections)}
 
 @app.post("/api/pair/generate", response_model=PairingGenerateResponse)
-def generate_pairing_code(req: PairingGenerateRequest):
+def generate_pairing_code(request: Request, req: PairingGenerateRequest):
+    # Requirement 2: Authentifier /api/pair/generate
+    authenticate_admin_request(request)
+
+    # Quota check
+    if count_active_pairing_codes() >= 10:
+        raise HTTPException(status_code=429, detail="Too many active pairing codes. Please wait or use existing codes.")
+
     code = secrets.token_hex(3).upper() # 6 characters
     save_pairing_code(code, req.user_id or "admin", expires_in_seconds=300)
-    logger.info(f"Generated pairing code: {code}")
+    # Requirement 2: Ne jamais journaliser ce code
+    logger.info("Generated pairing code for user: %s (expires in 300s)", req.user_id or "admin")
     return PairingGenerateResponse(code=code, expires_in_seconds=300)
 
 @app.post("/api/pair/verify", response_model=PairingVerifyResponse)
@@ -154,7 +267,7 @@ def verify_pairing_code(req: PairingVerifyRequest):
 
     device_token = "tok_" + secrets.token_urlsafe(24)
     register_device(req.device_id, device_token, req.device_name or "Android Phone")
-    logger.info(f"Paired device {req.device_id} successfully.")
+    logger.info("Paired device %s successfully for user %s.", req.device_id, user_id)
     return PairingVerifyResponse(ok=True, device_token=device_token)
 
 # ── WebSocket Device Endpoint ────────────────────────────────────────────────
@@ -169,7 +282,7 @@ async def websocket_device_endpoint(
     authenticated_device_id = None
 
     try:
-        # Initial message must be Auth or headers must authenticate
+        # Initial authentication via headers if present
         if x_device_id and x_device_token and verify_device_token(x_device_id, x_device_token):
             authenticated_device_id = x_device_id
             manager.register_connection(authenticated_device_id, websocket)
@@ -198,16 +311,24 @@ async def websocket_device_endpoint(
             elif msg_type == "session_start":
                 if not authenticated_device_id:
                     continue
+
+                # Requirement 6: Durée maximale bornée côté relais (max 1800s / 30 min)
+                try:
+                    duration = int(data.get("duration_seconds", 900))
+                except (ValueError, TypeError):
+                    duration = 900
+                bounded_duration = max(60, min(duration, 1800))
+
                 session = ActiveSession(
                     session_id=data.get("session_id", str(uuid.uuid4())),
                     device_id=authenticated_device_id,
                     target_package=data.get("target_package", ""),
                     allowed_profile=data.get("allowed_profile", "mario"),
                     mode=data.get("mode", "interaction"),
-                    expires_at=time.time() + data.get("duration_seconds", 900)
+                    expires_at=time.time() + bounded_duration
                 )
                 manager.set_active_session(session)
-                log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}")
+                log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s")
                 await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "session_started_ack", "session_id": session.session_id}))
 
             elif msg_type == "session_end":
@@ -218,8 +339,12 @@ async def websocket_device_endpoint(
                 log_audit(str(uuid.uuid4()), authenticated_device_id, "", "SESSION_END", "STOPPED", data.get("reason", "user_cancelled"))
 
             elif msg_type == "result":
+                # Requirement 5: Accepter uniquement depuis le téléphone authentifié
+                if not authenticated_device_id:
+                    logger.warning("Rejected result message from unauthenticated WebSocket connection.")
+                    continue
                 res = MobileCommandResult(**data)
-                manager.resolve_command_result(res)
+                manager.resolve_command_result(authenticated_device_id, res)
 
             elif msg_type == "ping":
                 await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "pong"}))
@@ -312,23 +437,50 @@ MCP_TOOLS = [
     }
 ]
 
+INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "back"}
+
 @app.post("/mcp")
 @app.post("/mcp/v1/stream")
-async def mcp_stream_endpoint(
-    request: Request,
-    x_hermes_profile: Optional[str] = Header(None)
-):
+async def mcp_stream_endpoint(request: Request):
+    # Requirement 1: Authentifier /mcp et déduire le profil uniquement du token
+    authenticated_profile = authenticate_hermes_profile(request)
+
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON-RPC request")
 
     method = body.get("method")
-    req_id = body.get("id", 1)
+    req_id = body.get("id")
     params = body.get("params", {})
 
-    # Extract caller profile (from header or fallback to mario for pilot)
-    profile = (x_hermes_profile or "mario").lower()
+    # Requirement 3: Implémenter l'initialisation MCP et les notifications
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": { "listChanged": False }
+                },
+                "serverInfo": {
+                    "name": "hermes-mobile-relay",
+                    "version": "1.0.0"
+                }
+            }
+        }
+
+    # Handle notifications (e.g. notifications/initialized) - no response required in JSON-RPC
+    if (method and method.startswith("notifications/")) or (req_id is None):
+        return Response(status_code=204)
+
+    if method == "ping":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {}
+        }
 
     if method == "tools/list":
         return {
@@ -343,19 +495,36 @@ async def mcp_stream_endpoint(
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
-        # 1. mobile_control_status does not require an active session
+        # 1. mobile_control_status
         if tool_name == "mobile_control_status":
-            session = manager.get_session_for_profile(profile)
+            session = manager.get_session_for_profile(authenticated_profile)
             if session:
                 remaining = int(session.expires_at - time.time())
-                return format_mcp_response(req_id, f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s")
+                return format_mcp_response(
+                    req_id,
+                    f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s"
+                )
             else:
-                return format_mcp_response(req_id, f"Aucune session de contrôle mobile n'est actuellement active pour le profil '{profile}'. L'utilisateur doit démarrer une session sur son application Hermes Android.")
+                return format_mcp_response(
+                    req_id,
+                    f"Aucune session de contrôle mobile n'est actuellement active pour le profil '{authenticated_profile}'. L'utilisateur doit démarrer une session sur son application Hermes Android."
+                )
 
-        # 2. All other tools require an active validated session for this profile
-        session = manager.get_session_for_profile(profile)
+        # 2. All other tools require an active validated session for this authenticated profile
+        session = manager.get_session_for_profile(authenticated_profile)
         if not session:
-            return format_mcp_error(req_id, f"SESSION_REQUIRED: Aucune session active pour le profil '{profile}'. Demandez à l'utilisateur de lancer une session dans l'app Hermes.")
+            return format_mcp_error(
+                req_id,
+                f"SESSION_REQUIRED: Aucune session active pour le profil '{authenticated_profile}'. Demandez à l'utilisateur de lancer une session dans l'app Hermes."
+            )
+
+        # Requirement 6: Vérifier l'expiration côté relais
+        if session.is_expired:
+            manager.end_active_session(session.device_id, session.session_id)
+            return format_mcp_error(
+                req_id,
+                "SESSION_EXPIRED: La session de contrôle a expiré. Une nouvelle session doit être démarrée sur le téléphone."
+            )
 
         op_map = {
             "mobile_observe": "observe",
@@ -370,6 +539,13 @@ async def mcp_stream_endpoint(
         op = op_map.get(tool_name)
         if not op:
             return format_mcp_error(req_id, f"UNSUPPORTED_TOOL: Outil inconnu '{tool_name}'.")
+
+        # Requirement 6: Mode observation côté relais
+        if session.mode == "observation" and op in INTERACTION_OPERATIONS:
+            return format_mcp_error(
+                req_id,
+                f"MODE_DENIED: L'application '{session.target_package}' est en mode observation seule. Les interactions ({op}) sont refusées par le relais."
+            )
 
         cmd = MobileCommand(
             command_id="cmd_" + str(uuid.uuid4()),
@@ -389,7 +565,7 @@ async def mcp_stream_endpoint(
         result = await manager.send_command_to_device(session.device_id, cmd)
 
         if result.status == "success":
-            # Format friendly MCP textual view of screen data
+            # Requirement 4: Corriger el.className en el.class_name
             if result.data and result.data.elements:
                 elements_summary = []
                 for el in result.data.elements:
@@ -398,11 +574,12 @@ async def mcp_stream_endpoint(
                     if el.editable: attrs.append("editable")
                     if el.scrollable: attrs.append("scrollable")
                     attr_str = f" [{', '.join(attrs)}]" if attrs else ""
-                    text_display = f"\"{el.text}\"" if el.text else (f"desc=\"{el.content_desc}\"" if el.content_desc else el.className)
-                    elements_summary.append(f"- [{el.element_ref}] {el.className}: {text_display}{attr_str}")
+                    c_name = el.class_name or "View"
+                    text_display = f"\"{el.text}\"" if el.text else (f"desc=\"{el.content_desc}\"" if el.content_desc else c_name)
+                    elements_summary.append(f"- [{el.element_ref}] {c_name}: {text_display}{attr_str}")
 
                 content = (
-                    f"Observation de {result.data.package_name} (Révision: {result.data.screenRevision if hasattr(result.data, 'screenRevision') else result.data.screen_revision}):\n" +
+                    f"Observation de {result.data.package_name} (Révision: {result.data.screen_revision}):\n" +
                     "\n".join(elements_summary)
                 )
                 return format_mcp_response(req_id, content)
