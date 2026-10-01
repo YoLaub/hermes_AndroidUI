@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Hermes</string>
+    <string name="accessibility_service_description">Permet au profil Hermes autorisé de lire et d\'interagir avec l\'application sélectionnée lorsque vous activez une session de contrôle mobile explicite.</string>
 </resources>

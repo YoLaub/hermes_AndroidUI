@@ -15,6 +15,7 @@ val HermesOnPrimaryContainer = Color(0xFFC8E1FF)
 val HermesSecondary = Color(0xFF7EE787)
 val HermesSecondaryContainer = Color(0xFF133820)
 val HermesOnSecondaryContainer = Color(0xFFAFF5B4)
+val HermesSuccess = HermesSecondary
 
 val HermesTertiary = Color(0xFFD2A8FF)
 val HermesTertiaryContainer = Color(0xFF3B2757)

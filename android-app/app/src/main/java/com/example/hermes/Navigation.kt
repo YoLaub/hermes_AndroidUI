@@ -22,6 +22,9 @@ import com.example.hermes.features.kanban.KanbanViewModel
 import com.example.hermes.features.workspace.WorkspaceHubScreen
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.forum.ForumViewModel
+import com.example.hermes.core.mobilecontrol.MobileControlManager
+import com.example.hermes.features.mobilecontrol.MobileControlScreen
+import com.example.hermes.features.mobilecontrol.MobileControlViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
 
 @Composable
@@ -34,6 +37,7 @@ fun MainNavigation() {
     val forumRepository = remember { ForumRepository(context) }
     val speechManager = remember { SpeechRecognitionManager(context) }
     val audioPlayer = remember { AudioPlayerManager(context) }
+    val mobileControlManager = remember { MobileControlManager(context, preferences) }
 
     val authViewModel = remember { AuthViewModel(repository) }
     val chatViewModel = remember { ChatViewModel(repository) }
@@ -41,6 +45,7 @@ fun MainNavigation() {
     val notesViewModel = remember { NotesViewModel(notesRepository, speechManager, audioPlayer) }
     val calendarViewModel = remember { CalendarViewModel(calendarRepository) }
     val forumViewModel = remember { ForumViewModel(forumRepository) }
+    val mobileControlViewModel = remember { MobileControlViewModel(context, mobileControlManager, repository, preferences) }
 
     val backStack = rememberNavBackStack(AuthRoute)
 
@@ -72,6 +77,9 @@ fun MainNavigation() {
                         notesViewModel.loadNotes()
                         calendarViewModel.loadCalendarData()
                         forumViewModel.loadData()
+                    },
+                    onNavigateToMobileControl = {
+                        backStack.add(MobileControlRoute)
                     }
                 )
             }
@@ -88,6 +96,14 @@ fun MainNavigation() {
                     notesViewModel = notesViewModel,
                     calendarViewModel = calendarViewModel,
                     forumViewModel = forumViewModel,
+                    onNavigateBack = {
+                        backStack.removeLastOrNull()
+                    }
+                )
+            }
+            entry<MobileControlRoute> {
+                MobileControlScreen(
+                    viewModel = mobileControlViewModel,
                     onNavigateBack = {
                         backStack.removeLastOrNull()
                     }

@@ -23,6 +23,9 @@ class HermesPreferences(private val context: Context) {
         val KEY_OPENBAO_URL = stringPreferencesKey("openbao_url")
         val KEY_OPENBAO_TOKEN = stringPreferencesKey("openbao_token")
         val KEY_OPENBAO_MOUNT = stringPreferencesKey("openbao_mount")
+        val KEY_MOBILE_DEVICE_ID = stringPreferencesKey("mobile_device_id")
+        val KEY_MOBILE_DEVICE_TOKEN = stringPreferencesKey("mobile_device_token")
+        val KEY_MOBILE_RELAY_URL = stringPreferencesKey("mobile_relay_url")
         const val DEFAULT_SERVER_URL = "http://10.0.2.2:8000"
         const val DEFAULT_OPENBAO_URL = "https://hermes-bao.john-world.store"
         const val DEFAULT_OPENBAO_MOUNT = "hermes"
@@ -30,6 +33,18 @@ class HermesPreferences(private val context: Context) {
 
     val serverUrl: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_SERVER_URL] ?: DEFAULT_SERVER_URL
+    }
+
+    val mobileDeviceId: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_MOBILE_DEVICE_ID]
+    }
+
+    val mobileDeviceToken: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_MOBILE_DEVICE_TOKEN]
+    }
+
+    val mobileRelayUrl: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_MOBILE_RELAY_URL]
     }
 
     val sessionCookie: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -144,6 +159,29 @@ class HermesPreferences(private val context: Context) {
         val cleanMount = mount.trim().trim('/')
         context.dataStore.edit { preferences ->
             preferences[KEY_OPENBAO_MOUNT] = cleanMount.ifBlank { DEFAULT_OPENBAO_MOUNT }
+        }
+    }
+
+    suspend fun setMobileDeviceId(deviceId: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_MOBILE_DEVICE_ID] = deviceId.trim()
+        }
+    }
+
+    suspend fun setMobileDeviceToken(token: String?) {
+        context.dataStore.edit { preferences ->
+            if (token != null && token.isNotBlank()) {
+                preferences[KEY_MOBILE_DEVICE_TOKEN] = token.trim()
+            } else {
+                preferences.remove(KEY_MOBILE_DEVICE_TOKEN)
+            }
+        }
+    }
+
+    suspend fun setMobileRelayUrl(url: String) {
+        val cleanUrl = url.trim().removeSuffix("/")
+        context.dataStore.edit { preferences ->
+            preferences[KEY_MOBILE_RELAY_URL] = cleanUrl
         }
     }
 

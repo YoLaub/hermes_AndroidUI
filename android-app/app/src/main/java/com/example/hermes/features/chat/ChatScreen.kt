@@ -36,6 +36,7 @@ fun ChatScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToKanban: () -> Unit = {},
     onNavigateToWorkspace: () -> Unit = {},
+    onNavigateToMobileControl: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -238,6 +239,19 @@ fun ChatScreen(
                                 imageVector = Icons.Default.Hub,
                                 contentDescription = "Zone Commune (Notes, Audio, Forum)",
                                 tint = HermesTertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Contrôle d'applications Android par Hermes
+                        IconButton(
+                            onClick = onNavigateToMobileControl,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhoneAndroid,
+                                contentDescription = "Contrôle par Hermes",
+                                tint = HermesPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
