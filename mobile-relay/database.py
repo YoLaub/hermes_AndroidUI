@@ -104,41 +104,56 @@ def atomic_register_or_update_device(
     ou (False, "UNAUTHORIZED_OVERWRITE" | "INTEGRITY_ERROR") en cas de refus.
     """
     conn = get_db()
+    conn.isolation_level = None # Allows explicit BEGIN IMMEDIATE transaction
     new_hash = hash_token(new_token)
     now = time.time()
     result = (False, "ERROR")
     try:
-        with conn:
-            # 1. Vérification d'existence sous verrou transactionnel SQLite
-            row = conn.execute("SELECT token_hash FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
-            if row:
-                # Appareil existant: remplacement
-                existing_hash = row["token_hash"]
-                token_matches = False
-                if current_token:
-                    candidate_hash = hash_token(current_token)
-                    token_matches = secrets.compare_digest(existing_hash, candidate_hash)
+        conn.execute("BEGIN IMMEDIATE")
+        # 1. Vérification d'existence sous verrou transactionnel immédiat SQLite
+        row = conn.execute(
+            "SELECT token_hash FROM paired_devices WHERE device_id = ?",
+            (device_id,)
+        ).fetchone()
 
-                if not (is_admin_authorized or token_matches):
-                    return (False, "UNAUTHORIZED_OVERWRITE")
+        if row:
+            # Appareil existant: remplacement
+            existing_hash = row["token_hash"]
+            token_matches = False
+            if current_token:
+                candidate_hash = hash_token(current_token)
+                token_matches = secrets.compare_digest(existing_hash, candidate_hash)
 
-                # Remplacement autorisé: UPDATE atomique dans la même transaction
+            if not (is_admin_authorized or token_matches):
+                conn.execute("ROLLBACK")
+                return (False, "UNAUTHORIZED_OVERWRITE")
+
+            # Remplacement autorisé: UPDATE atomique dans la même transaction
+            conn.execute("""
+                UPDATE paired_devices
+                SET token_hash = ?, device_name = ?, last_seen = ?
+                WHERE device_id = ?
+            """, (new_hash, device_name, now, device_id))
+            conn.execute("COMMIT")
+            result = (True, "updated")
+        else:
+            # Nouvel appareil: INSERT strict (échoue atomiquement si doublon inséré en concurrence)
+            try:
                 conn.execute("""
-                    UPDATE paired_devices
-                    SET token_hash = ?, device_name = ?, last_seen = ?
-                    WHERE device_id = ?
-                """, (new_hash, device_name, now, device_id))
-                result = (True, "updated")
-            else:
-                # Nouvel appareil: INSERT strict (échoue atomiquement si doublon inséré en concurrence)
-                try:
-                    conn.execute("""
-                        INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (device_id, new_hash, device_name, now, now))
-                    result = (True, "created")
-                except sqlite3.IntegrityError:
-                    result = (False, "UNAUTHORIZED_OVERWRITE")
+                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (device_id, new_hash, device_name, now, now))
+                conn.execute("COMMIT")
+                result = (True, "created")
+            except sqlite3.IntegrityError:
+                conn.execute("ROLLBACK")
+                result = (False, "UNAUTHORIZED_OVERWRITE")
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
     finally:
         conn.close()
     return result

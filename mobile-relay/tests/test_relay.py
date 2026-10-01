@@ -236,6 +236,12 @@ def test_atomic_register_or_update_device_direct():
     assert status_adm == "updated"
     assert verify_device_token("dev_direct", "tok_v3") is True
 
+    # 5. Immediate rejection of previous token (v2) once v3 took lock and updated
+    ok_old, status_old = atomic_register_or_update_device("dev_direct", "tok_v4", "My Phone", current_token="tok_v2")
+    assert ok_old is False
+    assert status_old == "UNAUTHORIZED_OVERWRITE"
+
+
 
 def test_pairing_rate_limiting_cannot_be_bypassed_by_changing_device_id():
     # 5 failed attempts with different device_ids from the same client IP
