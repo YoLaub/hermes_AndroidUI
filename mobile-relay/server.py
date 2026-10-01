@@ -663,7 +663,15 @@ async def mcp_stream_endpoint(request: Request):
             else:
                 return format_mcp_response(req_id, result.message or "Action exécutée avec succès.", protocol_version=negotiated_version)
         else:
-            return format_mcp_error(req_id, f"{result.error_code or 'ACTION_FAILED'}: {result.message or 'Erreur lors de l\'exécution sur le téléphone'}", protocol_version=negotiated_version)
+            error_code = result.error_code or "ACTION_FAILED"
+            error_message = (
+                result.message or "Erreur lors de l'exécution sur le téléphone"
+            )
+            return format_mcp_error(
+                req_id,
+                f"{error_code}: {error_message}",
+                protocol_version=negotiated_version,
+            )
 
     else:
         return JSONResponse(
