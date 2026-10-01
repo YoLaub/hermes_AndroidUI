@@ -10,7 +10,7 @@ os.environ["MOBILE_CONTROL_TOKEN_MARIO"] = "token_for_mario"
 os.environ["MOBILE_CONTROL_TOKEN_GASTON"] = "token_for_gaston"
 
 from server import app, manager, ActiveSession
-from database import init_db, verify_device_token, register_device
+from database import init_db, verify_device_token, register_device, reset_pairing_attempts
 from models import MobileCommand, MobileCommandResult, MobileScreenData, MobileElementInfo
 
 client = TestClient(app)
@@ -30,7 +30,7 @@ def test_health():
     assert res.status_code == 200
     assert res.json()["status"] == "ok"
 
-# ── Requirement 1: Authentifier /mcp ──────────────────────────────────────────
+# ── Fix 1: Authentification stricte & Pas de token dans l'URL ──────────────────
 
 def test_mcp_unauthorized_without_token():
     payload = {
@@ -47,7 +47,9 @@ def test_mcp_unauthorized_without_token():
     res = client.post("/mcp", json=payload, headers={"Authorization": "Bearer bad_token"})
     assert res.status_code == 401
 
-def test_mcp_authorized_deduces_profile():
+def test_hermes_profile_tokens_strict_mapping_and_no_url_token(monkeypatch):
+    monkeypatch.setenv("HERMES_PROFILE_TOKENS", json.dumps({"mario": "super_secret_token_mario"}))
+
     payload = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -57,19 +59,66 @@ def test_mcp_authorized_deduces_profile():
             "arguments": {}
         }
     }
-    # Authorized as mario via Bearer token
-    res = client.post("/mcp", json=payload, headers={"Authorization": "Bearer token_for_mario"})
-    assert res.status_code == 200
-    content = res.json()["result"]["content"][0]["text"]
+
+    # 1. Sending the profile name 'mario' as Bearer token MUST BE REJECTED
+    res_key = client.post("/mcp", json=payload, headers={"Authorization": "Bearer mario"})
+    assert res_key.status_code == 401
+
+    # 2. Sending the secret token MUST BE ACCEPTED and identify profile mario
+    res_val = client.post("/mcp", json=payload, headers={"Authorization": "Bearer super_secret_token_mario"})
+    assert res_val.status_code == 200
+    content = res_val.json()["result"]["content"][0]["text"]
     assert "profil 'mario'" in content
 
-    # Authorized as gaston via X-Hermes-Token
-    res = client.post("/mcp", json=payload, headers={"X-Hermes-Token": "token_for_gaston"})
-    assert res.status_code == 200
-    content = res.json()["result"]["content"][0]["text"]
-    assert "profil 'gaston'" in content
+    # 3. Sending token as URL query param MUST BE REJECTED (no URL tokens allowed)
+    res_url = client.post("/mcp?token=super_secret_token_mario", json=payload)
+    assert res_url.status_code == 401
 
-# ── Requirement 2: Protéger /api/pair/generate & Ne pas journaliser le code ──
+# ── Fix 2: Permissions (Refuser tout mode inconnu pour interactions) ──────────
+
+def test_unknown_and_observation_modes_deny_interaction():
+    # 1. Mode observation
+    session_obs = ActiveSession(
+        session_id="ses_obs",
+        device_id="dev_obs",
+        target_package="com.linkedin.android",
+        allowed_profile="mario",
+        mode="observation",
+        expires_at=9999999999.0
+    )
+    manager.set_active_session(session_obs)
+
+    payload_click = {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "mobile_click_element",
+            "arguments": {"element_ref": "el_1"}
+        }
+    }
+    res_obs = client.post("/mcp", json=payload_click, headers={"Authorization": "Bearer token_for_mario"})
+    assert res_obs.status_code == 200
+    assert res_obs.json()["result"]["isError"] is True
+    assert "MODE_DENIED" in res_obs.json()["result"]["content"][0]["text"]
+
+    # 2. Mode inconnu (ex: 'audit', 'custom_read', etc.)
+    session_unknown = ActiveSession(
+        session_id="ses_unk",
+        device_id="dev_unk",
+        target_package="com.linkedin.android",
+        allowed_profile="mario",
+        mode="audit",
+        expires_at=9999999999.0
+    )
+    manager.set_active_session(session_unknown)
+
+    res_unk = client.post("/mcp", json=payload_click, headers={"Authorization": "Bearer token_for_mario"})
+    assert res_unk.status_code == 200
+    assert res_unk.json()["result"]["isError"] is True
+    assert "MODE_DENIED" in res_unk.json()["result"]["content"][0]["text"]
+
+# ── Fix 3: Appairage (Transaction atomique, Rate Limit, Protection écrasement) ──
 
 def test_pair_generate_requires_admin_token():
     # Unauthorized
@@ -93,9 +142,79 @@ def test_pair_generate_requires_admin_token():
     assert token.startswith("tok_")
     assert verify_device_token("dev_test_1", token) is True
 
-# ── Requirement 3: Implémenter l'initialisation MCP ───────────────────────────
+def test_pairing_code_atomic_consumption_single_use():
+    # Generate code
+    res = client.post("/api/pair/generate", json={"user_id": "user1"}, headers={"Authorization": "Bearer test_admin_token_12345"})
+    code = res.json()["code"]
 
-def test_mcp_initialize():
+    # First verify succeeds
+    res1 = client.post("/api/pair/verify", json={"code": code, "device_id": "dev_atom_1"})
+    assert res1.status_code == 200
+
+    # Second verify with same code fails (code was consumed atomically)
+    res2 = client.post("/api/pair/verify", json={"code": code, "device_id": "dev_atom_2"})
+    assert res2.status_code == 400
+
+def test_pairing_device_overwrite_protection():
+    # 1. Pair dev_fixed first time
+    res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
+    code1 = res.json()["code"]
+    res_pair1 = client.post("/api/pair/verify", json={"code": code1, "device_id": "dev_fixed"})
+    assert res_pair1.status_code == 200
+    orig_token = res_pair1.json()["device_token"]
+
+    # 2. Attempt to overwrite dev_fixed without allow_overwrite authorization
+    res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
+    code2 = res.json()["code"]
+    res_pair2 = client.post("/api/pair/verify", json={"code": code2, "device_id": "dev_fixed", "allow_overwrite": False})
+    assert res_pair2.status_code == 409
+    assert "déjà enregistré" in res_pair2.json()["detail"]
+
+    # 3. Overwrite with explicit allow_overwrite
+    res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
+    code3 = res.json()["code"]
+    res_pair3 = client.post("/api/pair/verify", json={"code": code3, "device_id": "dev_fixed", "allow_overwrite": True})
+    assert res_pair3.status_code == 200
+    new_token = res_pair3.json()["device_token"]
+    assert new_token != orig_token
+    assert verify_device_token("dev_fixed", new_token) is True
+
+def test_pairing_rate_limiting():
+    # 5 failed attempts
+    for _ in range(5):
+        client.post("/api/pair/verify", json={"code": "BADCOD", "device_id": "dev_brute"})
+
+    # 6th attempt should be rate limited (429)
+    res_limit = client.post("/api/pair/verify", json={"code": "BADCOD", "device_id": "dev_brute"})
+    assert res_limit.status_code == 429
+    assert "Trop de tentatives" in res_limit.json()["detail"]
+
+# ── Fix 4: Reconnexion (Vérification d'identité avant déconnexion) ─────────────
+
+def test_reconnection_stale_disconnect_does_not_unregister_new_socket():
+    ws_old = object()
+    ws_new = object()
+
+    # Old connection registers
+    manager.register_connection("phone_1", ws_old)
+    assert manager.active_connections["phone_1"] == ws_old
+
+    # New reconnection comes in
+    manager.register_connection("phone_1", ws_new)
+    assert manager.active_connections["phone_1"] == ws_new
+
+    # Old connection disconnect event fires late
+    manager.unregister_connection("phone_1", websocket=ws_old)
+    # The active connection MUST still be ws_new, not wiped out!
+    assert manager.active_connections.get("phone_1") == ws_new
+
+    # When new connection disconnects
+    manager.unregister_connection("phone_1", websocket=ws_new)
+    assert "phone_1" not in manager.active_connections
+
+# ── Fix 5: MCP (Notifications HTTP 202 et négociation de version) ─────────────
+
+def test_mcp_initialize_version_negotiation():
     payload = {
         "jsonrpc": "2.0",
         "id": "init-1",
@@ -113,14 +232,24 @@ def test_mcp_initialize():
     assert data["result"]["serverInfo"]["name"] == "hermes-mobile-relay"
     assert data["result"]["protocolVersion"] == "2024-11-05"
 
-def test_mcp_notifications():
-    payload = {
+def test_mcp_notifications_return_202():
+    # Named notification
+    payload1 = {
         "jsonrpc": "2.0",
         "method": "notifications/initialized",
         "params": {}
     }
-    res = client.post("/mcp", json=payload, headers={"Authorization": "Bearer token_for_mario"})
-    assert res.status_code == 204
+    res1 = client.post("/mcp", json=payload1, headers={"Authorization": "Bearer token_for_mario"})
+    assert res1.status_code == 202
+
+    # Notification without id
+    payload2 = {
+        "jsonrpc": "2.0",
+        "method": "custom_notification",
+        "params": {}
+    }
+    res2 = client.post("/mcp", json=payload2, headers={"Authorization": "Bearer token_for_mario"})
+    assert res2.status_code == 202
 
 def test_mcp_ping():
     payload = {
@@ -134,10 +263,9 @@ def test_mcp_ping():
     assert res.json()["id"] == 99
     assert res.json()["result"] == {}
 
-# ── Requirement 4: class_name sans AttributeError ────────────────────────────
+# ── Tests complémentaires (class_name & websocket security) ───────────────────
 
 def test_class_name_formatting():
-    # Setup active session for mario
     session = ActiveSession(
         session_id="ses_1",
         device_id="dev_1",
@@ -148,7 +276,6 @@ def test_class_name_formatting():
     )
     manager.set_active_session(session)
 
-    # Fake device response for an observation
     screen_data = MobileScreenData(
         screen_revision="rev_1",
         package_name="com.linkedin.android",
@@ -173,7 +300,6 @@ def test_class_name_formatting():
         data=screen_data
     )
 
-    # Verify formatting does not crash with AttributeError
     elements_summary = []
     for el in result.data.elements:
         attrs = []
@@ -188,26 +314,21 @@ def test_class_name_formatting():
     assert "- [el_1] android.widget.Button: \"Publier\" [clickable]" in elements_summary
     assert "- [el_2] android.widget.EditText: desc=\"Écrire un post\" [editable]" in elements_summary
 
-# ── Requirement 5: Sécuriser les résultats WebSocket ─────────────────────────
-
 def test_websocket_result_security():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     fut = loop.create_future()
 
-    # Pending command sent to dev_real
     manager.pending_commands["cmd_secure_1"] = (fut, "dev_real", 9999999999.0)
 
-    # 1. Imposter dev_fake tries to resolve the command
     fake_result = MobileCommandResult(
         command_id="cmd_secure_1",
         status="success",
         message="Hacked result"
     )
     manager.resolve_command_result("dev_fake", fake_result)
-    assert not fut.done() # MUST NOT BE RESOLVED
+    assert not fut.done()
 
-    # 2. Legitimate dev_real resolves the command
     real_result = MobileCommandResult(
         command_id="cmd_secure_1",
         status="success",
@@ -217,37 +338,7 @@ def test_websocket_result_security():
     assert fut.done()
     assert fut.result().message == "Valid result"
 
-# ── Requirement 6: Limites de session côté relais ────────────────────────────
-
-def test_observation_mode_denies_interaction():
-    session = ActiveSession(
-        session_id="ses_obs",
-        device_id="dev_obs",
-        target_package="com.linkedin.android",
-        allowed_profile="mario",
-        mode="observation", # OBSERVATION ONLY
-        expires_at=9999999999.0
-    )
-    manager.set_active_session(session)
-
-    # Trying to click element in observation mode
-    payload = {
-        "jsonrpc": "2.0",
-        "id": 10,
-        "method": "tools/call",
-        "params": {
-            "name": "mobile_click_element",
-            "arguments": {"element_ref": "el_1"}
-        }
-    }
-    res = client.post("/mcp", json=payload, headers={"Authorization": "Bearer token_for_mario"})
-    assert res.status_code == 200
-    data = res.json()
-    assert data["result"]["isError"] is True
-    assert "MODE_DENIED" in data["result"]["content"][0]["text"]
-
 def test_concurrent_command_denied():
-    # Mark device as connected and already in flight with cmd_1
     manager.active_connections["dev_busy"] = object()
     manager.device_in_flight["dev_busy"] = "cmd_1"
 

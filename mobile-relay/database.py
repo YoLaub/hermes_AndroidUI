@@ -56,6 +56,13 @@ def init_db():
                 message TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pairing_attempts (
+                identifier TEXT PRIMARY KEY,
+                attempts INTEGER NOT NULL,
+                last_attempt REAL NOT NULL
+            )
+        """)
     conn.close()
 
 def hash_token(token: str) -> str:
@@ -75,19 +82,63 @@ def verify_device_token(device_id: str, token: str) -> bool:
     conn.close()
     return is_valid
 
-def register_device(device_id: str, token: str, name: str):
+def is_device_registered(device_id: str) -> bool:
+    conn = get_db()
+    row = conn.execute("SELECT 1 FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
+    conn.close()
+    return row is not None
+
+def register_device(device_id: str, token: str, name: str, allow_overwrite: bool = False) -> bool:
     conn = get_db()
     h = hash_token(token)
     now = time.time()
+    success = False
+    try:
+        with conn:
+            existing = conn.execute("SELECT 1 FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
+            if existing and not allow_overwrite:
+                return False
+            conn.execute("""
+                INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    token_hash = excluded.token_hash,
+                    device_name = excluded.device_name,
+                    last_seen = excluded.last_seen
+            """, (device_id, h, name, now, now))
+            success = True
+    finally:
+        conn.close()
+    return success
+
+def check_and_record_pairing_attempt(identifier: str, max_attempts: int = 5, window_seconds: int = 300) -> bool:
+    """
+    Returns True if attempt is permitted, False if rate limit exceeded.
+    """
+    conn = get_db()
+    now = time.time()
+    allowed = False
+    try:
+        with conn:
+            conn.execute("DELETE FROM pairing_attempts WHERE last_attempt < ?", (now - window_seconds,))
+            row = conn.execute("SELECT attempts, last_attempt FROM pairing_attempts WHERE identifier = ?", (identifier,)).fetchone()
+            if row:
+                if row["attempts"] >= max_attempts:
+                    allowed = False
+                else:
+                    conn.execute("UPDATE pairing_attempts SET attempts = attempts + 1, last_attempt = ? WHERE identifier = ?", (now, identifier))
+                    allowed = True
+            else:
+                conn.execute("INSERT INTO pairing_attempts (identifier, attempts, last_attempt) VALUES (?, 1, ?)", (identifier, now))
+                allowed = True
+    finally:
+        conn.close()
+    return allowed
+
+def reset_pairing_attempts(identifier: str):
+    conn = get_db()
     with conn:
-        conn.execute("""
-            INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(device_id) DO UPDATE SET
-                token_hash = excluded.token_hash,
-                device_name = excluded.device_name,
-                last_seen = excluded.last_seen
-        """, (device_id, h, name, now, now))
+        conn.execute("DELETE FROM pairing_attempts WHERE identifier = ?", (identifier,))
     conn.close()
 
 def count_active_pairing_codes() -> int:
@@ -102,7 +153,6 @@ def save_pairing_code(code: str, user_id: str, expires_in_seconds: int = 300):
     conn = get_db()
     expires_at = time.time() + expires_in_seconds
     with conn:
-        # Cleanup expired codes first
         conn.execute("DELETE FROM pairing_codes WHERE expires_at < ?", (time.time(),))
         conn.execute("INSERT OR REPLACE INTO pairing_codes (code, user_id, expires_at) VALUES (?, ?, ?)",
                      (code, user_id, expires_at))
@@ -111,19 +161,17 @@ def save_pairing_code(code: str, user_id: str, expires_in_seconds: int = 300):
 def consume_pairing_code(code: str) -> Optional[str]:
     conn = get_db()
     now = time.time()
-    row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ?", (code,)).fetchone()
-    if not row:
+    clean_code = code.strip().upper()
+    user_id = None
+    try:
+        with conn:
+            row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ?", (clean_code,)).fetchone()
+            if row:
+                conn.execute("DELETE FROM pairing_codes WHERE code = ?", (clean_code,))
+                if row["expires_at"] >= now:
+                    user_id = row["user_id"]
+    finally:
         conn.close()
-        return None
-    if row["expires_at"] < now:
-        conn.execute("DELETE FROM pairing_codes WHERE code = ?", (code,))
-        conn.commit()
-        conn.close()
-        return None
-    user_id = row["user_id"]
-    conn.execute("DELETE FROM pairing_codes WHERE code = ?", (code,))
-    conn.commit()
-    conn.close()
     return user_id
 
 def register_profile_token(profile: str, token: str):

@@ -76,6 +76,7 @@ class PairingVerifyRequest(BaseModel):
     code: str
     device_id: str
     device_name: Optional[str] = "Android Phone"
+    allow_overwrite: Optional[bool] = False
 
 class PairingVerifyResponse(BaseModel):
     ok: bool

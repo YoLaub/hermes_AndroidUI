@@ -16,9 +16,12 @@ from database import (
     init_db,
     verify_device_token,
     register_device,
+    is_device_registered,
     save_pairing_code,
     consume_pairing_code,
     count_active_pairing_codes,
+    check_and_record_pairing_attempt,
+    reset_pairing_attempts,
     verify_admin_token,
     verify_profile_token_in_db,
     log_audit
@@ -80,7 +83,12 @@ class DeviceConnectionManager:
         self.active_connections[device_id] = websocket
         logger.info(f"Device connected: {device_id}")
 
-    def unregister_connection(self, device_id: str):
+    def unregister_connection(self, device_id: str, websocket: Optional[WebSocket] = None):
+        if websocket is not None:
+            current_ws = self.active_connections.get(device_id)
+            if current_ws != websocket:
+                logger.info(f"Ignoring unregister for device {device_id} from stale/superseded connection")
+                return
         self.active_connections.pop(device_id, None)
         self.active_sessions.pop(device_id, None)
         self.device_in_flight.pop(device_id, None)
@@ -185,6 +193,7 @@ def authenticate_hermes_profile(request: Request) -> str:
     """
     Validates token from Authorization or X-Hermes-Token and strictly deduces
     the authorized profile. Never trusts user-supplied profile headers blindly.
+    Tokens in URLs / query params are strictly rejected.
     """
     token = None
     auth_header = request.headers.get("Authorization", "")
@@ -192,8 +201,6 @@ def authenticate_hermes_profile(request: Request) -> str:
         token = auth_header[7:].strip()
     elif "X-Hermes-Token" in request.headers:
         token = request.headers["X-Hermes-Token"].strip()
-    elif "token" in request.query_params:
-        token = request.query_params["token"].strip()
 
     if not token:
         raise HTTPException(
@@ -201,17 +208,16 @@ def authenticate_hermes_profile(request: Request) -> str:
             detail="Unauthorized: Missing Hermes profile token (Authorization: Bearer <token> or X-Hermes-Token)."
         )
 
-    # 1. Check environment profile tokens mapping
+    # 1. Check environment profile tokens mapping: strictly {profile: token}
     env_tokens_json = os.environ.get("HERMES_PROFILE_TOKENS")
     if env_tokens_json:
         try:
             mapping = json.loads(env_tokens_json)
-            # supports {"token": "profile"} or {"profile": "token"}
-            for k, v in mapping.items():
-                if secrets.compare_digest(k, token):
-                    return v.lower()
-                if secrets.compare_digest(v, token):
-                    return k.lower()
+            if isinstance(mapping, dict):
+                # Only compare the provided token against the configured token (dict value)
+                for profile, configured_token in mapping.items():
+                    if secrets.compare_digest(str(configured_token).strip(), token):
+                        return profile.lower()
         except Exception as e:
             logger.error(f"Failed to parse HERMES_PROFILE_TOKENS: {e}")
 
@@ -260,13 +266,33 @@ def generate_pairing_code(request: Request, req: PairingGenerateRequest):
     return PairingGenerateResponse(code=code, expires_in_seconds=300)
 
 @app.post("/api/pair/verify", response_model=PairingVerifyResponse)
-def verify_pairing_code(req: PairingVerifyRequest):
+def verify_pairing_code(request: Request, req: PairingVerifyRequest):
+    client_ip = request.client.host if request.client else "unknown"
+    rate_key = f"pair_{client_ip}_{req.device_id}"
+
+    # Rate limiting on pairing verification attempts
+    if not check_and_record_pairing_attempt(rate_key, max_attempts=5, window_seconds=300):
+        raise HTTPException(
+            status_code=429,
+            detail="Trop de tentatives de vérification. Veuillez patienter avant de réessayer."
+        )
+
+    # Prevent overwriting an already paired device without explicit authorization
+    if is_device_registered(req.device_id) and not req.allow_overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail="Ce téléphone est déjà enregistré. L'écrasement sans autorisation explicite est refusé."
+        )
+
     user_id = consume_pairing_code(req.code.strip().upper())
     if not user_id:
         raise HTTPException(status_code=400, detail="Code d'appairage invalide ou expiré.")
 
+    reset_pairing_attempts(rate_key)
     device_token = "tok_" + secrets.token_urlsafe(24)
-    register_device(req.device_id, device_token, req.device_name or "Android Phone")
+    if not register_device(req.device_id, device_token, req.device_name or "Android Phone", allow_overwrite=bool(req.allow_overwrite)):
+        raise HTTPException(status_code=409, detail="Impossible d'enregistrer l'appareil.")
+
     logger.info("Paired device %s successfully for user %s.", req.device_id, user_id)
     return PairingVerifyResponse(ok=True, device_token=device_token)
 
@@ -351,11 +377,11 @@ async def websocket_device_endpoint(
 
     except WebSocketDisconnect:
         if authenticated_device_id:
-            manager.unregister_connection(authenticated_device_id)
+            manager.unregister_connection(authenticated_device_id, websocket)
     except Exception as e:
         logger.error(f"WebSocket exception for device {authenticated_device_id}: {e}")
         if authenticated_device_id:
-            manager.unregister_connection(authenticated_device_id)
+            manager.unregister_connection(authenticated_device_id, websocket)
 
 # ── MCP Streamable HTTP Endpoint for Hermes Profiles ─────────────────────────
 
@@ -456,11 +482,16 @@ async def mcp_stream_endpoint(request: Request):
 
     # Requirement 3: Implémenter l'initialisation MCP et les notifications
     if method == "initialize":
+        client_version = params.get("protocolVersion")
+        supported_versions = ["2024-11-05"]
+        # Protocol version negotiation: match requested version if supported, otherwise fallback to highest supported
+        negotiated_version = client_version if client_version in supported_versions else "2024-11-05"
+
         return {
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": negotiated_version,
                 "capabilities": {
                     "tools": { "listChanged": False }
                 },
@@ -471,9 +502,9 @@ async def mcp_stream_endpoint(request: Request):
             }
         }
 
-    # Handle notifications (e.g. notifications/initialized) - no response required in JSON-RPC
+    # Handle notifications (e.g. notifications/initialized) - return HTTP 202 Accepted
     if (method and method.startswith("notifications/")) or (req_id is None):
-        return Response(status_code=204)
+        return Response(status_code=202)
 
     if method == "ping":
         return {
@@ -540,11 +571,11 @@ async def mcp_stream_endpoint(request: Request):
         if not op:
             return format_mcp_error(req_id, f"UNSUPPORTED_TOOL: Outil inconnu '{tool_name}'.")
 
-        # Requirement 6: Mode observation côté relais
-        if session.mode == "observation" and op in INTERACTION_OPERATIONS:
+        # Permissions: Refuser tout mode autre que l'exact mode 'interaction' pour les opérations interactives
+        if op in INTERACTION_OPERATIONS and session.mode != "interaction":
             return format_mcp_error(
                 req_id,
-                f"MODE_DENIED: L'application '{session.target_package}' est en mode observation seule. Les interactions ({op}) sont refusées par le relais."
+                f"MODE_DENIED: Le mode actuel de la session est '{session.mode}'. Seul le mode 'interaction' autorise les actions interactives ({op})."
             )
 
         cmd = MobileCommand(
