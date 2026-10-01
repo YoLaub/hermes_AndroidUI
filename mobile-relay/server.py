@@ -268,29 +268,46 @@ def generate_pairing_code(request: Request, req: PairingGenerateRequest):
 @app.post("/api/pair/verify", response_model=PairingVerifyResponse)
 def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     client_ip = request.client.host if request.client else "unknown"
-    rate_key = f"pair_{client_ip}_{req.device_id}"
+    rate_key_ip = f"ip_{client_ip}"
 
-    # Rate limiting on pairing verification attempts
-    if not check_and_record_pairing_attempt(rate_key, max_attempts=5, window_seconds=300):
+    # Rate limiting strictly on client IP (independent of device_id to prevent bypass)
+    if not check_and_record_pairing_attempt(rate_key_ip, max_attempts=5, window_seconds=300):
         raise HTTPException(
             status_code=429,
-            detail="Trop de tentatives de vérification. Veuillez patienter avant de réessayer."
+            detail="Trop de tentatives de vérification depuis cette adresse IP. Veuillez patienter avant de réessayer."
         )
 
-    # Prevent overwriting an already paired device without explicit authorization
-    if is_device_registered(req.device_id) and not req.allow_overwrite:
-        raise HTTPException(
-            status_code=409,
-            detail="Ce téléphone est déjà enregistré. L'écrasement sans autorisation explicite est refusé."
-        )
+    # Prevent overwriting an already paired device without cryptographic authorization
+    if is_device_registered(req.device_id):
+        # Extract candidate tokens from payload and headers
+        candidate_device_token = req.current_device_token or request.headers.get("X-Device-Token")
+        candidate_admin_token = req.admin_token or request.headers.get("X-Admin-Token")
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            bearer_tok = auth_header[7:].strip()
+            if not candidate_admin_token:
+                candidate_admin_token = bearer_tok
+            if not candidate_device_token:
+                candidate_device_token = bearer_tok
+
+        has_valid_device_auth = bool(candidate_device_token and verify_device_token(req.device_id, candidate_device_token))
+        has_valid_admin_auth = bool(candidate_admin_token and verify_admin_token(candidate_admin_token))
+
+        if not (has_valid_device_auth or has_valid_admin_auth):
+            raise HTTPException(
+                status_code=403,
+                detail="Ce téléphone est déjà enregistré. L'écrasement nécessite le token actuel de l'appareil ou une autorisation administrateur dédiée."
+            )
 
     user_id = consume_pairing_code(req.code.strip().upper())
     if not user_id:
         raise HTTPException(status_code=400, detail="Code d'appairage invalide ou expiré.")
 
-    reset_pairing_attempts(rate_key)
+    # Reset failed attempts on success
+    reset_pairing_attempts(rate_key_ip)
+
     device_token = "tok_" + secrets.token_urlsafe(24)
-    if not register_device(req.device_id, device_token, req.device_name or "Android Phone", allow_overwrite=bool(req.allow_overwrite)):
+    if not register_device(req.device_id, device_token, req.device_name or "Android Phone", allow_overwrite=True):
         raise HTTPException(status_code=409, detail="Impossible d'enregistrer l'appareil.")
 
     logger.info("Paired device %s successfully for user %s.", req.device_id, user_id)
@@ -465,6 +482,9 @@ MCP_TOOLS = [
 
 INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "back"}
 
+SUPPORTED_MCP_PROTOCOL_VERSIONS = ["2025-03-26", "2024-11-05"]
+DEFAULT_MCP_PROTOCOL_VERSION = "2025-03-26"
+
 @app.post("/mcp")
 @app.post("/mcp/v1/stream")
 async def mcp_stream_endpoint(request: Request):
@@ -480,47 +500,61 @@ async def mcp_stream_endpoint(request: Request):
     req_id = body.get("id")
     params = body.get("params", {})
 
-    # Requirement 3: Implémenter l'initialisation MCP et les notifications
-    if method == "initialize":
-        client_version = params.get("protocolVersion")
-        supported_versions = ["2024-11-05"]
-        # Protocol version negotiation: match requested version if supported, otherwise fallback to highest supported
-        negotiated_version = client_version if client_version in supported_versions else "2024-11-05"
+    # Protocol version negotiation
+    client_version = request.headers.get("MCP-Protocol-Version") or (params.get("protocolVersion") if isinstance(params, dict) else None)
+    if client_version in SUPPORTED_MCP_PROTOCOL_VERSIONS:
+        negotiated_version = client_version
+    else:
+        negotiated_version = DEFAULT_MCP_PROTOCOL_VERSION
 
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "protocolVersion": negotiated_version,
-                "capabilities": {
-                    "tools": { "listChanged": False }
-                },
-                "serverInfo": {
-                    "name": "hermes-mobile-relay",
-                    "version": "1.0.0"
+    # Initialize handshake
+    if method == "initialize":
+        return JSONResponse(
+            status_code=200,
+            headers={"MCP-Protocol-Version": negotiated_version},
+            content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": negotiated_version,
+                    "capabilities": {
+                        "tools": { "listChanged": False }
+                    },
+                    "serverInfo": {
+                        "name": "hermes-mobile-relay",
+                        "version": "1.0.0"
+                    }
                 }
             }
-        }
+        )
 
     # Handle notifications (e.g. notifications/initialized) - return HTTP 202 Accepted
     if (method and method.startswith("notifications/")) or (req_id is None):
-        return Response(status_code=202)
+        return Response(status_code=202, headers={"MCP-Protocol-Version": negotiated_version})
 
     if method == "ping":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {}
-        }
+        return JSONResponse(
+            status_code=200,
+            headers={"MCP-Protocol-Version": negotiated_version},
+            content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {}
+            }
+        )
 
     if method == "tools/list":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "tools": MCP_TOOLS
+        return JSONResponse(
+            status_code=200,
+            headers={"MCP-Protocol-Version": negotiated_version},
+            content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "tools": MCP_TOOLS
+                }
             }
-        }
+        )
 
     elif method == "tools/call":
         tool_name = params.get("name")
@@ -533,12 +567,14 @@ async def mcp_stream_endpoint(request: Request):
                 remaining = int(session.expires_at - time.time())
                 return format_mcp_response(
                     req_id,
-                    f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s"
+                    f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s",
+                    protocol_version=negotiated_version
                 )
             else:
                 return format_mcp_response(
                     req_id,
-                    f"Aucune session de contrôle mobile n'est actuellement active pour le profil '{authenticated_profile}'. L'utilisateur doit démarrer une session sur son application Hermes Android."
+                    f"Aucune session de contrôle mobile n'est actuellement active pour le profil '{authenticated_profile}'. L'utilisateur doit démarrer une session sur son application Hermes Android.",
+                    protocol_version=negotiated_version
                 )
 
         # 2. All other tools require an active validated session for this authenticated profile
@@ -546,15 +582,17 @@ async def mcp_stream_endpoint(request: Request):
         if not session:
             return format_mcp_error(
                 req_id,
-                f"SESSION_REQUIRED: Aucune session active pour le profil '{authenticated_profile}'. Demandez à l'utilisateur de lancer une session dans l'app Hermes."
+                f"SESSION_REQUIRED: Aucune session active pour le profil '{authenticated_profile}'. Demandez à l'utilisateur de lancer une session dans l'app Hermes.",
+                protocol_version=negotiated_version
             )
 
-        # Requirement 6: Vérifier l'expiration côté relais
+        # Vérifier l'expiration côté relais
         if session.is_expired:
             manager.end_active_session(session.device_id, session.session_id)
             return format_mcp_error(
                 req_id,
-                "SESSION_EXPIRED: La session de contrôle a expiré. Une nouvelle session doit être démarrée sur le téléphone."
+                "SESSION_EXPIRED: La session de contrôle a expiré. Une nouvelle session doit être démarrée sur le téléphone.",
+                protocol_version=negotiated_version
             )
 
         op_map = {
@@ -569,13 +607,14 @@ async def mcp_stream_endpoint(request: Request):
 
         op = op_map.get(tool_name)
         if not op:
-            return format_mcp_error(req_id, f"UNSUPPORTED_TOOL: Outil inconnu '{tool_name}'.")
+            return format_mcp_error(req_id, f"UNSUPPORTED_TOOL: Outil inconnu '{tool_name}'.", protocol_version=negotiated_version)
 
         # Permissions: Refuser tout mode autre que l'exact mode 'interaction' pour les opérations interactives
         if op in INTERACTION_OPERATIONS and session.mode != "interaction":
             return format_mcp_error(
                 req_id,
-                f"MODE_DENIED: Le mode actuel de la session est '{session.mode}'. Seul le mode 'interaction' autorise les actions interactives ({op})."
+                f"MODE_DENIED: Le mode actuel de la session est '{session.mode}'. Seul le mode 'interaction' autorise les actions interactives ({op}).",
+                protocol_version=negotiated_version
             )
 
         cmd = MobileCommand(
@@ -596,7 +635,6 @@ async def mcp_stream_endpoint(request: Request):
         result = await manager.send_command_to_device(session.device_id, cmd)
 
         if result.status == "success":
-            # Requirement 4: Corriger el.className en el.class_name
             if result.data and result.data.elements:
                 elements_summary = []
                 for el in result.data.elements:
@@ -613,47 +651,60 @@ async def mcp_stream_endpoint(request: Request):
                     f"Observation de {result.data.package_name} (Révision: {result.data.screen_revision}):\n" +
                     "\n".join(elements_summary)
                 )
-                return format_mcp_response(req_id, content)
+                return format_mcp_response(req_id, content, protocol_version=negotiated_version)
             else:
-                return format_mcp_response(req_id, result.message or "Action exécutée avec succès.")
+                return format_mcp_response(req_id, result.message or "Action exécutée avec succès.", protocol_version=negotiated_version)
         else:
-            return format_mcp_error(req_id, f"{result.error_code or 'ACTION_FAILED'}: {result.message or 'Erreur lors de l\'exécution sur le téléphone'}")
+            return format_mcp_error(req_id, f"{result.error_code or 'ACTION_FAILED'}: {result.message or 'Erreur lors de l\'exécution sur le téléphone'}", protocol_version=negotiated_version)
 
     else:
-        return {
+        return JSONResponse(
+            status_code=200,
+            headers={"MCP-Protocol-Version": negotiated_version},
+            content={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Method '{method}' not found"
+                }
+            }
+        )
+
+def format_mcp_response(req_id: Any, text: str, protocol_version: str = DEFAULT_MCP_PROTOCOL_VERSION) -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        headers={"MCP-Protocol-Version": protocol_version},
+        content={
             "jsonrpc": "2.0",
             "id": req_id,
-            "error": {
-                "code": -32601,
-                "message": f"Method '{method}' not found"
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": text
+                    }
+                ]
             }
         }
+    )
 
-def format_mcp_response(req_id: Any, text: str) -> Dict[str, Any]:
-    return {
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "content": [
-                {
-                    "type": "text",
-                    "text": text
-                }
-            ]
+def format_mcp_error(req_id: Any, message: str, protocol_version: str = DEFAULT_MCP_PROTOCOL_VERSION) -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        headers={"MCP-Protocol-Version": protocol_version},
+        content={
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "isError": True,
+                "content": [
+                    {
+                        "type": "text",
+                        "text": message
+                    }
+                ]
+            }
         }
-    }
+    )
 
-def format_mcp_error(req_id: Any, message: str) -> Dict[str, Any]:
-    return {
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "isError": True,
-            "content": [
-                {
-                    "type": "text",
-                    "text": message
-                }
-            ]
-        }
-    }

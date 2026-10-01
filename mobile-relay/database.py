@@ -164,12 +164,31 @@ def consume_pairing_code(code: str) -> Optional[str]:
     clean_code = code.strip().upper()
     user_id = None
     try:
-        with conn:
+        # SQLite 3.35+ supports DELETE ... RETURNING user_id, expires_at as a single atomic execution
+        cursor = conn.execute(
+            "DELETE FROM pairing_codes WHERE code = ? RETURNING user_id, expires_at",
+            (clean_code,)
+        )
+        row = cursor.fetchone()
+        conn.commit()
+        if row and row["expires_at"] >= now:
+            user_id = row["user_id"]
+    except sqlite3.OperationalError:
+        # Fallback with BEGIN IMMEDIATE for atomic select+delete if RETURNING is not supported
+        try:
+            conn.isolation_level = None
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ?", (clean_code,)).fetchone()
             if row:
                 conn.execute("DELETE FROM pairing_codes WHERE code = ?", (clean_code,))
                 if row["expires_at"] >= now:
                     user_id = row["user_id"]
+            conn.execute("COMMIT")
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:
+                pass
     finally:
         conn.close()
     return user_id

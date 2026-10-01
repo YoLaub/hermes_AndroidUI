@@ -155,6 +155,29 @@ def test_pairing_code_atomic_consumption_single_use():
     res2 = client.post("/api/pair/verify", json={"code": code, "device_id": "dev_atom_2"})
     assert res2.status_code == 400
 
+def test_pairing_code_concurrent_race_condition():
+    from concurrent.futures import ThreadPoolExecutor
+    # Generate code
+    res = client.post("/api/pair/generate", json={"user_id": "race_user"}, headers={"Authorization": "Bearer test_admin_token_12345"})
+    code = res.json()["code"]
+
+    def attempt_verify(dev_num):
+        # Create dedicated client per thread
+        c = TestClient(app)
+        return c.post("/api/pair/verify", json={"code": code, "device_id": f"dev_race_{dev_num}"})
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(attempt_verify, i) for i in range(5)]
+        results = [f.result() for f in futures]
+
+    successes = [r for r in results if r.status_code == 200]
+    failures = [r for r in results if r.status_code == 400]
+
+    # Exactly ONE thread can succeed, all other simultaneous threads MUST fail
+    assert len(successes) == 1
+    assert len(failures) == 4
+
+
 def test_pairing_device_overwrite_protection():
     # 1. Pair dev_fixed first time
     res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
@@ -163,29 +186,38 @@ def test_pairing_device_overwrite_protection():
     assert res_pair1.status_code == 200
     orig_token = res_pair1.json()["device_token"]
 
-    # 2. Attempt to overwrite dev_fixed without allow_overwrite authorization
+    # 2. Attempt to overwrite dev_fixed without any token (or bogus token)
     res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
     code2 = res.json()["code"]
-    res_pair2 = client.post("/api/pair/verify", json={"code": code2, "device_id": "dev_fixed", "allow_overwrite": False})
-    assert res_pair2.status_code == 409
-    assert "déjà enregistré" in res_pair2.json()["detail"]
+    res_pair2 = client.post("/api/pair/verify", json={"code": code2, "device_id": "dev_fixed", "current_device_token": "wrong_tok"})
+    assert res_pair2.status_code == 403
+    assert "L'écrasement nécessite le token actuel" in res_pair2.json()["detail"]
 
-    # 3. Overwrite with explicit allow_overwrite
+    # 3. Overwrite with valid current_device_token
     res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
     code3 = res.json()["code"]
-    res_pair3 = client.post("/api/pair/verify", json={"code": code3, "device_id": "dev_fixed", "allow_overwrite": True})
+    res_pair3 = client.post("/api/pair/verify", json={"code": code3, "device_id": "dev_fixed", "current_device_token": orig_token})
     assert res_pair3.status_code == 200
     new_token = res_pair3.json()["device_token"]
     assert new_token != orig_token
     assert verify_device_token("dev_fixed", new_token) is True
 
-def test_pairing_rate_limiting():
-    # 5 failed attempts
-    for _ in range(5):
-        client.post("/api/pair/verify", json={"code": "BADCOD", "device_id": "dev_brute"})
+    # 4. Overwrite with admin_token authorization
+    res = client.post("/api/pair/generate", json={}, headers={"Authorization": "Bearer test_admin_token_12345"})
+    code4 = res.json()["code"]
+    res_pair4 = client.post("/api/pair/verify", json={"code": code4, "device_id": "dev_fixed", "admin_token": "test_admin_token_12345"})
+    assert res_pair4.status_code == 200
+    token4 = res_pair4.json()["device_token"]
+    assert token4 != new_token
+    assert verify_device_token("dev_fixed", token4) is True
 
-    # 6th attempt should be rate limited (429)
-    res_limit = client.post("/api/pair/verify", json={"code": "BADCOD", "device_id": "dev_brute"})
+def test_pairing_rate_limiting_cannot_be_bypassed_by_changing_device_id():
+    # 5 failed attempts with different device_ids from the same client IP
+    for i in range(5):
+        client.post("/api/pair/verify", json={"code": "BADCOD", "device_id": f"dev_brute_{i}"})
+
+    # 6th attempt with a completely new device_id is STILL rate limited (429)
+    res_limit = client.post("/api/pair/verify", json={"code": "BADCOD", "device_id": "dev_brand_new"})
     assert res_limit.status_code == 429
     assert "Trop de tentatives" in res_limit.json()["detail"]
 
@@ -212,12 +244,29 @@ def test_reconnection_stale_disconnect_does_not_unregister_new_socket():
     manager.unregister_connection("phone_1", websocket=ws_new)
     assert "phone_1" not in manager.active_connections
 
-# ── Fix 5: MCP (Notifications HTTP 202 et négociation de version) ─────────────
+# ── Fix 5: MCP (Notifications HTTP 202 et négociation de version 2025-03-26) ──
 
 def test_mcp_initialize_version_negotiation():
-    payload = {
+    # Default initialize negotiates 2025-03-26
+    payload_def = {
         "jsonrpc": "2.0",
-        "id": "init-1",
+        "id": "init-def",
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "hermes-agent", "version": "1.0.0"}
+        }
+    }
+    res_def = client.post("/mcp", json=payload_def, headers={"Authorization": "Bearer token_for_mario"})
+    assert res_def.status_code == 200
+    assert res_def.json()["result"]["protocolVersion"] == "2025-03-26"
+    assert res_def.headers.get("MCP-Protocol-Version") == "2025-03-26"
+
+    # Backward compatibility with 2024-11-05
+    payload_legacy = {
+        "jsonrpc": "2.0",
+        "id": "init-leg",
         "method": "initialize",
         "params": {
             "protocolVersion": "2024-11-05",
@@ -225,12 +274,10 @@ def test_mcp_initialize_version_negotiation():
             "clientInfo": {"name": "hermes-agent", "version": "1.0.0"}
         }
     }
-    res = client.post("/mcp", json=payload, headers={"Authorization": "Bearer token_for_mario"})
-    assert res.status_code == 200
-    data = res.json()
-    assert data["id"] == "init-1"
-    assert data["result"]["serverInfo"]["name"] == "hermes-mobile-relay"
-    assert data["result"]["protocolVersion"] == "2024-11-05"
+    res_leg = client.post("/mcp", json=payload_legacy, headers={"Authorization": "Bearer token_for_mario"})
+    assert res_leg.status_code == 200
+    assert res_leg.json()["result"]["protocolVersion"] == "2024-11-05"
+    assert res_leg.headers.get("MCP-Protocol-Version") == "2024-11-05"
 
 def test_mcp_notifications_return_202():
     # Named notification
@@ -241,6 +288,7 @@ def test_mcp_notifications_return_202():
     }
     res1 = client.post("/mcp", json=payload1, headers={"Authorization": "Bearer token_for_mario"})
     assert res1.status_code == 202
+    assert "MCP-Protocol-Version" in res1.headers
 
     # Notification without id
     payload2 = {
