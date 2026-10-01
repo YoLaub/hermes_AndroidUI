@@ -3,7 +3,7 @@ import hashlib
 import time
 import os
 import secrets
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 DB_PATH = os.environ.get("MOBILE_RELAY_DB_PATH", "/data/mobile_relay.db")
 
@@ -88,27 +88,68 @@ def is_device_registered(device_id: str) -> bool:
     conn.close()
     return row is not None
 
-def register_device(device_id: str, token: str, name: str, allow_overwrite: bool = False) -> bool:
+def atomic_register_or_update_device(
+    device_id: str,
+    new_token: str,
+    device_name: str,
+    current_token: Optional[str] = None,
+    is_admin_authorized: bool = False
+) -> Tuple[bool, str]:
+    """
+    Rend atomiques la vérification d'existence, l'autorisation de remplacement et l'enregistrement:
+    - Pour un nouvel appareil: INSERT strict qui refuse les doublons (sans ON CONFLICT DO UPDATE).
+    - Pour un remplacement: vérifie le token actuel (ou autorisation admin) dans la même transaction avant le UPDATE.
+
+    Retourne (True, "created" | "updated") en cas de succès,
+    ou (False, "UNAUTHORIZED_OVERWRITE" | "INTEGRITY_ERROR") en cas de refus.
+    """
     conn = get_db()
-    h = hash_token(token)
+    new_hash = hash_token(new_token)
     now = time.time()
-    success = False
+    result = (False, "ERROR")
     try:
         with conn:
-            existing = conn.execute("SELECT 1 FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
-            if existing and not allow_overwrite:
-                return False
-            conn.execute("""
-                INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(device_id) DO UPDATE SET
-                    token_hash = excluded.token_hash,
-                    device_name = excluded.device_name,
-                    last_seen = excluded.last_seen
-            """, (device_id, h, name, now, now))
-            success = True
+            # 1. Vérification d'existence sous verrou transactionnel SQLite
+            row = conn.execute("SELECT token_hash FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
+            if row:
+                # Appareil existant: remplacement
+                existing_hash = row["token_hash"]
+                token_matches = False
+                if current_token:
+                    candidate_hash = hash_token(current_token)
+                    token_matches = secrets.compare_digest(existing_hash, candidate_hash)
+
+                if not (is_admin_authorized or token_matches):
+                    return (False, "UNAUTHORIZED_OVERWRITE")
+
+                # Remplacement autorisé: UPDATE atomique dans la même transaction
+                conn.execute("""
+                    UPDATE paired_devices
+                    SET token_hash = ?, device_name = ?, last_seen = ?
+                    WHERE device_id = ?
+                """, (new_hash, device_name, now, device_id))
+                result = (True, "updated")
+            else:
+                # Nouvel appareil: INSERT strict (échoue atomiquement si doublon inséré en concurrence)
+                try:
+                    conn.execute("""
+                        INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (device_id, new_hash, device_name, now, now))
+                    result = (True, "created")
+                except sqlite3.IntegrityError:
+                    result = (False, "UNAUTHORIZED_OVERWRITE")
     finally:
         conn.close()
+    return result
+
+def register_device(device_id: str, token: str, name: str, allow_overwrite: bool = True) -> bool:
+    success, _ = atomic_register_or_update_device(
+        device_id=device_id,
+        new_token=token,
+        device_name=name,
+        is_admin_authorized=allow_overwrite
+    )
     return success
 
 def check_and_record_pairing_attempt(identifier: str, max_attempts: int = 5, window_seconds: int = 300) -> bool:

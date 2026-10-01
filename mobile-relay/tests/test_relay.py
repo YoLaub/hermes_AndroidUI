@@ -211,6 +211,32 @@ def test_pairing_device_overwrite_protection():
     assert token4 != new_token
     assert verify_device_token("dev_fixed", token4) is True
 
+def test_atomic_register_or_update_device_direct():
+    from database import atomic_register_or_update_device
+
+    # 1. First registration (new device -> INSERT strict)
+    ok, status = atomic_register_or_update_device("dev_direct", "tok_v1", "My Phone")
+    assert ok is True
+    assert status == "created"
+
+    # 2. Unauthorized overwrite attempt (wrong token)
+    ok_bad, status_bad = atomic_register_or_update_device("dev_direct", "tok_v2", "My Phone", current_token="wrong")
+    assert ok_bad is False
+    assert status_bad == "UNAUTHORIZED_OVERWRITE"
+
+    # 3. Authorized overwrite (valid current token -> UPDATE)
+    ok_up, status_up = atomic_register_or_update_device("dev_direct", "tok_v2", "My Phone", current_token="tok_v1")
+    assert ok_up is True
+    assert status_up == "updated"
+    assert verify_device_token("dev_direct", "tok_v2") is True
+
+    # 4. Authorized overwrite via admin
+    ok_adm, status_adm = atomic_register_or_update_device("dev_direct", "tok_v3", "My Phone", is_admin_authorized=True)
+    assert ok_adm is True
+    assert status_adm == "updated"
+    assert verify_device_token("dev_direct", "tok_v3") is True
+
+
 def test_pairing_rate_limiting_cannot_be_bypassed_by_changing_device_id():
     # 5 failed attempts with different device_ids from the same client IP
     for i in range(5):

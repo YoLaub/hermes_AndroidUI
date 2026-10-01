@@ -16,6 +16,7 @@ from database import (
     init_db,
     verify_device_token,
     register_device,
+    atomic_register_or_update_device,
     is_device_registered,
     save_pairing_code,
     consume_pairing_code,
@@ -277,40 +278,47 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
             detail="Trop de tentatives de vérification depuis cette adresse IP. Veuillez patienter avant de réessayer."
         )
 
-    # Prevent overwriting an already paired device without cryptographic authorization
-    if is_device_registered(req.device_id):
-        # Extract candidate tokens from payload and headers
-        candidate_device_token = req.current_device_token or request.headers.get("X-Device-Token")
-        candidate_admin_token = req.admin_token or request.headers.get("X-Admin-Token")
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            bearer_tok = auth_header[7:].strip()
-            if not candidate_admin_token:
-                candidate_admin_token = bearer_tok
-            if not candidate_device_token:
-                candidate_device_token = bearer_tok
+    # 1. Extract candidate auth tokens from headers / payload
+    candidate_device_token = req.current_device_token or request.headers.get("X-Device-Token")
+    candidate_admin_token = req.admin_token or request.headers.get("X-Admin-Token")
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        bearer_tok = auth_header[7:].strip()
+        if not candidate_admin_token and verify_admin_token(bearer_tok):
+            candidate_admin_token = bearer_tok
+        if not candidate_device_token:
+            candidate_device_token = bearer_tok
 
-        has_valid_device_auth = bool(candidate_device_token and verify_device_token(req.device_id, candidate_device_token))
-        has_valid_admin_auth = bool(candidate_admin_token and verify_admin_token(candidate_admin_token))
+    is_admin_auth = bool(candidate_admin_token and verify_admin_token(candidate_admin_token))
 
-        if not (has_valid_device_auth or has_valid_admin_auth):
-            raise HTTPException(
-                status_code=403,
-                detail="Ce téléphone est déjà enregistré. L'écrasement nécessite le token actuel de l'appareil ou une autorisation administrateur dédiée."
-            )
-
+    # 2. Consume pairing code atomically FIRST
     user_id = consume_pairing_code(req.code.strip().upper())
     if not user_id:
         raise HTTPException(status_code=400, detail="Code d'appairage invalide ou expiré.")
 
+    # 3. Perform atomic existence check, replacement authorization, and INSERT / UPDATE in a single transaction
+    device_token = "tok_" + secrets.token_urlsafe(24)
+    success, reason = atomic_register_or_update_device(
+        device_id=req.device_id,
+        new_token=device_token,
+        device_name=req.device_name or "Android Phone",
+        current_token=candidate_device_token,
+        is_admin_authorized=is_admin_auth
+    )
+
+    if not success:
+        if reason == "UNAUTHORIZED_OVERWRITE":
+            raise HTTPException(
+                status_code=403,
+                detail="Ce téléphone est déjà enregistré. L'écrasement nécessite le token actuel de l'appareil ou une autorisation administrateur dédiée."
+            )
+        else:
+            raise HTTPException(status_code=409, detail="Impossible d'enregistrer l'appareil.")
+
     # Reset failed attempts on success
     reset_pairing_attempts(rate_key_ip)
 
-    device_token = "tok_" + secrets.token_urlsafe(24)
-    if not register_device(req.device_id, device_token, req.device_name or "Android Phone", allow_overwrite=True):
-        raise HTTPException(status_code=409, detail="Impossible d'enregistrer l'appareil.")
-
-    logger.info("Paired device %s successfully for user %s.", req.device_id, user_id)
+    logger.info("Paired device %s successfully (%s) for user %s.", req.device_id, reason, user_id)
     return PairingVerifyResponse(ok=True, device_token=device_token)
 
 # ── WebSocket Device Endpoint ────────────────────────────────────────────────
