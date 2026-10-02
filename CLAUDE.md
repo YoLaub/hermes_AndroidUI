@@ -41,3 +41,23 @@ priorité, ne sacrifier aucun des deux sans le dire.
 - Relais : `_à décider_` (commande de test pytest à confirmer)
 - WebUI : `_à décider_`
 - Déploiement : `HERMES_MOBILE_CONTROL_DEPLOYMENT.md`
+
+BRAIN: ~/brain/hermes-android
+
+## Journal d'erreurs
+
+Quand un bug non trivial est résolu, append une ligne à `$BRAIN/bag.ndjson` :
+
+{"trigger":"", "symptom":"", "root_cause":"", "fix":"", "severity":1, "date":"YYYY-MM-DD"}
+
+- `trigger` : les termes techniques exacts qui identifient le contexte
+  ("relation polymorphe Strapi v5"), pas une description du bug.
+  C'est la clé de regroupement.
+- `severity` : 1 friction · 2 rework · 3 irréversible (perte de données,
+  CI verte à tort, prod)
+- Append only, jamais d'édition, une ligne par incident.
+
+Si le `trigger` n'est pas formulable en termes techniques précis, le diagnostic
+n'est pas terminé : le dire plutôt que de logger une entrée floue.
+Un bug résolu par hasard ne se logge pas.
+Si aucune ligne `BRAIN:` n'est présente dans ce CLAUDE.md, ne rien logger et le signaler.

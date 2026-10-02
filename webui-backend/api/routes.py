@@ -10431,7 +10431,7 @@ def _server_summary(name, cfg, runtime_status=None):
         return out
 
     enabled = _parse_mcp_enabled(cfg.get("enabled", True))
-    connected = bool(runtime_status.get("connected")) if enabled else False
+    connected = bool(runtime_status.get("active") or runtime_status.get("connected")) if enabled else False
     if "url" in cfg:
         out["transport"] = "http"
         # Mask auth headers
@@ -10461,8 +10461,14 @@ def _server_summary(name, cfg, runtime_status=None):
         out["status"] = "active"
     else:
         out["status"] = "configured"
-    out["tool_count"] = runtime_status.get("tools") if runtime_status else None
+
+    tc = runtime_status.get("tool_count") if runtime_status else None
+    if tc is None and runtime_status and "tools" in runtime_status:
+        raw_t = runtime_status["tools"]
+        tc = len(raw_t) if isinstance(raw_t, list) else raw_t
+    out["tool_count"] = tc
     return out
+
 
 
 def _mcp_safe_display_text(value, *, limit: int) -> str:
@@ -10824,5 +10830,7 @@ def _handle_mcp_server_update(handler, name, body):
     config_path = _get_config_path(profile=profile)
     _save_yaml_config_file(config_path, cfg)
     reload_config(profile=profile)
+    invalidate_profile_mcp_server(profile, name)
     return j(handler, {"ok": True, "server": _server_summary(name, server_cfg)})
+
 

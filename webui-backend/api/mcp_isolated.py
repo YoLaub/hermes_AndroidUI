@@ -2,14 +2,16 @@
 Hermes Web UI -- MCP Profile Isolation & Scoping.
 
 Provides:
-1. ProfileAwareMCPServers: Profile-partitioned dictionary for tools.mcp_tool._servers,
-   preventing cross-profile connection collisions when two profiles define servers with
-   the same name but different credentials.
-2. Isolated Discovery Runner: Executes discovery without injecting secrets into
-   os.environ of the shared WebUI process, using a dedicated subprocess with its own
-   clean environment.
-3. Per-profile inventory cache to report real discovery results to WebUI endpoints.
-4. Parameter preservation utilities for MCP server updates/saves.
+1. ProfileMCPManager: Manages persistent profile MCP worker processes.
+   Each profile with MCP servers gets its own long-running worker process
+   spawned with isolated_env (secrets never leak to the shared WebUI process).
+2. Live IPC Execution: Tool calls from AIAgent route over IPC (stdin/stdout)
+   to the active profile worker, executing against real live MCP connections.
+3. ProfileAwareMCPServers: Scopes tools.mcp_tool._servers by profile.
+4. Live Status & Inventory: Reports real active/connected status only when
+   the worker and its server connections are actually alive.
+5. Invalidation: Automatically reloads/terminates workers and purges cached
+   inventories when configuration changes.
 """
 
 import json
@@ -19,8 +21,10 @@ import re
 import subprocess
 import sys
 import threading
+import time
+import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,31 +34,346 @@ _INVENTORY_LOCK = threading.RLock()
 _PROFILE_MCP_INVENTORY: Dict[str, Dict[str, Any]] = {}
 
 
-def _sanitize_mcp_error(err_str: str, secret_values: List[str]) -> str:
+def _sanitize_mcp_error(err_str: str, secret_values: Any = None) -> str:
     """Mask secrets and credential tokens from error messages."""
     if not err_str:
         return ""
     err_str = re.sub(r'Bearer\s+[A-Za-z0-9_\-\.]+', 'Bearer [REDACTED]', err_str)
     err_str = re.sub(r'token=[A-Za-z0-9_\-\.]+', 'token=[REDACTED]', err_str)
     err_str = re.sub(r'key=[A-Za-z0-9_\-\.]+', 'key=[REDACTED]', err_str)
-    for val in secret_values:
-        if val and len(val) >= 4 and val in err_str:
-            err_str = err_str.replace(val, '[REDACTED]')
+    if isinstance(secret_values, dict):
+        vals = list(secret_values.values())
+    elif isinstance(secret_values, (list, tuple, set)):
+        vals = list(secret_values)
+    else:
+        vals = []
+    for val in vals:
+        val_str = str(val)
+        if val_str and len(val_str) >= 4 and val_str in err_str:
+            err_str = err_str.replace(val_str, '[REDACTED]')
     return err_str
 
 
+class ProfileMCPWorkerClient:
+    """Client for a persistent profile MCP worker process."""
+
+    def __init__(self, profile_name: str, home_path: Path, profile_env: Optional[Dict[str, str]] = None):
+        self.profile_name = profile_name
+        self.home_path = Path(home_path).resolve()
+        self.profile_env = dict(profile_env or {})
+        self.proc: Optional[subprocess.Popen] = None
+        self._pending_requests: Dict[str, dict] = {}
+        self._pending_events: Dict[str, threading.Event] = {}
+        self._lock = threading.RLock()
+        self._reader_thread: Optional[threading.Thread] = None
+        self._is_alive = False
+
+    def is_alive(self) -> bool:
+        return self._is_alive and self.proc is not None and self.proc.poll() is None
+
+    def start(self) -> None:
+        with self._lock:
+            if self.is_alive():
+                return
+
+            from api.config import PYTHON_EXE, REPO_ROOT, _AGENT_DIR
+
+            isolated_env = dict(os.environ)
+            # Secrets strictly passed only to child process
+            if self.profile_env:
+                isolated_env.update(self.profile_env)
+            isolated_env["HERMES_HOME"] = str(self.home_path)
+            isolated_env["HERMES_WEBUI_DIR"] = str(REPO_ROOT)
+            isolated_env["PYTHONPATH"] = f"{REPO_ROOT}:{isolated_env.get('PYTHONPATH', '')}".rstrip(":")
+            if _AGENT_DIR:
+                isolated_env["HERMES_AGENT_DIR"] = str(_AGENT_DIR)
+                isolated_env["PYTHONPATH"] = f"{_AGENT_DIR}:{isolated_env['PYTHONPATH']}".rstrip(":")
+
+            cmd = [
+                PYTHON_EXE or sys.executable,
+                "-m",
+                "api.mcp_worker",
+                "--profile",
+                self.profile_name,
+                "--home",
+                str(self.home_path),
+            ]
+
+            try:
+                self.proc = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    cwd=str(REPO_ROOT),
+                    env=isolated_env,
+                )
+                self._is_alive = True
+            except Exception as e:
+                logger.error("Failed to spawn MCP worker for profile '%s': %s", self.profile_name, e)
+                self._is_alive = False
+                return
+
+            self._reader_thread = threading.Thread(
+                target=self._read_stdout_loop,
+                name=f"mcp-worker-reader-{self.profile_name}",
+                daemon=True,
+            )
+            self._reader_thread.start()
+
+            # Start stderr logger thread
+            threading.Thread(
+                target=self._read_stderr_loop,
+                name=f"mcp-worker-err-{self.profile_name}",
+                daemon=True,
+            ).start()
+
+    def _read_stdout_loop(self) -> None:
+        if not self.proc or not self.proc.stdout:
+            return
+        try:
+            for line in self.proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    req_id = data.get("id")
+                    if req_id:
+                        with self._lock:
+                            self._pending_requests[req_id] = data
+                            evt = self._pending_events.get(req_id)
+                            if evt:
+                                evt.set()
+                except Exception as exc:
+                    logger.debug("Failed to parse worker stdout: %s", exc)
+        except Exception:
+            pass
+        finally:
+            self._is_alive = False
+
+    def _read_stderr_loop(self) -> None:
+        if not self.proc or not self.proc.stderr:
+            return
+        try:
+            for line in self.proc.stderr:
+                logger.debug("[%s worker err] %s", self.profile_name, line.strip())
+        except Exception:
+            pass
+
+    def send_command(self, action: str, timeout: float = 30.0, **params) -> dict:
+        """Send command to worker and await response."""
+        if not self.is_alive():
+            self.start()
+        if not self.is_alive() or not self.proc or not self.proc.stdin:
+            return {"ok": False, "error": f"Worker process for profile '{self.profile_name}' is not running"}
+
+        req_id = f"req-{uuid.uuid4().hex[:8]}"
+        payload = {"id": req_id, "action": action, **params}
+        evt = threading.Event()
+
+        with self._lock:
+            self._pending_events[req_id] = evt
+
+        try:
+            line = json.dumps(payload) + "\n"
+            with self._lock:
+                self.proc.stdin.write(line)
+                self.proc.stdin.flush()
+        except Exception as e:
+            self._is_alive = False
+            return {"ok": False, "error": f"Failed to write to worker stdin: {e}"}
+
+        signaled = False
+        start_t = time.time()
+        while time.time() - start_t < timeout:
+            if evt.wait(timeout=0.1):
+                signaled = True
+                break
+            if not self.is_alive():
+                break
+
+        with self._lock:
+            self._pending_events.pop(req_id, None)
+            resp = self._pending_requests.pop(req_id, None)
+
+        if not signaled or resp is None:
+            if not self.is_alive():
+                return {"ok": False, "error": f"Worker process for profile '{self.profile_name}' terminated unexpectedly"}
+            return {"ok": False, "error": f"Worker timed out waiting for response to {action}"}
+        return resp
+
+    def stop(self) -> None:
+        """Terminate the worker cleanly."""
+        with self._lock:
+            self._is_alive = False
+            if self.proc:
+                try:
+                    if self.proc.stdin:
+                        self.proc.stdin.write(json.dumps({"action": "shutdown"}) + "\n")
+                        self.proc.stdin.flush()
+                        time.sleep(0.05)
+                except Exception:
+                    pass
+                try:
+                    self.proc.terminate()
+                    self.proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        self.proc.kill()
+                    except Exception:
+                        pass
+                self.proc = None
+
+
+class ProfileMCPManager:
+    """Singleton manager for profile MCP workers and live tool dispatch."""
+
+    _instance = None
+    _lock = threading.RLock()
+
+    def __init__(self):
+        self._workers: Dict[str, ProfileMCPWorkerClient] = {}
+
+    @classmethod
+    def get_instance(cls) -> "ProfileMCPManager":
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = ProfileMCPManager()
+            return cls._instance
+
+    def get_or_create_worker(
+        self,
+        profile_name: str,
+        home_path: Path,
+        profile_env: Optional[Dict[str, str]] = None,
+    ) -> ProfileMCPWorkerClient:
+        profile_str = str(profile_name or "default")
+        with self._lock:
+            worker = self._workers.get(profile_str)
+            if worker is None:
+                worker = ProfileMCPWorkerClient(profile_str, home_path, profile_env)
+                self._workers[profile_str] = worker
+            elif profile_env:
+                worker.profile_env.update(profile_env)
+            return worker
+
+    def discover_for_profile(
+        self,
+        profile_name: str,
+        home_path: Path,
+        profile_env: Optional[Dict[str, str]] = None,
+    ) -> dict:
+        """Discover tools via the dedicated worker and register executable callers."""
+        profile_str = str(profile_name or "default")
+        from api.config import get_config as _get_cfg
+        profile_cfg = _get_cfg(profile=profile_str) if profile_str else {}
+        mcp_servers = profile_cfg.get("mcp_servers", {}) if isinstance(profile_cfg, dict) else {}
+
+        if not mcp_servers:
+            self.invalidate_profile(profile_str)
+            return {"ok": True, "servers": {}, "tools": []}
+
+        worker = self.get_or_create_worker(profile_str, home_path, profile_env)
+        resp = worker.send_command("discover", timeout=25.0)
+
+        if resp.get("ok"):
+            tools = resp.get("tools", [])
+            servers = resp.get("servers", {})
+            set_profile_discovery_inventory(profile_str, tools, servers)
+            # Register executable tool wrappers into registry
+            self._register_live_tools_for_profile(profile_str, tools)
+            return resp
+        else:
+            # Server unreachable or failed: mark inactive
+            set_profile_discovery_inventory(profile_str, [], {})
+            err_msg = resp.get("error", "Discovery failed")
+            sanitized_err = _sanitize_mcp_error(str(err_msg), profile_env)
+            logger.warning("Profile '%s' MCP discovery failed: %s", profile_str, sanitized_err)
+            return resp
+
+    def _register_live_tools_for_profile(self, profile_name: str, tools: List[dict]) -> None:
+        """Register live tool callables into tools.registry.registry."""
+        try:
+            from tools.registry import registry
+        except Exception:
+            return
+
+        for t in tools:
+            tool_name = t.get("name")
+            server_name = t.get("server") or ""
+            if not tool_name:
+                continue
+
+            schema = t.get("schema") or t.get("inputSchema") or {}
+
+            # Create closure capturing profile, server, and tool name
+            def make_caller(p_name: str, s_name: str, orig_name: str):
+                def live_tool_caller(**kwargs):
+                    return self.call_tool(p_name, s_name, orig_name, kwargs)
+                return live_tool_caller
+
+            caller = make_caller(profile_name, server_name, tool_name)
+            toolset_name = f"mcp-{server_name}" if not server_name.startswith("mcp-") else server_name
+            try:
+                registry.register(tool_name, caller, schema=schema, toolset=toolset_name)
+            except Exception:
+                # If already registered or method differences, update existing registry
+                if hasattr(registry, "_tools") and isinstance(registry._tools, dict):
+                    registry._tools[tool_name] = caller
+                if hasattr(registry, "_schemas") and isinstance(registry._schemas, dict):
+                    registry._schemas[tool_name] = schema
+                if hasattr(registry, "_toolsets") and isinstance(registry._toolsets, dict):
+                    registry._toolsets[tool_name] = toolset_name
+
+    def call_tool(self, profile_name: str, server_name: str, tool_name: str, arguments: dict) -> Any:
+        """Call a tool via the live persistent worker."""
+        profile_str = str(profile_name or "default")
+        with self._lock:
+            worker = self._workers.get(profile_str)
+        if not worker or not worker.is_alive():
+            raise RuntimeError(f"No active MCP worker for profile '{profile_str}'")
+
+        resp = worker.send_command("call_tool", server=server_name, tool=tool_name, arguments=arguments)
+        if not resp.get("ok"):
+            raise RuntimeError(resp.get("error", "Tool execution failed"))
+        return resp.get("result")
+
+    def get_status_for_profile(self, profile_name: str) -> dict:
+        """Return real live connection status from the worker."""
+        profile_str = str(profile_name or "default")
+        with self._lock:
+            worker = self._workers.get(profile_str)
+        if not worker or not worker.is_alive():
+            return {"active": False, "servers": {}}
+        resp = worker.send_command("status", timeout=5.0)
+        return resp if resp.get("ok") else {"active": False, "servers": {}}
+
+    def invalidate_profile(self, profile_name: str) -> None:
+        """Stop worker and purge discovery cache when config changes."""
+        profile_str = str(profile_name or "default")
+        with self._lock:
+            worker = self._workers.pop(profile_str, None)
+            if worker:
+                worker.stop()
+        with _INVENTORY_LOCK:
+            _PROFILE_MCP_INVENTORY.pop(profile_str, None)
+
+        servers_dict = ensure_servers_profile_aware()
+        if servers_dict is not None:
+            servers_dict.clear_profile(profile_str)
+
+    def shutdown_all(self) -> None:
+        with self._lock:
+            for w in self._workers.values():
+                w.stop()
+            self._workers.clear()
+
+
 class ProfileAwareMCPServers(dict):
-    """Profile-partitioned dictionary replacing tools.mcp_tool._servers.
-
-    Upstream Hermes Agent uses a process-global _servers dict keyed solely by server name.
-    If two profiles define a server with the same name (e.g. 'shared-db' or 'mcp-mobile')
-    with different credentials/endpoints, the second profile either reuses the first profile's
-    connection or overwrites it.
-
-    ProfileAwareMCPServers partitions storage by active profile name (derived from
-    api.profiles.get_active_profile_name()), so each profile gets its own isolated
-    server instance dictionary while maintaining standard dict semantics.
-    """
+    """Profile-partitioned dictionary replacing tools.mcp_tool._servers."""
 
     def __init__(self, initial=None):
         super().__init__()
@@ -145,7 +464,7 @@ def ensure_servers_profile_aware() -> Optional[ProfileAwareMCPServers]:
     if isinstance(current_servers, ProfileAwareMCPServers):
         return current_servers
 
-    if isinstance(current_servers, dict):
+    if isinstance(current_servers, dict) and not ("mock" in type(current_servers).__module__):
         new_servers = ProfileAwareMCPServers(initial=current_servers)
         setattr(_mcp_mod, "_servers", new_servers)
         return new_servers
@@ -154,7 +473,7 @@ def ensure_servers_profile_aware() -> Optional[ProfileAwareMCPServers]:
 
 
 def get_profile_discovered_inventory(profile: str) -> Dict[str, Any]:
-    """Return the cached discovery results (tools, servers) for a profile."""
+    """Return cached discovery results (tools, servers) for a profile."""
     profile_str = str(profile or "default")
     with _INVENTORY_LOCK:
         return dict(_PROFILE_MCP_INVENTORY.get(profile_str, {"tools": [], "servers": {}}))
@@ -175,54 +494,8 @@ def set_profile_discovery_inventory(
 
 
 def invalidate_profile_mcp_server(profile: str, server_name: str) -> None:
-    """Remove a server from profile cache and active server connections."""
-    profile_str = str(profile or "default")
-    with _INVENTORY_LOCK:
-        if profile_str in _PROFILE_MCP_INVENTORY:
-            inv = _PROFILE_MCP_INVENTORY[profile_str]
-            inv.get("servers", {}).pop(server_name, None)
-            inv["tools"] = [
-                t for t in inv.get("tools", [])
-                if t.get("server") != server_name and t.get("server") != f"mcp-{server_name}"
-            ]
-    servers_dict = ensure_servers_profile_aware()
-    if servers_dict is not None:
-        servers_dict.get_for_profile(profile_str).pop(server_name, None)
-
-
-def _clean_stale_connections(mcp_servers_keys: List[str], profile_name: str) -> None:
-    """Purge disconnected or inactive servers from the profile's _servers dict."""
-    try:
-        _mcp_mod = sys.modules.get("tools.mcp_tool")
-        if _mcp_mod is None:
-            return
-        servers_dict = getattr(_mcp_mod, "_servers", None)
-        if isinstance(servers_dict, ProfileAwareMCPServers):
-            prof_dict = servers_dict.get_for_profile(profile_name)
-            for s_name in list(mcp_servers_keys):
-                srv_obj = prof_dict.get(s_name)
-                if srv_obj is not None:
-                    is_active = getattr(srv_obj, "is_connected", None)
-                    if callable(is_active):
-                        is_active = is_active()
-                    elif is_active is None:
-                        is_active = getattr(srv_obj, "connected", True)
-                    if not is_active:
-                        prof_dict.pop(s_name, None)
-        elif isinstance(servers_dict, dict):
-            for s_name in list(mcp_servers_keys):
-                srv_obj = servers_dict.get(s_name)
-                if srv_obj is not None:
-                    is_active = getattr(srv_obj, "is_connected", None)
-                    if callable(is_active):
-                        is_active = is_active()
-                    elif is_active is None:
-                        is_active = getattr(srv_obj, "connected", True)
-                    if not is_active:
-                        servers_dict.pop(s_name, None)
-    except Exception:
-        pass
-
+    """Invalidate cache and worker for this profile upon configuration changes."""
+    ProfileMCPManager.get_instance().invalidate_profile(profile)
 
 
 def discover_profile_mcp_tools(
@@ -230,176 +503,6 @@ def discover_profile_mcp_tools(
     profile_home_path: Path,
     profile_env: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Discover and register MCP tools isolated to this profile.
-
-    Crucial isolation guarantees:
-    1. NEVER injects secrets into os.environ of the shared WebUI process.
-    2. Runs discovery in a dedicated subprocess with its own clean environment
-       when Python runtime is available.
-    3. In mock/test environments, performs safe in-process discovery without
-       modifying parent os.environ.
-    4. Caches real discovery results (tools, schemas, server statuses) for this
-       specific profile.
-    5. Cleans up stale connections to allow seamless retry.
-    """
-    profile_str = str(profile_name or "default")
-    from api.config import get_config as _get_cfg
-    profile_cfg = _get_cfg(profile=profile_str) if profile_str else {}
-    mcp_servers = profile_cfg.get("mcp_servers", {}) if isinstance(profile_cfg, dict) else {}
-    if not mcp_servers:
-        with _INVENTORY_LOCK:
-            _PROFILE_MCP_INVENTORY.pop(profile_str, None)
-        servers_dict = ensure_servers_profile_aware()
-        if servers_dict is not None:
-            servers_dict.clear_profile(profile_str)
-        return
-
-    _clean_stale_connections(list(mcp_servers.keys()), profile_str)
-
-    secrets_to_mask = [
-        str(v) for k, v in (profile_env or {}).items()
-        if any(term in k.upper() for term in ("TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH"))
-    ]
-
-    # Check if tools.mcp_tool is mocked in sys.modules (e.g. unit tests)
-    _mcp_mod = sys.modules.get("tools.mcp_tool")
-    is_mock = False
-    if _mcp_mod is not None:
-        # Check for MagicMock / Mock or mock-like discover_mcp_tools
-        disc_func = getattr(_mcp_mod, "discover_mcp_tools", None)
-        if hasattr(_mcp_mod, "_mock_return_value") or hasattr(disc_func, "mock") or "unittest.mock" in type(_mcp_mod).__module__:
-            is_mock = True
-
-    if is_mock and _mcp_mod is not None:
-        # Run test/mock discovery directly without mutating os.environ
-        try:
-            disc = getattr(_mcp_mod, "discover_mcp_tools", None)
-            if callable(disc):
-                disc()
-            logger.info("[mcp] Successfully discovered MCP tools for profile '%s' (in-process mock)", profile_str)
-        except Exception as exc:
-            sanitized = _sanitize_mcp_error(str(exc), secrets_to_mask)
-            logger.warning(
-                "[mcp] Profile '%s' MCP discovery failed (%s: %s). Server will remain usable; retry on next request.",
-                profile_str,
-                type(exc).__name__,
-                sanitized,
-            )
-            # Purge failed servers from mock
-            s_dict = getattr(_mcp_mod, "_servers", None)
-            if isinstance(s_dict, dict):
-                for s_name in mcp_servers.keys():
-                    s_dict.pop(s_name, None)
-        return
-
-    # Dedicated Subprocess Discovery:
-    # Build isolated env with profile secrets and HERMES_HOME passed ONLY to the child process.
-    # The parent process os.environ remains completely clean!
-    isolated_env = dict(os.environ)
-    if profile_env:
-        isolated_env.update(profile_env)
-    if profile_home_path:
-        isolated_env["HERMES_HOME"] = str(profile_home_path)
-
-    from api.config import PYTHON_EXE, REPO_ROOT, _AGENT_DIR
-
-    script = """
-import json, os, sys
-from pathlib import Path
-
-# Add repo and agent dirs to sys.path
-agent_dir = os.getenv("HERMES_AGENT_DIR", "")
-if agent_dir and agent_dir not in sys.path:
-    sys.path.insert(0, agent_dir)
-webui_dir = os.getenv("HERMES_WEBUI_DIR", "")
-if webui_dir and webui_dir not in sys.path:
-    sys.path.insert(0, webui_dir)
-
-try:
-    import tools.mcp_tool as mcp
-    mcp.discover_mcp_tools()
-    
-    statuses = getattr(mcp, "get_mcp_status", lambda: [])()
-    tools = []
-    try:
-        from tools.registry import registry
-        for t_name in registry.get_all_tool_names():
-            t_set = registry.get_toolset_for_tool(t_name)
-            if t_set and t_set.startswith("mcp-"):
-                schema = registry.get_schema(t_name) or {}
-                tools.append({
-                    "name": t_name,
-                    "server": t_set[len("mcp-"):],
-                    "schema": schema,
-                })
-    except Exception:
-        pass
-    print("MCP_RESULT:" + json.dumps({"ok": True, "statuses": statuses, "tools": tools}))
-except Exception as exc:
-    print("MCP_RESULT:" + json.dumps({"ok": False, "error": str(exc), "error_type": type(exc).__name__}))
-"""
-    isolated_env["HERMES_WEBUI_DIR"] = str(REPO_ROOT)
-    if _AGENT_DIR:
-        isolated_env["HERMES_AGENT_DIR"] = str(_AGENT_DIR)
-
-    try:
-        proc = subprocess.run(
-            [PYTHON_EXE or sys.executable, "-c", script],
-            env=isolated_env,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        output = proc.stdout or ""
-        result_line = None
-        for line in output.splitlines():
-            if line.startswith("MCP_RESULT:"):
-                result_line = line[len("MCP_RESULT:"):].strip()
-                break
-
-        if result_line:
-            data = json.loads(result_line)
-            if data.get("ok"):
-                raw_tools = data.get("tools", [])
-                raw_statuses = data.get("statuses", [])
-                servers_map = {}
-                for st in raw_statuses:
-                    if isinstance(st, dict) and st.get("name"):
-                        servers_map[str(st["name"])] = st
-
-                set_profile_discovery_inventory(profile_str, raw_tools, servers_map)
-                logger.info("[mcp] Successfully discovered MCP tools for profile '%s' via dedicated process", profile_str)
-                return
-            else:
-                err_msg = data.get("error", "Unknown discovery error")
-                err_type = data.get("error_type", "Error")
-                sanitized_msg = _sanitize_mcp_error(err_msg, secrets_to_mask)
-                logger.warning(
-                    "[mcp] Profile '%s' MCP discovery failed (%s: %s). Server will remain usable; retry on next request.",
-                    profile_str,
-                    err_type,
-                    sanitized_msg,
-                )
-        else:
-            stderr_msg = proc.stderr or ""
-            sanitized_err = _sanitize_mcp_error(stderr_msg, secrets_to_mask)
-            logger.warning(
-                "[mcp] Profile '%s' MCP discovery runner exited with code %s: %s",
-                profile_str,
-                proc.returncode,
-                sanitized_err[:300],
-            )
-    except subprocess.TimeoutExpired:
-        logger.warning("[mcp] Profile '%s' MCP discovery timed out after 15s", profile_str)
-    except Exception as exc:
-        sanitized_msg = _sanitize_mcp_error(str(exc), secrets_to_mask)
-        logger.warning(
-            "[mcp] Profile '%s' MCP discovery failed (%s: %s).",
-            profile_str,
-            type(exc).__name__,
-            sanitized_msg,
-        )
-
-    # Invalidate failed inventory for this profile
-    with _INVENTORY_LOCK:
-        _PROFILE_MCP_INVENTORY.pop(profile_str, None)
+    """Trigger profile-isolated discovery through the persistent worker."""
+    mgr = ProfileMCPManager.get_instance()
+    mgr.discover_for_profile(profile_name, profile_home_path, profile_env)

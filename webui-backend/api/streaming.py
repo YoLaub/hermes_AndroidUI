@@ -3227,7 +3227,9 @@ def _run_agent_streaming(
             os.environ['HERMES_SESSION_ID'] = session_id
             os.environ['HERMES_SESSION_PLATFORM'] = 'webui'
             if _profile_home:
-                os.environ['HERMES_HOME'] = _profile_home
+                # Do not mutate os.environ['HERMES_HOME'] globally across all threads,
+                # as concurrent sessions from different profiles will stomp on each other.
+                # HERMES_HOME is already maintained per-thread in _thread_env.
                 # Patch module-level caches to match the active profile.
                 # _set_hermes_home() does this for process-wide switches
                 # but per-request switches skip it (#1700).

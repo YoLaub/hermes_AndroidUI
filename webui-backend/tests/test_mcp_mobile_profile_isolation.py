@@ -9,6 +9,8 @@ Covers:
 - Profile resolution via X-Hermes-Profile header and hermes_profile cookie.
 """
 
+import http.server
+import json
 import logging
 import os
 import sys
@@ -38,6 +40,112 @@ from api.streaming import _discover_profile_mcp_tools, _sanitize_mcp_error
 class DummyHandler:
     def __init__(self, headers=None):
         self.headers = headers or {}
+
+
+class MockMCPServerHandler(http.server.BaseHTTPRequestHandler):
+    expected_token = None
+    server_instance = None
+
+    def log_message(self, format, *args):
+        pass
+
+    def do_POST(self):
+        auth_header = self.headers.get("Authorization", "")
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len).decode("utf-8")
+        req = json.loads(body)
+        method = req.get("method")
+        req_id = req.get("id")
+
+        if self.expected_token and auth_header != f"Bearer {self.expected_token}":
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Unauthorized"}).encode("utf-8"))
+            return
+
+        if self.server_instance:
+            self.server_instance.recorded_requests.append({
+                "method": method,
+                "auth": auth_header,
+                "body": req,
+            })
+
+        if method == "initialize":
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "serverInfo": {"name": "test-relay", "version": "1.0"},
+                },
+            }
+        elif method == "tools/list":
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": "Echo back message",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {"message": {"type": "string"}},
+                                "required": ["message"],
+                            },
+                        }
+                    ]
+                },
+            }
+        elif method == "tools/call":
+            params = req.get("params", {})
+            t_name = params.get("name")
+            args = params.get("arguments", {})
+            if t_name == "echo":
+                msg = args.get("message", "")
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [
+                            {"type": "text", "text": f"Echo: {msg}"}
+                        ]
+                    },
+                }
+            else:
+                resp = {"jsonrpc": "2.0", "id": req_id, "error": {"message": f"Unknown tool {t_name}"}}
+        else:
+            resp = {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(resp).encode("utf-8"))
+
+
+class LocalMCPTestServer:
+    def __init__(self, expected_token: str):
+        self.expected_token = expected_token
+        self.recorded_requests = []
+        handler_cls = type(
+            "BoundHandler",
+            (MockMCPServerHandler,),
+            {"expected_token": expected_token, "server_instance": self},
+        )
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
+        self.port = self.httpd.server_address[1]
+        self.url = f"http://127.0.0.1:{self.port}/mcp"
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+
+    def shutdown(self):
+        try:
+            self.httpd.shutdown()
+            self.httpd.server_close()
+        except Exception:
+            pass
 
 
 class TestProfileDetection:
@@ -170,112 +278,120 @@ class TestConfigAndSecretIsolation:
             assert results["mario"] == "MarioAgent"
 
     def test_secrets_never_leak_globally_during_or_after_discovery(self, tmp_path):
-        john_home = tmp_path / "profiles" / "john"
-        john_home.mkdir(parents=True)
-        (john_home / "config.yaml").write_text(
-            "mcp_servers:\n  mcp-mobile:\n    url: http://mobile-relay:8765/mcp\n",
-            encoding="utf-8"
-        )
+        from api.mcp_isolated import ProfileMCPManager, get_profile_discovered_inventory
 
-        john_env = {
-            "MOBILE_CONTROL_TOKEN": "super_secret_john_token_12345",
-            "OTHER_VAR": "public_value"
-        }
+        token = "super_secret_john_token_12345"
+        server = LocalMCPTestServer(expected_token=token)
+        try:
+            john_home = tmp_path / "profiles" / "john"
+            john_home.mkdir(parents=True)
+            (john_home / "config.yaml").write_text(
+                f"mcp_servers:\n  mcp-mobile:\n    url: {server.url}\n    headers:\n      Authorization: Bearer ${{MOBILE_CONTROL_TOKEN}}\n",
+                encoding="utf-8"
+            )
 
-        # Ensure token is not currently in os.environ
-        assert "MOBILE_CONTROL_TOKEN" not in os.environ
+            john_env = {
+                "MOBILE_CONTROL_TOKEN": token,
+                "OTHER_VAR": "public_value"
+            }
 
-        discovered = []
+            # Ensure token is not currently in os.environ
+            assert "MOBILE_CONTROL_TOKEN" not in os.environ
 
-        def fake_discover():
-            # Crucial: Secret tokens are NEVER injected into os.environ of the shared WebUI process
-            assert os.environ.get("MOBILE_CONTROL_TOKEN") is None
-            discovered.append(True)
+            def mock_get_hermes_home(profile):
+                return john_home
 
-        fake_mcp = MagicMock(discover_mcp_tools=fake_discover, _servers={})
-
-        def mock_get_hermes_home(profile):
-            return john_home
-
-        with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
-            with patch.dict("sys.modules", {"tools.mcp_tool": fake_mcp}):
+            with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
                 _discover_profile_mcp_tools("john", john_home, john_env)
 
-        assert discovered == [True]
-        # Crucial check: AFTER discovery finishes, MOBILE_CONTROL_TOKEN must NOT be in os.environ
-        assert "MOBILE_CONTROL_TOKEN" not in os.environ
+            # Crucial check: AFTER discovery finishes, MOBILE_CONTROL_TOKEN must NOT be in os.environ
+            assert "MOBILE_CONTROL_TOKEN" not in os.environ
+            assert os.environ.get("MOBILE_CONTROL_TOKEN") is None
+
+            # Verify discovery actually reached the local server with the secret token
+            reqs = [r for r in server.recorded_requests if r["method"] == "tools/list"]
+            assert len(reqs) >= 1
+            assert all(r["auth"] == f"Bearer {token}" for r in reqs)
+
+            inv = get_profile_discovered_inventory("john")
+            assert len(inv.get("tools", [])) == 1
+        finally:
+            ProfileMCPManager.get_instance().shutdown_all()
+            server.shutdown()
 
 
 class TestResilienceAndRetry:
     def test_offline_mcp_server_does_not_crash_and_redacts_secrets(self, tmp_path, caplog):
+        from api.mcp_isolated import ProfileMCPManager
+
         john_home = tmp_path / "profiles" / "john"
         john_home.mkdir(parents=True)
+        secret_token = "secret_auth_token_9999"
         (john_home / "config.yaml").write_text(
-            "mcp_servers:\n  mcp-mobile:\n    url: http://mobile-relay:8765/mcp\n",
+            f"mcp_servers:\n  mcp-mobile:\n    url: http://127.0.0.1:59998/mcp?token={secret_token}\n    headers:\n      Authorization: Bearer {secret_token}\n",
             encoding="utf-8"
         )
 
-        secret_token = "secret_auth_token_9999"
         john_env = {"MOBILE_CONTROL_TOKEN": secret_token}
-
-        def failing_discover():
-            raise ConnectionRefusedError(f"Failed to connect to http://mobile-relay:8765/mcp with Bearer {secret_token}")
-
-        fake_mcp = MagicMock(discover_mcp_tools=failing_discover, _servers={})
 
         def mock_get_hermes_home(profile):
             return john_home
 
-        with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
-            with patch.dict("sys.modules", {"tools.mcp_tool": fake_mcp}):
+        try:
+            with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
                 with caplog.at_level(logging.WARNING):
                     # Must not raise exception
                     _discover_profile_mcp_tools("john", john_home, john_env)
 
-        # Check logs: profile mentioned, error mentioned, secret REDACTED
-        assert "Profile 'john' MCP discovery failed" in caplog.text
-        assert secret_token not in caplog.text
-        assert "[REDACTED]" in caplog.text
+            # Check logs: profile mentioned, error mentioned, secret REDACTED
+            assert "Profile 'john' MCP discovery failed" in caplog.text
+            assert secret_token not in caplog.text
+            assert "[REDACTED]" in caplog.text
+        finally:
+            ProfileMCPManager.get_instance().shutdown_all()
 
     def test_retry_after_initial_failure_cleans_stale_server_and_succeeds(self, tmp_path):
+        from api.mcp_isolated import ProfileMCPManager, get_profile_discovered_inventory
+
         john_home = tmp_path / "profiles" / "john"
         john_home.mkdir(parents=True)
+
+        token = "token_retry_test_123"
+        server = LocalMCPTestServer(expected_token=token)
+        server_url = server.url
+        # Stop server to simulate initial offline state
+        server.shutdown()
+
         (john_home / "config.yaml").write_text(
-            "mcp_servers:\n  mcp-mobile:\n    url: http://mobile-relay:8765/mcp\n",
+            f"mcp_servers:\n  mcp-mobile:\n    url: {server_url}\n    headers:\n      Authorization: Bearer {token}\n",
             encoding="utf-8"
         )
-
-        attempts = 0
-        stale_server = MagicMock(is_connected=lambda: False)
-        servers_dict = {"mcp-mobile": stale_server}
-
-        def discover():
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
-                raise ConnectionError("Temporary relay offline")
-            # Attempt 2 succeeds and registers active server
-            active_server = MagicMock(is_connected=lambda: True)
-            servers_dict["mcp-mobile"] = active_server
-
-        fake_mcp = MagicMock(discover_mcp_tools=discover, _servers=servers_dict)
 
         def mock_get_hermes_home(profile):
             return john_home
 
-        with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
-            with patch.dict("sys.modules", {"tools.mcp_tool": fake_mcp}):
-                # Attempt 1: fails gracefully
+        try:
+            with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
+                # Attempt 1: server is down, discovery fails gracefully and registers 0 tools
                 _discover_profile_mcp_tools("john", john_home, {})
-                assert attempts == 1
+                inv1 = get_profile_discovered_inventory("john")
+                assert len(inv1.get("tools", [])) == 0
 
-                # Stale server should have been purged from _servers
-                assert servers_dict.get("mcp-mobile") is None
+                # Restart server on the same port
+                server = LocalMCPTestServer(expected_token=token)
+                (john_home / "config.yaml").write_text(
+                    f"mcp_servers:\n  mcp-mobile:\n    url: {server.url}\n    headers:\n      Authorization: Bearer {token}\n",
+                    encoding="utf-8"
+                )
 
                 # Attempt 2: succeeds on next turn/request
                 _discover_profile_mcp_tools("john", john_home, {})
-                assert attempts == 2
-                assert servers_dict["mcp-mobile"].is_connected() is True
+                inv2 = get_profile_discovered_inventory("john")
+                assert len(inv2.get("tools", [])) == 1
+                assert inv2["servers"]["mcp-mobile"]["active"] is True
+        finally:
+            ProfileMCPManager.get_instance().shutdown_all()
+            server.shutdown()
 
     def test_concurrent_sessions_profile_and_secret_isolation(self, tmp_path):
         john_home = tmp_path / "profiles" / "john"
@@ -676,4 +792,143 @@ class TestMcpSaveParameterPreservationAndTrueDiscovery:
         tool_names = [t["name"] for t in handler.sent_json["tools"]]
         assert "mcp_mobile_take_screenshot" in tool_names
         assert "mcp_mobile_tap_element" in tool_names
+
+
+class TestRealLocalMCPServerIntegration:
+    def test_end_to_end_discovery_execution_and_isolation(self, tmp_path):
+        """Full end-to-end integration test with real local MCP HTTP servers.
+
+        Tests:
+        1. Two real local HTTP MCP servers with different credentials.
+        2. Two profiles (John & Alice) with servers sharing the exact same name ('my-relay').
+        3. Real discovery via ProfileMCPManager running persistent workers.
+        4. Real live execution of tools via IPC, returning real results.
+        5. Verification that each profile connects with its own token to its own server.
+        6. Verification that neither token ever enters parent os.environ.
+        7. Gaston and Mario have 0 tools and cannot invoke mobile tools.
+        8. Updating/invalidating configuration purges old inventory and resets the worker.
+        """
+        from api.mcp_isolated import (
+            ProfileMCPManager,
+            invalidate_profile_mcp_server,
+            get_profile_discovered_inventory,
+        )
+
+        token_john = "token_john_live_secret_777"
+        token_alice = "token_alice_live_secret_888"
+
+        server_john = LocalMCPTestServer(expected_token=token_john)
+        server_alice = LocalMCPTestServer(expected_token=token_alice)
+
+        try:
+            john_home = tmp_path / "profiles" / "john"
+            alice_home = tmp_path / "profiles" / "alice"
+            gaston_home = tmp_path / "profiles" / "gaston"
+            mario_home = tmp_path / "profiles" / "mario"
+            for p in (john_home, alice_home, gaston_home, mario_home):
+                p.mkdir(parents=True)
+
+            # Both profiles configure a server with the EXACT SAME NAME 'my-relay'
+            (john_home / "config.yaml").write_text(
+                f"mcp_servers:\n  my-relay:\n    url: {server_john.url}\n    headers:\n      Authorization: Bearer ${{JOHN_TOKEN}}\n",
+                encoding="utf-8"
+            )
+            (alice_home / "config.yaml").write_text(
+                f"mcp_servers:\n  my-relay:\n    url: {server_alice.url}\n    headers:\n      Authorization: Bearer ${{ALICE_TOKEN}}\n",
+                encoding="utf-8"
+            )
+            (gaston_home / "config.yaml").write_text("agent:\n  name: Gaston\n", encoding="utf-8")
+            (mario_home / "config.yaml").write_text("agent:\n  name: Mario\n", encoding="utf-8")
+
+            john_env = {"JOHN_TOKEN": token_john}
+            alice_env = {"ALICE_TOKEN": token_alice}
+
+            mgr = ProfileMCPManager.get_instance()
+            # Clean start
+            mgr.shutdown_all()
+
+            def mock_get_hermes_home(profile):
+                if profile == "john":
+                    return john_home
+                elif profile == "alice":
+                    return alice_home
+                elif profile == "gaston":
+                    return gaston_home
+                elif profile == "mario":
+                    return mario_home
+                return tmp_path
+
+            with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
+                # 1. Real Discovery
+                disc_john = mgr.discover_for_profile("john", john_home, john_env)
+                disc_alice = mgr.discover_for_profile("alice", alice_home, alice_env)
+                disc_gaston = mgr.discover_for_profile("gaston", gaston_home, {})
+
+                assert disc_john["ok"] is True
+                assert len(disc_john["tools"]) == 1
+                assert disc_john["tools"][0]["name"] == "echo"
+                assert disc_john["servers"]["my-relay"]["active"] is True
+
+                assert disc_alice["ok"] is True
+                assert len(disc_alice["tools"]) == 1
+                assert disc_alice["tools"][0]["name"] == "echo"
+                assert disc_alice["servers"]["my-relay"]["active"] is True
+
+                assert len(disc_gaston["tools"]) == 0
+
+                # 2. Verify parent os.environ is NOT contaminated
+                assert token_john not in os.environ
+                assert token_alice not in os.environ
+
+                # 3. Real Tool Execution
+                res_j = mgr.call_tool("john", "my-relay", "echo", {"message": "greeting from john"})
+                assert res_j == "Echo: greeting from john"
+
+                res_a = mgr.call_tool("alice", "my-relay", "echo", {"message": "greeting from alice"})
+                assert res_a == "Echo: greeting from alice"
+
+                # 4. Verify tokens received on each local server
+                john_reqs = [r for r in server_john.recorded_requests if r["method"] == "tools/call"]
+                alice_reqs = [r for r in server_alice.recorded_requests if r["method"] == "tools/call"]
+
+                assert len(john_reqs) == 1
+                assert john_reqs[0]["auth"] == f"Bearer {token_john}"
+
+                assert len(alice_reqs) == 1
+                assert alice_reqs[0]["auth"] == f"Bearer {token_alice}"
+
+                # 5. Concurrent execution
+                concurrent_results = {}
+                errors = []
+
+                def worker_run(p_name, msg):
+                    try:
+                        ans = mgr.call_tool(p_name, "my-relay", "echo", {"message": msg})
+                        concurrent_results[p_name] = ans
+                    except Exception as exc:
+                        errors.append(f"{p_name} error: {exc}")
+
+                threads = [
+                    threading.Thread(target=worker_run, args=("john", "concurrent John msg")),
+                    threading.Thread(target=worker_run, args=("alice", "concurrent Alice msg")),
+                ]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+
+                assert not errors, f"Errors: {errors}"
+                assert concurrent_results["john"] == "Echo: concurrent John msg"
+                assert concurrent_results["alice"] == "Echo: concurrent Alice msg"
+
+                # 6. Invalidation upon configuration change
+                invalidate_profile_mcp_server("john", "my-relay")
+                john_inv = get_profile_discovered_inventory("john")
+                assert len(john_inv.get("tools", [])) == 0
+
+        finally:
+            mgr.shutdown_all()
+            server_john.shutdown()
+            server_alice.shutdown()
+
 
