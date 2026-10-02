@@ -7,16 +7,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.example.hermes.core.model.ChatMessage
 import com.example.hermes.theme.*
+import kotlinx.coroutines.delay
 
 @Composable
 fun MessageBubble(
@@ -24,6 +29,15 @@ fun MessageBubble(
     modifier: Modifier = Modifier
 ) {
     val isUser = message.role == "user"
+    val clipboardManager = LocalClipboardManager.current
+    var isCopied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            delay(2000)
+            isCopied = false
+        }
+    }
 
     Row(
         modifier = modifier
@@ -128,6 +142,30 @@ fun MessageBubble(
                             text = displayContent,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+
+                        // Action row with copy button
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(displayContent))
+                                    isCopied = true
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                    contentDescription = if (isCopied) "Copié" else "Copier le message",
+                                    tint = if (isCopied) HermesSuccess else HermesTextMuted.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

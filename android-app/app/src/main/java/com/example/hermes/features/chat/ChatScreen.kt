@@ -55,26 +55,42 @@ fun ChatScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Auto-scroll to bottom on new message or when streaming begins/ends
-    LaunchedEffect(state.messages.size, state.isStreaming) {
+    // Detect if user is currently near the bottom of the conversation
+    val isNearBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) return@derivedStateOf true
+            val lastVisible = visibleItems.last()
+            val totalItems = layoutInfo.totalItemsCount
+            lastVisible.index >= totalItems - 2
+        }
+    }
+
+    // Auto-scroll on new message added (e.g. user sends message or session changes)
+    LaunchedEffect(state.messages.size) {
         try {
             val totalItems = state.messages.size + (if (state.isStreaming) 1 else 0)
             if (totalItems > 0) {
-                listState.animateScrollToItem(totalItems - 1)
+                listState.scrollToItem(totalItems - 1, scrollOffset = 100000)
             }
         } catch (_: Exception) {
             // Ignore transient scroll races
         }
     }
 
-    // Fast non-animated scroll when streaming progresses, only if user is already near bottom
-    LaunchedEffect(state.streamingTokens.length / 100) {
-        if (state.isStreaming) {
+    // Continuously follow the bottom of the streaming message, allowing manual scroll-up
+    LaunchedEffect(
+        state.streamingTokens.length,
+        state.streamingReasoning.length,
+        state.streamingToolCalls.size,
+        state.isStreaming
+    ) {
+        if (state.isStreaming && isNearBottom && !listState.isScrollInProgress) {
             try {
                 val totalItems = state.messages.size + 1
-                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                if (lastVisible >= totalItems - 2 && totalItems > 0) {
-                    listState.scrollToItem(totalItems - 1)
+                if (totalItems > 0) {
+                    listState.scrollToItem(totalItems - 1, scrollOffset = 100000)
                 }
             } catch (_: Exception) {
                 // Ignore transient scroll races
