@@ -37,7 +37,7 @@ class MobileControlViewModel(
 
     private val _uiState = MutableStateFlow(
         MobileControlUiState(
-            relayUrl = "https://hermes.john-world.store",
+            relayUrl = "https://mobile-relay-hermes.john-world.store",
             deviceId = "dev_" + UUID.randomUUID().toString().take(8)
         )
     )
@@ -79,11 +79,13 @@ class MobileControlViewModel(
             }
         }
 
-        // Collect server URL & device preferences
+        // Collect mobile relay URL preferences
         viewModelScope.launch {
-            preferences.serverUrl.collect { url ->
-                if (_uiState.value.relayUrl.isBlank() || _uiState.value.relayUrl == "https://hermes.john-world.store") {
+            preferences.mobileRelayUrl.collect { url ->
+                if (!url.isNullOrBlank()) {
                     _uiState.update { it.copy(relayUrl = url) }
+                } else {
+                    _uiState.update { it.copy(relayUrl = "https://mobile-relay-hermes.john-world.store") }
                 }
             }
         }

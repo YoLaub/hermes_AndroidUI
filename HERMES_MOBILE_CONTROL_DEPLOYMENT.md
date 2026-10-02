@@ -72,14 +72,14 @@ Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config
 
 ### Étape 2 : Appairer le Téléphone avec le Relais VPS
 1. Cliquez sur l'icône d'engrenage dans l'encadré *Relais VPS*.
-2. Vérifiez l'URL de votre serveur (ex: `https://hermes.john-world.store` ou domaine configuré).
+2. Vérifiez l'URL de votre serveur (ex: `https://mobile-relay-hermes.john-world.store` ou domaine configuré).
 3. Cliquez sur **Enregistrer** pour valider l'appairage.
 
 ### Étape 3 : Démarrer une Session pour LinkedIn
 1. Dans l'écran **Contrôle par Hermes**, cliquez sur **Démarrer une session de contrôle**.
 2. Sélectionnez :
    - **Application cible :** LinkedIn (`com.linkedin.android`)
-   - **Profil autorisé :** Mario
+   - **Profil autorisé :** John (`john`)
    - **Mode :** Interaction (ou Observation seule)
    - **Durée :** 15 min (défaut)
 3. Cliquez sur **Démarrer**.
