@@ -188,8 +188,8 @@ class TestConfigAndSecretIsolation:
         discovered = []
 
         def fake_discover():
-            # During discovery under _ENV_LOCK, the env is available
-            assert os.environ.get("MOBILE_CONTROL_TOKEN") == "super_secret_john_token_12345"
+            # Crucial: Secret tokens are NEVER injected into os.environ of the shared WebUI process
+            assert os.environ.get("MOBILE_CONTROL_TOKEN") is None
             discovered.append(True)
 
         fake_mcp = MagicMock(discover_mcp_tools=fake_discover, _servers={})
@@ -346,3 +346,334 @@ class TestResilienceAndRetry:
         assert "mcp-mobile" in observed_toolsets["john"]
         assert "mcp-mobile" not in observed_toolsets["mario"]
         assert "MOBILE_CONTROL_TOKEN" not in os.environ
+
+
+class TestConcurrentSameServerNameDifferentCredentials:
+    def test_two_profiles_same_server_name_different_credentials(self, tmp_path):
+        """Two concurrent profiles have a server of the SAME name but with DIFFERENT credentials.
+
+        Neither profile's credentials or connection object should stomp on the other,
+        and no secrets should enter os.environ.
+        """
+        john_home = tmp_path / "profiles" / "john"
+        alice_home = tmp_path / "profiles" / "alice"
+        john_home.mkdir(parents=True)
+        alice_home.mkdir(parents=True)
+
+        (john_home / "config.yaml").write_text(
+            "mcp_servers:\n  custom-server:\n    url: http://relay1:8000/mcp\n    headers:\n      Authorization: Bearer john_secret_token_111\n",
+            encoding="utf-8"
+        )
+        (alice_home / "config.yaml").write_text(
+            "mcp_servers:\n  custom-server:\n    url: http://relay2:9000/mcp\n    headers:\n      Authorization: Bearer alice_secret_token_222\n",
+            encoding="utf-8"
+        )
+
+        john_env = {"SECRET_TOKEN": "john_secret_token_111"}
+        alice_env = {"SECRET_TOKEN": "alice_secret_token_222"}
+
+        from api.mcp_isolated import ProfileAwareMCPServers
+        servers = ProfileAwareMCPServers()
+
+        srv_john = MagicMock(name="ServerJohn", token="john_secret_token_111", url="http://relay1:8000/mcp")
+        srv_alice = MagicMock(name="ServerAlice", token="alice_secret_token_222", url="http://relay2:9000/mcp")
+
+        results = {}
+        errors = []
+
+        def worker(p_name, srv_obj, env_dict):
+            try:
+                set_request_profile(p_name)
+                # Store server connection in profile-aware dictionary under SAME key
+                servers["custom-server"] = srv_obj
+                # Sleep briefly to ensure concurrent interleave
+                import time; time.sleep(0.01)
+                # Read back
+                retrieved = servers.get("custom-server")
+                results[p_name] = retrieved
+                # Verify os.environ never contains the secret token
+                for val in env_dict.values():
+                    if val in str(os.environ):
+                        errors.append(f"{p_name} secret leaked into os.environ!")
+            except Exception as e:
+                errors.append(f"{p_name} error: {e}")
+            finally:
+                clear_request_profile()
+
+        t1 = threading.Thread(target=worker, args=("john", srv_john, john_env))
+        t2 = threading.Thread(target=worker, args=("alice", srv_alice, alice_env))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert not errors, f"Errors: {errors}"
+        assert results["john"] is srv_john
+        assert results["john"].token == "john_secret_token_111"
+        assert results["alice"] is srv_alice
+        assert results["alice"].token == "alice_secret_token_222"
+        assert "john_secret_token_111" not in os.environ
+        assert "alice_secret_token_222" not in os.environ
+
+
+class TestGastonMarioMobileExclusion:
+    def test_gaston_mario_default_strict_exclusion(self, tmp_path):
+        """Ensure Gaston, Mario, and Default have NO mobile tools or servers."""
+        from api.routes import _handle_mcp_servers_list, _handle_mcp_tools_list
+        import json
+
+        john_home = tmp_path / "profiles" / "john"
+        gaston_home = tmp_path / "profiles" / "gaston"
+        mario_home = tmp_path / "profiles" / "mario"
+        default_home = tmp_path / "default"
+        for p in (john_home, gaston_home, mario_home, default_home):
+            p.mkdir(parents=True)
+
+        (john_home / "config.yaml").write_text(
+            "mcp_servers:\n  mcp-mobile:\n    url: http://mobile-relay:8765/mcp\n"
+            "platform_toolsets:\n  api_server: [browser, web, mcp-mobile]\n",
+            encoding="utf-8"
+        )
+        (gaston_home / "config.yaml").write_text(
+            "platform_toolsets:\n  api_server: [browser, web]\n",
+            encoding="utf-8"
+        )
+        (mario_home / "config.yaml").write_text(
+            "platform_toolsets:\n  cli: [browser, terminal, file]\n",
+            encoding="utf-8"
+        )
+        (default_home / "config.yaml").write_text("agent:\n  name: DefaultAgent\n", encoding="utf-8")
+
+        def mock_get_hermes_home(profile):
+            if profile == "john":
+                return john_home
+            elif profile == "gaston":
+                return gaston_home
+            elif profile == "mario":
+                return mario_home
+            return default_home
+
+        class RecordingHandler(DummyHandler):
+            def __init__(self, headers=None):
+                super().__init__(headers)
+                self.sent_json = None
+
+            def send_response(self, code):
+                self.status_code = code
+
+            def send_header(self, k, v):
+                pass
+
+            def end_headers(self):
+                pass
+
+            @property
+            def wfile(self):
+                mock_w = MagicMock()
+                def write_bytes(data):
+                    try:
+                        self.sent_json = json.loads(data.decode("utf-8"))
+                    except Exception:
+                        pass
+                mock_w.write.side_effect = write_bytes
+                return mock_w
+
+        with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
+            # Test Mario: 0 servers, 0 tools
+            h_mario = RecordingHandler({"X-Hermes-Profile": "mario"})
+            set_request_profile("mario")
+            try:
+                _handle_mcp_servers_list(h_mario)
+                assert len(h_mario.sent_json["servers"]) == 0
+                _handle_mcp_tools_list(h_mario)
+                assert len(h_mario.sent_json["tools"]) == 0
+            finally:
+                clear_request_profile()
+
+            # Test Gaston: 0 servers, 0 tools
+            h_gaston = RecordingHandler({"X-Hermes-Profile": "gaston"})
+            set_request_profile("gaston")
+            try:
+                _handle_mcp_servers_list(h_gaston)
+                assert len(h_gaston.sent_json["servers"]) == 0
+                _handle_mcp_tools_list(h_gaston)
+                assert len(h_gaston.sent_json["tools"]) == 0
+            finally:
+                clear_request_profile()
+
+            # Test John: 1 mobile server
+            h_john = RecordingHandler({"X-Hermes-Profile": "john"})
+            set_request_profile("john")
+            try:
+                _handle_mcp_servers_list(h_john)
+                assert len(h_john.sent_json["servers"]) == 1
+                assert h_john.sent_json["servers"][0]["name"] == "mcp-mobile"
+            finally:
+                clear_request_profile()
+
+
+class TestMcpSaveParameterPreservationAndTrueDiscovery:
+    def test_mcp_server_save_preserves_all_parameters(self, tmp_path):
+        from api.routes import _handle_mcp_server_update
+        import json
+
+        john_home = tmp_path / "profiles" / "john"
+        john_home.mkdir(parents=True)
+        initial_yaml = (
+            "mcp_servers:\n"
+            "  test-server:\n"
+            "    url: http://example.internal/mcp\n"
+            "    headers:\n"
+            "      Authorization: Bearer secret_live_token_777\n"
+            "    timeout: 90\n"
+            "    connect_timeout: 30\n"
+            "    enabled: true\n"
+            "    description: Custom Mobile Relay\n"
+        )
+        (john_home / "config.yaml").write_text(initial_yaml, encoding="utf-8")
+
+        def mock_get_hermes_home(profile):
+            return john_home
+
+        class RecordingHandler(DummyHandler):
+            def __init__(self, headers=None):
+                super().__init__(headers)
+                self.sent_json = None
+
+            def send_response(self, code):
+                self.status_code = code
+
+            def send_header(self, k, v):
+                pass
+
+            def end_headers(self):
+                pass
+
+            @property
+            def wfile(self):
+                mock_w = MagicMock()
+                def write_bytes(data):
+                    try:
+                        self.sent_json = json.loads(data.decode("utf-8"))
+                    except Exception:
+                        pass
+                mock_w.write.side_effect = write_bytes
+                return mock_w
+
+        handler = RecordingHandler({"X-Hermes-Profile": "john"})
+
+        # Submit update with masked placeholder "••••••" and without timeout/connect_timeout
+        update_body = {
+            "name": "test-server",
+            "url": "http://updated.internal/mcp",
+            "headers": {
+                "Authorization": "Bearer ••••••"
+            }
+        }
+
+        with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
+            set_request_profile("john")
+            try:
+                _handle_mcp_server_update(handler, "test-server", update_body)
+            finally:
+                clear_request_profile()
+
+        assert handler.sent_json["ok"] is True
+        saved_server = handler.sent_json["server"]
+        assert saved_server["name"] == "test-server"
+        assert saved_server["url"] == "http://updated.internal/mcp"
+        assert saved_server["timeout"] == 90
+        assert saved_server["connect_timeout"] == 30
+        assert saved_server["enabled"] is True
+
+        import yaml
+        saved_disk_cfg = yaml.safe_load((john_home / "config.yaml").read_text(encoding="utf-8"))
+        srv_disk = saved_disk_cfg["mcp_servers"]["test-server"]
+        assert srv_disk["url"] == "http://updated.internal/mcp"
+        assert srv_disk["headers"]["Authorization"] == "Bearer secret_live_token_777"
+        assert srv_disk["timeout"] == 90
+        assert srv_disk["connect_timeout"] == 30
+        assert srv_disk["enabled"] is True
+        assert srv_disk["description"] == "Custom Mobile Relay"
+
+    def test_real_discovery_results_reporting(self, tmp_path):
+        from api.mcp_isolated import set_profile_discovery_inventory
+        from api.routes import _handle_mcp_tools_list
+        import json
+
+        john_home = tmp_path / "profiles" / "john"
+        john_home.mkdir(parents=True)
+        (john_home / "config.yaml").write_text(
+            "mcp_servers:\n  mcp-mobile:\n    url: http://mobile-relay:8765/mcp\n",
+            encoding="utf-8"
+        )
+
+        def mock_get_hermes_home(profile):
+            return john_home
+
+        real_tools = [
+            {
+                "name": "mcp_mobile_take_screenshot",
+                "server": "mcp-mobile",
+                "description": "Capture Android screen",
+                "schema": {"properties": {"quality": {"type": "integer"}}},
+            },
+            {
+                "name": "mcp_mobile_tap_element",
+                "server": "mcp-mobile",
+                "description": "Tap on UI coordinate",
+                "schema": {"properties": {"x": {"type": "integer"}, "y": {"type": "integer"}}},
+            }
+        ]
+        real_servers = {
+            "mcp-mobile": {
+                "name": "mcp-mobile",
+                "transport": "http",
+                "status": "active",
+                "active": True,
+                "enabled": True,
+                "tools": 2
+            }
+        }
+        set_profile_discovery_inventory("john", real_tools, real_servers)
+
+        class RecordingHandler(DummyHandler):
+            def __init__(self, headers=None):
+                super().__init__(headers)
+                self.sent_json = None
+
+            def send_response(self, code):
+                self.status_code = code
+
+            def send_header(self, k, v):
+                pass
+
+            def end_headers(self):
+                pass
+
+            @property
+            def wfile(self):
+                mock_w = MagicMock()
+                def write_bytes(data):
+                    try:
+                        self.sent_json = json.loads(data.decode("utf-8"))
+                    except Exception:
+                        pass
+                mock_w.write.side_effect = write_bytes
+                return mock_w
+
+        handler = RecordingHandler({"X-Hermes-Profile": "john"})
+
+        with patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
+            set_request_profile("john")
+            try:
+                _handle_mcp_tools_list(handler)
+            finally:
+                clear_request_profile()
+
+        assert handler.sent_json["total"] == 2
+        assert handler.sent_json["source"] == "profile_discovery"
+        tool_names = [t["name"] for t in handler.sent_json["tools"]]
+        assert "mcp_mobile_take_screenshot" in tool_names
+        assert "mcp_mobile_tap_element" in tool_names
+

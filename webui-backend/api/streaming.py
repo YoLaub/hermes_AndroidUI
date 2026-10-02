@@ -2866,101 +2866,12 @@ def _refresh_cached_agent_primary_runtime_snapshot(agent) -> None:
             rt['is_anthropic_oauth'] = getattr(agent, '_is_anthropic_oauth')
 
 
-def _sanitize_mcp_error(err_str: str, secret_values: list[str]) -> str:
-    """Sanitize error messages to remove tokens, Bearer headers, and secrets."""
-    if not isinstance(err_str, str):
-        err_str = str(err_str)
-    err_str = re.sub(r'Bearer\s+[A-Za-z0-9_\-\.]+', 'Bearer [REDACTED]', err_str)
-    for val in secret_values:
-        if val and len(val) >= 4 and val in err_str:
-            err_str = err_str.replace(val, '[REDACTED]')
-    return err_str
+from api.mcp_isolated import (
+    _sanitize_mcp_error,
+    discover_profile_mcp_tools as _discover_profile_mcp_tools,
+    ensure_servers_profile_aware,
+)
 
-
-def _discover_profile_mcp_tools(profile_name, profile_home_path, profile_env):
-    """Discover and register MCP tools in the context of the profile.
-
-    Temporarily applies the profile's environment and HERMES_HOME under _ENV_LOCK,
-    then immediately restores os.environ so secrets and HERMES_HOME do not leak
-    globally during agent streaming. Logs failures cleanly with redacted secrets.
-    """
-    profile_str = str(profile_name or 'default')
-    from api.config import get_config as _get_cfg
-    profile_cfg = _get_cfg(profile=profile_str) if profile_str else {}
-    mcp_servers = profile_cfg.get("mcp_servers", {}) if isinstance(profile_cfg, dict) else {}
-    if not mcp_servers:
-        return
-
-    # Check for stale / disconnected server objects in tools.mcp_tool._servers
-    # to ensure retry is possible after an initial connection failure
-    try:
-        _mcp_mod = sys.modules.get("tools.mcp_tool")
-        if _mcp_mod is None:
-            import tools.mcp_tool as _mcp_mod
-        mcp_servers_dict = getattr(_mcp_mod, "_servers", None)
-        if isinstance(mcp_servers_dict, dict):
-            for s_name in list(mcp_servers.keys()):
-                srv_obj = mcp_servers_dict.get(s_name)
-                if srv_obj is not None:
-                    is_active = getattr(srv_obj, "is_connected", None)
-                    if callable(is_active):
-                        is_active = is_active()
-                    elif is_active is None:
-                        is_active = getattr(srv_obj, "connected", True)
-                    if not is_active:
-                        mcp_servers_dict.pop(s_name, None)
-    except Exception:
-        pass
-
-    secrets_to_mask = [v for k, v in (profile_env or {}).items() if "TOKEN" in k or "KEY" in k or "SECRET" in k]
-
-    with _ENV_LOCK:
-        old_env_snapshot = {k: os.environ.get(k) for k in (profile_env or {})}
-        old_home = os.environ.get("HERMES_HOME")
-        had_home = "HERMES_HOME" in os.environ
-        try:
-            if profile_env:
-                os.environ.update(profile_env)
-            if profile_home_path:
-                os.environ["HERMES_HOME"] = str(profile_home_path)
-
-            _mcp_mod = sys.modules.get("tools.mcp_tool")
-            if _mcp_mod is not None and hasattr(_mcp_mod, "discover_mcp_tools"):
-                discover_mcp_tools = getattr(_mcp_mod, "discover_mcp_tools")
-            else:
-                from tools.mcp_tool import discover_mcp_tools
-            discover_mcp_tools()
-            logger.info("[mcp] Successfully discovered MCP tools for profile '%s'", profile_str)
-        except Exception as exc:
-            sanitized_msg = _sanitize_mcp_error(str(exc), secrets_to_mask)
-            logger.warning(
-                "[mcp] Profile '%s' MCP discovery failed (%s: %s). Server will remain usable; retry on next request.",
-                profile_str,
-                type(exc).__name__,
-                sanitized_msg,
-            )
-            # Clean up failed / partial server references from _servers so subsequent retry starts clean
-            try:
-                _mcp_mod = sys.modules.get("tools.mcp_tool")
-                if _mcp_mod is None:
-                    import tools.mcp_tool as _mcp_mod
-                mcp_servers_dict = getattr(_mcp_mod, "_servers", None)
-                if isinstance(mcp_servers_dict, dict):
-                    for s_name in mcp_servers.keys():
-                        mcp_servers_dict.pop(s_name, None)
-            except Exception:
-                pass
-        finally:
-            # Immediately restore os.environ so secrets and HERMES_HOME do not persist globally
-            for k, old_val in old_env_snapshot.items():
-                if old_val is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = old_val
-            if had_home:
-                os.environ["HERMES_HOME"] = old_home or ""
-            else:
-                os.environ.pop("HERMES_HOME", None)
 
 
 def _run_agent_streaming(

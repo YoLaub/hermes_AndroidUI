@@ -4467,7 +4467,13 @@ def handle_post(handler, parsed) -> bool:
         result = handle_kanban_post(handler, parsed, body)
         if result is False:
             return _kanban_unknown_endpoint(handler, parsed, "POST")
-        return True
+    if parsed.path == "/api/mcp/servers":
+        name = body.get("name") if isinstance(body, dict) else None
+        return _handle_mcp_server_update(handler, name, body)
+    if parsed.path.startswith("/api/mcp/servers/"):
+        name = parsed.path[len("/api/mcp/servers/"):].strip()
+        return _handle_mcp_server_update(handler, name, body)
+
     if parsed.path == "/api/dashboard/config":
         from api import dashboard_probe
 
@@ -5943,11 +5949,28 @@ def handle_post(handler, parsed) -> bool:
     return False  # 404
 
 
+def handle_put(handler, parsed) -> bool:
+    """Handle all PUT routes. Returns True if handled, False for 404."""
+    if not _check_csrf(handler):
+        return j(handler, {"error": "Cross-origin request rejected"}, status=403)
+    body = read_body(handler)
+    if parsed.path.startswith("/api/mcp/servers/"):
+        name = parsed.path[len("/api/mcp/servers/"):].strip()
+        return _handle_mcp_server_update(handler, name, body)
+    if parsed.path == "/api/mcp/servers":
+        name = body.get("name") if isinstance(body, dict) else None
+        return _handle_mcp_server_update(handler, name, body)
+    return False
+
+
 def handle_patch(handler, parsed) -> bool:
     """Handle all PATCH routes. Returns True if handled, False for 404."""
     if not _check_csrf(handler):
         return j(handler, {"error": "Cross-origin request rejected"}, status=403)
     body = read_body(handler)
+    if parsed.path.startswith("/api/mcp/servers/"):
+        name = parsed.path[len("/api/mcp/servers/"):].strip()
+        return _handle_mcp_server_update(handler, name, body)
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_patch
 
@@ -5963,6 +5986,9 @@ def handle_delete(handler, parsed) -> bool:
     if not _check_csrf(handler):
         return j(handler, {"error": "Cross-origin request rejected"}, status=403)
     body = read_body(handler)
+    if parsed.path.startswith("/api/mcp/servers/"):
+        name = parsed.path[len("/api/mcp/servers/"):].strip()
+        return _handle_mcp_server_delete(handler, name)
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_delete
 
@@ -5971,6 +5997,7 @@ def handle_delete(handler, parsed) -> bool:
             return _kanban_unknown_endpoint(handler, parsed, "DELETE")
         return True
     return False
+
 
 # ── GET route helpers ─────────────────────────────────────────────────────────
 
@@ -10597,22 +10624,58 @@ def _mcp_tools_from_registry(server_summaries):
     return tools
 
 
+from api.helpers import get_profile_cookie
+from api.mcp_isolated import (
+    get_profile_discovered_inventory,
+    invalidate_profile_mcp_server,
+)
+from api.profiles import get_active_profile_name
+
+
 def _handle_mcp_tools_list(handler):
-    """List known MCP tools from already-available runtime inventory only."""
-    cfg = get_config()
+    """List known MCP tools for the active profile from real discovery and runtime inventory."""
+    profile = get_profile_cookie(handler) or get_active_profile_name()
+    cfg = get_config(profile=profile)
     servers = cfg.get("mcp_servers", {})
     if not isinstance(servers, dict):
         servers = {}
+
+    inv = get_profile_discovered_inventory(profile)
+    inv_servers = inv.get("servers", {})
+    inv_tools = inv.get("tools", [])
+
     runtime = _mcp_runtime_status_by_name()
+    # Merge discovered statuses into runtime view for this profile
+    for s_name, s_st in inv_servers.items():
+        if isinstance(s_st, dict) and s_name not in runtime:
+            runtime[s_name] = s_st
+
     server_summaries = {
         str(name): _server_summary(str(name), scfg, runtime.get(str(name)))
         for name, scfg in servers.items()
     }
-    tools = _mcp_tools_from_runtime_status(runtime, server_summaries)
-    source = "mcp_runtime_status"
+
+    tools = []
+    # If dedicated runner cached real discovered tools for this profile, format them
+    if inv_tools:
+        for t in inv_tools:
+            s_name = t.get("server") or ""
+            summary = server_summaries.get(s_name)
+            if not summary and s_name.startswith("mcp-"):
+                summary = server_summaries.get(s_name[len("mcp-"):])
+            if not summary:
+                summary = server_summaries.get(f"mcp-{s_name}")
+            if summary:
+                tools.append(_mcp_tool_summary(t.get("name"), t, summary))
+
+    source = "profile_discovery"
+    if not tools:
+        tools = _mcp_tools_from_runtime_status(runtime, server_summaries)
+        source = "mcp_runtime_status" if tools else source
     if not tools:
         tools = _mcp_tools_from_registry(server_summaries)
         source = "tool_registry" if tools else "none"
+
     tools.sort(key=lambda row: (row.get("server", ""), row.get("name", "")))
     unavailable_servers = [
         summary["name"] for summary in server_summaries.values()
@@ -10622,45 +10685,56 @@ def _handle_mcp_tools_list(handler):
         "tools": tools,
         "total": len(tools),
         "source": source,
-        "inventory_scope": "already_known_runtime_only",
+        "profile": profile,
+        "inventory_scope": "profile_scoped",
         "unavailable_servers": unavailable_servers,
     })
 
 
 def _handle_mcp_servers_list(handler):
-    """List configured MCP servers with safe, read-only runtime visibility."""
-    cfg = get_config()
+    """List configured MCP servers for the active profile with safe, read-only runtime visibility."""
+    profile = get_profile_cookie(handler) or get_active_profile_name()
+    cfg = get_config(profile=profile)
     servers = cfg.get("mcp_servers", {})
     if not isinstance(servers, dict):
         servers = {}
+
+    inv = get_profile_discovered_inventory(profile)
+    inv_servers = inv.get("servers", {})
+
     runtime = _mcp_runtime_status_by_name()
+    for s_name, s_st in inv_servers.items():
+        if isinstance(s_st, dict) and s_name not in runtime:
+            runtime[s_name] = s_st
+
     result = [
         _server_summary(name, scfg, runtime.get(str(name)))
         for name, scfg in servers.items()
     ]
     return j(handler, {
         "servers": result,
+        "profile": profile,
         "toggle_supported": False,
         "reload_required": True,
     })
 
 
 def _handle_mcp_server_delete(handler, name):
-    """Delete an MCP server by name."""
+    """Delete an MCP server by name for the active profile."""
     from urllib.parse import unquote
-    name = unquote(name)
+    name = unquote(name or "").strip()
     if not name:
         return bad(handler, "name is required")
-    cfg = get_config()
-    servers = cfg.get("mcp_servers", {})
-    if not isinstance(servers, dict):
-        servers = {}
-    if name not in servers:
+    profile = get_profile_cookie(handler) or get_active_profile_name()
+    cfg = get_config(profile=profile)
+    servers = cfg.get("mcp_servers")
+    if not isinstance(servers, dict) or name not in servers:
         return bad(handler, f"MCP server '{name}' not found", 404)
     del servers[name]
-    cfg["mcp_servers"] = servers
-    _save_yaml_config_file(_get_config_path(), cfg)
-    reload_config()
+    config_path = _get_config_path(profile=profile)
+    _save_yaml_config_file(config_path, cfg)
+    reload_config(profile=profile)
+    invalidate_profile_mcp_server(profile, name)
     return j(handler, {"ok": True, "deleted": name})
 
 
@@ -10673,10 +10747,11 @@ def _strip_masked_values(submitted, existing):
         return submitted
     cleaned = {}
     for k, v in submitted.items():
-        if isinstance(v, str) and v == _MASKED_PLACEHOLDER:
+        if isinstance(v, str) and (_MASKED_PLACEHOLDER in v or v == _MASKED_PLACEHOLDER):
             if k in existing and isinstance(existing[k], str):
                 cleaned[k] = existing[k]  # preserve original real value
                 continue
+
         elif isinstance(v, dict) and k in existing and isinstance(existing[k], dict):
             cleaned[k] = _strip_masked_values(v, existing[k])
         else:
@@ -10685,37 +10760,69 @@ def _strip_masked_values(submitted, existing):
 
 
 def _handle_mcp_server_update(handler, name, body):
-    """Add or update an MCP server."""
+    """Add or update an MCP server, preserving existing parameters and credentials."""
     from urllib.parse import unquote
-    name = unquote(name)
+    name = unquote(name or body.get("name") or "").strip()
     if not name:
         return bad(handler, "name is required")
-    # Validate: must have url (http) or command (stdio)
-    server_cfg = {}
-    cfg = get_config()
-    servers = cfg.get("mcp_servers", {})
+
+    profile = get_profile_cookie(handler) or get_active_profile_name()
+    cfg = get_config(profile=profile)
+    servers = cfg.get("mcp_servers")
     if not isinstance(servers, dict):
         servers = {}
+        cfg["mcp_servers"] = servers
+
     existing_cfg = servers.get(name, {})
+    if not isinstance(existing_cfg, dict):
+        existing_cfg = {}
+
+    # Start with existing configuration so existing parameters (timeout, connect_timeout, etc.) are preserved
+    server_cfg = dict(existing_cfg)
+
+    # Validate and apply transport / url / command
     if body.get("url"):
         server_cfg["url"] = body["url"].strip()
-        if body.get("headers"):
+        if "command" in body or ("command" in server_cfg and "command" not in body):
+            server_cfg.pop("command", None)
+            server_cfg.pop("args", None)
+        if "headers" in body:
             server_cfg["headers"] = _strip_masked_values(body["headers"], existing_cfg.get("headers", {}))
     elif body.get("command"):
         server_cfg["command"] = body["command"].strip()
-        if body.get("args"):
+        if "url" in body or ("url" in server_cfg and "url" not in body):
+            server_cfg.pop("url", None)
+            server_cfg.pop("headers", None)
+        if "args" in body:
             server_cfg["args"] = body["args"] if isinstance(body["args"], list) else [body["args"]]
-        if body.get("env"):
+        if "env" in body:
             server_cfg["env"] = _strip_masked_values(body["env"], existing_cfg.get("env", {}))
-    else:
+    elif not ("url" in server_cfg or "command" in server_cfg):
         return bad(handler, "url or command is required")
-    if body.get("timeout") is not None:
+
+    if "timeout" in body and body["timeout"] is not None:
         try:
             server_cfg["timeout"] = int(body["timeout"])
         except (ValueError, TypeError):
             pass
+
+    if "connect_timeout" in body and body["connect_timeout"] is not None:
+        try:
+            server_cfg["connect_timeout"] = int(body["connect_timeout"])
+        except (ValueError, TypeError):
+            pass
+
+    if "enabled" in body:
+        server_cfg["enabled"] = _parse_mcp_enabled(body["enabled"])
+
+    # Preserve any custom attributes passed or existing
+    for custom_key in ("description", "type", "auth", "transport"):
+        if custom_key in body:
+            server_cfg[custom_key] = body[custom_key]
+
     servers[name] = server_cfg
-    cfg["mcp_servers"] = servers
-    _save_yaml_config_file(_get_config_path(), cfg)
-    reload_config()
+    config_path = _get_config_path(profile=profile)
+    _save_yaml_config_file(config_path, cfg)
+    reload_config(profile=profile)
     return j(handler, {"ok": True, "server": _server_summary(name, server_cfg)})
+
