@@ -76,6 +76,11 @@ class MobileControlManager(
         mode: MobileControlMode,
         durationSeconds: Int
     ): Result<MobileControlSession> {
+        val normalizedProfile = allowedProfile.trim().lowercase()
+        if (normalizedProfile != "john") {
+            return Result.failure(IllegalArgumentException("Seul le profil 'john' est autorisé pour le contrôle mobile (reçu: '$allowedProfile')."))
+        }
+
         val app = _allowedApps.value.find { it.packageName == targetPackage && it.isEnabled }
         if (app == null) {
             return Result.failure(IllegalArgumentException("L'application $targetPackage n'est pas autorisée localement."))

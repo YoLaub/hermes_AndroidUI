@@ -22,8 +22,8 @@ data class MobileControlUiState(
     val activeSession: MobileControlSession? = null,
     val allowedApps: List<AllowedApp> = emptyList(),
     val auditLogs: List<AuditLogEntry> = emptyList(),
-    val availableProfiles: List<String> = listOf("mario", "gaston", "john"),
-    val activeProfile: String = "mario",
+    val availableProfiles: List<String> = emptyList(),
+    val activeProfile: String = "",
     val error: String? = null,
     val successMessage: String? = null
 )
@@ -122,11 +122,35 @@ class MobileControlViewModel(
             val res = repository.getProfiles()
             if (res.isSuccess) {
                 val data = res.getOrThrow()
-                val profileNames = data.profiles.map { it.name }
+                // Supprimer les profils de démonstration et dédupliquer par identifiant technique
+                val johnProfiles = data.profiles
+                    .map { it.name.trim().lowercase() }
+                    .filter { it == "john" }
+                    .distinct()
+
+                if (johnProfiles.contains("john")) {
+                    _uiState.update {
+                        it.copy(
+                            availableProfiles = listOf("john"),
+                            activeProfile = "john",
+                            error = null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            availableProfiles = emptyList(),
+                            activeProfile = "",
+                            error = "Le profil John ('john') est introuvable sur le serveur Hermes. Le démarrage du contrôle mobile est désactivé."
+                        )
+                    }
+                }
+            } else {
                 _uiState.update {
                     it.copy(
-                        availableProfiles = profileNames.ifEmpty { listOf("mario", "gaston", "john") },
-                        activeProfile = data.active
+                        availableProfiles = emptyList(),
+                        activeProfile = "",
+                        error = "Impossible de récupérer les profils Hermes. Le démarrage du contrôle mobile est désactivé."
                     )
                 }
             }
@@ -191,17 +215,24 @@ class MobileControlViewModel(
         mode: MobileControlMode,
         durationMinutes: Int
     ) {
+        if (!_uiState.value.availableProfiles.contains("john")) {
+            _uiState.update {
+                it.copy(error = "Le profil John ('john') n'est pas disponible. Le démarrage du contrôle mobile est désactivé.")
+            }
+            return
+        }
+
         val res = manager.startSession(
             targetPackage = targetPackage,
             targetAppName = targetAppName,
-            allowedProfile = profile,
+            allowedProfile = "john",
             mode = mode,
             durationSeconds = durationMinutes * 60
         )
         if (res.isFailure) {
             _uiState.update { it.copy(error = res.exceptionOrNull()?.localizedMessage ?: "Erreur de démarrage") }
         } else {
-            _uiState.update { it.copy(error = null, successMessage = "Session démarrée pour $targetAppName.") }
+            _uiState.update { it.copy(error = null, successMessage = "Session démarrée pour $targetAppName avec le profil John.") }
         }
     }
 

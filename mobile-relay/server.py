@@ -60,10 +60,13 @@ app.add_middleware(
 
 class ActiveSession:
     def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str, expires_at: float):
+        prof = allowed_profile.strip().lower()
+        if prof != "john":
+            raise ValueError(f"Profil non autorisé '{allowed_profile}'. Seul le profil 'john' est autorisé.")
         self.session_id = session_id
         self.device_id = device_id
         self.target_package = target_package
-        self.allowed_profile = allowed_profile.lower()
+        self.allowed_profile = "john"
         self.mode = mode.lower()
         self.expires_at = expires_at
 
@@ -96,8 +99,12 @@ class DeviceConnectionManager:
         logger.info(f"Device disconnected: {device_id}")
 
     def set_active_session(self, session: ActiveSession):
+        if session.allowed_profile != "john":
+            logger.warning(f"Refusing to activate session for unauthorized profile: {session.allowed_profile}")
+            return False
         self.active_sessions[session.device_id] = session
         logger.info(f"Active session started on device {session.device_id}: {session.session_id} (target: {session.target_package}, profile: {session.allowed_profile}, mode: {session.mode})")
+        return True
 
     def end_active_session(self, device_id: str, session_id: Optional[str] = None):
         current = self.active_sessions.get(device_id)
@@ -228,10 +235,10 @@ def authenticate_hermes_profile(request: Request) -> str:
         if env_val and secrets.compare_digest(env_val.strip(), token):
             return prof
 
-    # 3. Check generic MOBILE_CONTROL_TOKEN (maps to default pilot profile mario)
+    # 3. Check generic MOBILE_CONTROL_TOKEN (maps to default mobile control profile john)
     generic_token = os.environ.get("MOBILE_CONTROL_TOKEN")
     if generic_token and secrets.compare_digest(generic_token.strip(), token):
-        return "mario"
+        return "john"
 
     # 4. Check SQLite database profile_tokens
     db_profile = verify_profile_token_in_db(token)
@@ -241,7 +248,7 @@ def authenticate_hermes_profile(request: Request) -> str:
     # If test mode allows fallback test token
     test_token = os.environ.get("MOBILE_CONTROL_TEST_TOKEN")
     if test_token and secrets.compare_digest(test_token.strip(), token):
-        return "mario"
+        return "john"
 
     raise HTTPException(status_code=401, detail="Unauthorized: Invalid Hermes profile token.")
 
@@ -363,21 +370,43 @@ async def websocket_device_endpoint(
                 if not authenticated_device_id:
                     continue
 
-                # Requirement 6: Durée maximale bornée côté relais (max 1800s / 30 min)
+                req_profile = str(data.get("allowed_profile", "")).strip().lower()
+                # Server-side restriction: Reject any session whose allowed_profile is not 'john'
+                if req_profile != "john":
+                    logger.warning(f"Rejected session_start from device {authenticated_device_id}: unauthorized profile '{req_profile}'. Only 'john' is permitted.")
+                    await websocket.send_text(json.dumps({
+                        "protocol": "mobile-control/1",
+                        "type": "session_error",
+                        "error_code": "PROFILE_NOT_ALLOWED",
+                        "message": f"Seul le profil 'john' est autorisé pour le contrôle mobile (reçu: '{req_profile}')."
+                    }))
+                    continue
+
+                # Durée maximale bornée côté relais (max 1800s / 30 min)
                 try:
                     duration = int(data.get("duration_seconds", 900))
                 except (ValueError, TypeError):
                     duration = 900
                 bounded_duration = max(60, min(duration, 1800))
 
-                session = ActiveSession(
-                    session_id=data.get("session_id", str(uuid.uuid4())),
-                    device_id=authenticated_device_id,
-                    target_package=data.get("target_package", ""),
-                    allowed_profile=data.get("allowed_profile", "mario"),
-                    mode=data.get("mode", "interaction"),
-                    expires_at=time.time() + bounded_duration
-                )
+                try:
+                    session = ActiveSession(
+                        session_id=data.get("session_id", str(uuid.uuid4())),
+                        device_id=authenticated_device_id,
+                        target_package=data.get("target_package", ""),
+                        allowed_profile="john",
+                        mode=data.get("mode", "interaction"),
+                        expires_at=time.time() + bounded_duration
+                    )
+                except ValueError as ve:
+                    await websocket.send_text(json.dumps({
+                        "protocol": "mobile-control/1",
+                        "type": "session_error",
+                        "error_code": "PROFILE_NOT_ALLOWED",
+                        "message": str(ve)
+                    }))
+                    continue
+
                 manager.set_active_session(session)
                 log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s")
                 await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "session_started_ack", "session_id": session.session_id}))

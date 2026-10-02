@@ -147,7 +147,7 @@ fun MobileControlScreen(
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "Profil autorisé : ${session.allowedProfile.uppercase()} • Mode : ${session.mode.name.lowercase()}",
+                                text = "Profil autorisé : John (${session.allowedProfile}) • Mode : ${session.mode.name.lowercase()}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -254,23 +254,37 @@ fun MobileControlScreen(
             // ── Session Trigger Card (When no active session) ────────────────
             item {
                 if (state.activeSession == null) {
-                    Button(
-                        onClick = { showStartSessionDialog = true },
-                        enabled = state.isAccessibilityEnabled,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Démarrer une session de contrôle",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
+                    val isJohnAvailable = state.availableProfiles.contains("john")
+                    val isStartEnabled = state.isAccessibilityEnabled && isJohnAvailable
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { showStartSessionDialog = true },
+                            enabled = isStartEnabled,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Démarrer une session de contrôle",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                        }
+
+                        if (!isJohnAvailable) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Profil John ('john') indisponible : démarrage du contrôle mobile désactivé (aucun fallback autorisé).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HermesError
+                            )
+                        }
                     }
                 }
             }
@@ -485,7 +499,7 @@ private fun StartSessionDialog(
     onConfirm: (AllowedApp, String, MobileControlMode, Int) -> Unit
 ) {
     var selectedApp by remember { mutableStateOf(allowedApps.firstOrNull()) }
-    var selectedProfile by remember { mutableStateOf(if (availableProfiles.contains(activeProfile)) activeProfile else availableProfiles.firstOrNull() ?: "mario") }
+    val isJohnAvailable = availableProfiles.contains("john")
     var selectedMode by remember { mutableStateOf(MobileControlMode.INTERACTION) }
     var selectedDuration by remember { mutableStateOf(15) } // minutes
 
@@ -512,14 +526,21 @@ private fun StartSessionDialog(
                 }
 
                 Text("Profil Hermes autorisé :", style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    availableProfiles.forEach { prof ->
-                        FilterChip(
-                            selected = selectedProfile == prof,
-                            onClick = { selectedProfile = prof },
-                            label = { Text(prof.uppercase()) }
-                        )
-                    }
+                if (isJohnAvailable) {
+                    FilterChip(
+                        selected = true,
+                        onClick = { /* John est le seul profil autorisé pour le contrôle mobile */ },
+                        label = { Text("John (john)") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
+                    )
+                } else {
+                    Text(
+                        "Le profil John ('john') est introuvable. Démarrage impossible.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HermesError
+                    )
                 }
 
                 Text("Mode de contrôle :", style = MaterialTheme.typography.labelMedium)
@@ -552,11 +573,11 @@ private fun StartSessionDialog(
             Button(
                 onClick = {
                     val app = selectedApp
-                    if (app != null) {
-                        onConfirm(app, selectedProfile, selectedMode, selectedDuration)
+                    if (app != null && isJohnAvailable) {
+                        onConfirm(app, "john", selectedMode, selectedDuration)
                     }
                 },
-                enabled = selectedApp != null
+                enabled = selectedApp != null && isJohnAvailable
             ) {
                 Text("Démarrer")
             }

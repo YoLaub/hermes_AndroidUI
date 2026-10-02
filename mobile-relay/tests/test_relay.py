@@ -8,6 +8,7 @@ os.environ["MOBILE_RELAY_DB_PATH"] = "/tmp/test_mobile_relay.db"
 os.environ["MOBILE_RELAY_ADMIN_TOKEN"] = "test_admin_token_12345"
 os.environ["MOBILE_CONTROL_TOKEN_MARIO"] = "token_for_mario"
 os.environ["MOBILE_CONTROL_TOKEN_GASTON"] = "token_for_gaston"
+os.environ["MOBILE_CONTROL_TOKEN_JOHN"] = "token_for_john"
 
 from server import app, manager, ActiveSession
 from database import init_db, verify_device_token, register_device, reset_pairing_attempts
@@ -77,12 +78,12 @@ def test_hermes_profile_tokens_strict_mapping_and_no_url_token(monkeypatch):
 # ── Fix 2: Permissions (Refuser tout mode inconnu pour interactions) ──────────
 
 def test_unknown_and_observation_modes_deny_interaction():
-    # 1. Mode observation
+    # 1. Mode observation pour john
     session_obs = ActiveSession(
         session_id="ses_obs",
         device_id="dev_obs",
         target_package="com.linkedin.android",
-        allowed_profile="mario",
+        allowed_profile="john",
         mode="observation",
         expires_at=9999999999.0
     )
@@ -97,7 +98,7 @@ def test_unknown_and_observation_modes_deny_interaction():
             "arguments": {"element_ref": "el_1"}
         }
     }
-    res_obs = client.post("/mcp", json=payload_click, headers={"Authorization": "Bearer token_for_mario"})
+    res_obs = client.post("/mcp", json=payload_click, headers={"Authorization": "Bearer token_for_john"})
     assert res_obs.status_code == 200
     assert res_obs.json()["result"]["isError"] is True
     assert "MODE_DENIED" in res_obs.json()["result"]["content"][0]["text"]
@@ -107,16 +108,49 @@ def test_unknown_and_observation_modes_deny_interaction():
         session_id="ses_unk",
         device_id="dev_unk",
         target_package="com.linkedin.android",
-        allowed_profile="mario",
+        allowed_profile="john",
         mode="audit",
         expires_at=9999999999.0
     )
     manager.set_active_session(session_unknown)
 
-    res_unk = client.post("/mcp", json=payload_click, headers={"Authorization": "Bearer token_for_mario"})
+    res_unk = client.post("/mcp", json=payload_click, headers={"Authorization": "Bearer token_for_john"})
     assert res_unk.status_code == 200
     assert res_unk.json()["result"]["isError"] is True
     assert "MODE_DENIED" in res_unk.json()["result"]["content"][0]["text"]
+
+def test_session_rejects_non_john_profile():
+    # ActiveSession constructor strictly rejects any profile other than john
+    with pytest.raises(ValueError) as excinfo:
+        ActiveSession(
+            session_id="ses_mario",
+            device_id="dev_1",
+            target_package="com.linkedin.android",
+            allowed_profile="mario",
+            mode="interaction",
+            expires_at=9999999999.0
+        )
+    assert "Seul le profil 'john' est autorisé" in str(excinfo.value)
+
+    with pytest.raises(ValueError):
+        ActiveSession(
+            session_id="ses_gaston",
+            device_id="dev_1",
+            target_package="com.linkedin.android",
+            allowed_profile="gaston",
+            mode="interaction",
+            expires_at=9999999999.0
+        )
+
+    with pytest.raises(ValueError):
+        ActiveSession(
+            session_id="ses_freya",
+            device_id="dev_1",
+            target_package="com.linkedin.android",
+            allowed_profile="freya",
+            mode="interaction",
+            expires_at=9999999999.0
+        )
 
 # ── Fix 3: Appairage (Transaction atomique, Rate Limit, Protection écrasement) ──
 
@@ -350,7 +384,7 @@ def test_class_name_formatting():
         session_id="ses_1",
         device_id="dev_1",
         target_package="com.linkedin.android",
-        allowed_profile="mario",
+        allowed_profile="john",
         mode="interaction",
         expires_at=9999999999.0
     )

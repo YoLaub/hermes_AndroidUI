@@ -80,7 +80,7 @@ class MobileControlTest {
             id = "ses-1",
             targetPackage = "com.linkedin.android",
             targetAppName = "LinkedIn",
-            allowedProfile = "mario",
+            allowedProfile = "john",
             mode = MobileControlMode.INTERACTION,
             startedAt = now,
             durationSeconds = 900,
@@ -94,7 +94,7 @@ class MobileControlTest {
             id = "ses-2",
             targetPackage = "com.linkedin.android",
             targetAppName = "LinkedIn",
-            allowedProfile = "mario",
+            allowedProfile = "john",
             mode = MobileControlMode.OBSERVATION,
             startedAt = now - 1000000L,
             durationSeconds = 900,
@@ -103,6 +103,23 @@ class MobileControlTest {
 
         assertTrue(expiredSession.isExpired)
         assertEquals(0L, expiredSession.remainingSeconds)
+    }
+
+    @Test
+    fun testSessionStartMessageSerializationWithJohnProfile() {
+        val msg = MobileSessionStartMsg(
+            sessionId = "ses-test-123",
+            targetPackage = "com.linkedin.android",
+            allowedProfile = "john",
+            mode = "interaction",
+            durationSeconds = 900
+        )
+        val jsonStr = json.encodeToString(msg)
+        assertTrue(jsonStr.contains("\"allowed_profile\":\"john\""))
+        assertTrue(jsonStr.contains("\"session_start\""))
+        assertFalse(jsonStr.contains("mario"))
+        assertFalse(jsonStr.contains("gaston"))
+        assertFalse(jsonStr.contains("freya"))
     }
 
     @Test
