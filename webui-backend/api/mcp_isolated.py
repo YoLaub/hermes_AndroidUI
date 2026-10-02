@@ -295,7 +295,12 @@ class ProfileMCPManager:
             return resp
 
     def _register_live_tools_for_profile(self, profile_name: str, tools: List[dict]) -> None:
-        """Register live tool callables into tools.registry.registry."""
+        """Register live tool callables into tools.registry.registry.
+        
+        CRUCIAL: To prevent closures from one profile overwriting another profile,
+        registered functions dynamically resolve the active profile at execution time
+        via api.profiles.get_active_profile_name().
+        """
         try:
             from tools.registry import registry
         except Exception:
@@ -303,26 +308,46 @@ class ProfileMCPManager:
 
         for t in tools:
             tool_name = t.get("name")
+            orig_name = t.get("original_name") or tool_name
             server_name = t.get("server") or ""
             if not tool_name:
                 continue
 
             schema = t.get("schema") or t.get("inputSchema") or {}
-
-            # Create closure capturing profile, server, and tool name
-            def make_caller(p_name: str, s_name: str, orig_name: str):
-                def live_tool_caller(**kwargs):
-                    return self.call_tool(p_name, s_name, orig_name, kwargs)
-                return live_tool_caller
-
-            caller = make_caller(profile_name, server_name, tool_name)
             toolset_name = f"mcp-{server_name}" if not server_name.startswith("mcp-") else server_name
+
+            # Dynamic profile dispatcher: does NOT bind a hardcoded profile in closure!
+            def make_dynamic_dispatcher(s_name: str, o_name: str, full_name: str):
+                def dynamic_profile_tool_caller(**kwargs):
+                    from api.profiles import get_active_profile_name
+                    active_p = str(get_active_profile_name() or "default")
+                    mgr = ProfileMCPManager.get_instance()
+
+                    # Verify active_p has access to this tool
+                    inv = get_profile_discovered_inventory(active_p)
+                    profile_tools = inv.get("tools", [])
+                    has_access = any(
+                        pt.get("name") == full_name or pt.get("original_name") == o_name
+                        for pt in profile_tools
+                    )
+                    if not has_access:
+                        raise PermissionError(
+                            f"MCP tool '{full_name}' from server '{s_name}' is not configured or available for active profile '{active_p}'"
+                        )
+
+                    return mgr.call_tool(active_p, s_name, o_name, kwargs)
+
+                dynamic_profile_tool_caller.__name__ = full_name
+                dynamic_profile_tool_caller.__doc__ = f"Profile-isolated dynamic MCP tool dispatcher for {full_name}"
+                return dynamic_profile_tool_caller
+
+            dispatcher = make_dynamic_dispatcher(server_name, orig_name, tool_name)
+
             try:
-                registry.register(tool_name, caller, schema=schema, toolset=toolset_name)
+                registry.register(tool_name, dispatcher, schema=schema, toolset=toolset_name)
             except Exception:
-                # If already registered or method differences, update existing registry
                 if hasattr(registry, "_tools") and isinstance(registry._tools, dict):
-                    registry._tools[tool_name] = caller
+                    registry._tools[tool_name] = dispatcher
                 if hasattr(registry, "_schemas") and isinstance(registry._schemas, dict):
                     registry._schemas[tool_name] = schema
                 if hasattr(registry, "_toolsets") and isinstance(registry._toolsets, dict):
@@ -334,7 +359,16 @@ class ProfileMCPManager:
         with self._lock:
             worker = self._workers.get(profile_str)
         if not worker or not worker.is_alive():
-            raise RuntimeError(f"No active MCP worker for profile '{profile_str}'")
+            home_path = None
+            try:
+                from api.profiles import get_hermes_home_for_profile
+                home_path = get_hermes_home_for_profile(profile_str)
+            except Exception:
+                pass
+            if home_path:
+                worker = self.get_or_create_worker(profile_str, home_path)
+            else:
+                raise RuntimeError(f"No active MCP worker for profile '{profile_str}'")
 
         resp = worker.send_command("call_tool", server=server_name, tool=tool_name, arguments=arguments)
         if not resp.get("ok"):

@@ -10822,9 +10822,11 @@ def _handle_mcp_server_update(handler, name, body):
         server_cfg["enabled"] = _parse_mcp_enabled(body["enabled"])
 
     # Preserve any custom attributes passed or existing
-    for custom_key in ("description", "type", "auth", "transport"):
+    for custom_key in ("description", "type", "auth", "transport", "include_tools", "exclude_tools"):
         if custom_key in body:
             server_cfg[custom_key] = body[custom_key]
+        elif custom_key in existing_cfg and custom_key not in server_cfg:
+            server_cfg[custom_key] = existing_cfg[custom_key]
 
     servers[name] = server_cfg
     config_path = _get_config_path(profile=profile)

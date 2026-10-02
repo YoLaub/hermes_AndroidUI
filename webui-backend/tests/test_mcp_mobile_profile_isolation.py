@@ -105,12 +105,13 @@ class MockMCPServerHandler(http.server.BaseHTTPRequestHandler):
             args = params.get("arguments", {})
             if t_name == "echo":
                 msg = args.get("message", "")
+                prefix = getattr(self.server_instance, "response_prefix", "Echo: ") if self.server_instance else "Echo: "
                 resp = {
                     "jsonrpc": "2.0",
                     "id": req_id,
                     "result": {
                         "content": [
-                            {"type": "text", "text": f"Echo: {msg}"}
+                            {"type": "text", "text": f"{prefix}{msg}"}
                         ]
                     },
                 }
@@ -126,8 +127,9 @@ class MockMCPServerHandler(http.server.BaseHTTPRequestHandler):
 
 
 class LocalMCPTestServer:
-    def __init__(self, expected_token: str):
+    def __init__(self, expected_token: str, response_prefix: str = "Echo: "):
         self.expected_token = expected_token
+        self.response_prefix = response_prefix
         self.recorded_requests = []
         handler_cls = type(
             "BoundHandler",
@@ -866,12 +868,14 @@ class TestRealLocalMCPServerIntegration:
 
                 assert disc_john["ok"] is True
                 assert len(disc_john["tools"]) == 1
-                assert disc_john["tools"][0]["name"] == "echo"
+                assert disc_john["tools"][0]["name"] == "mcp_my_relay_echo"
+                assert disc_john["tools"][0]["original_name"] == "echo"
                 assert disc_john["servers"]["my-relay"]["active"] is True
 
                 assert disc_alice["ok"] is True
                 assert len(disc_alice["tools"]) == 1
-                assert disc_alice["tools"][0]["name"] == "echo"
+                assert disc_alice["tools"][0]["name"] == "mcp_my_relay_echo"
+                assert disc_alice["tools"][0]["original_name"] == "echo"
                 assert disc_alice["servers"]["my-relay"]["active"] is True
 
                 assert len(disc_gaston["tools"]) == 0
@@ -930,5 +934,356 @@ class TestRealLocalMCPServerIntegration:
             mgr.shutdown_all()
             server_john.shutdown()
             server_alice.shutdown()
+
+
+class InMemoryToolRegistry:
+    """In-memory tool registry matching tools.registry.registry interface."""
+
+    def __init__(self):
+        self._tools = {}
+        self._schemas = {}
+        self._toolsets = {}
+
+    def register(self, name, func, schema=None, toolset=None):
+        self._tools[name] = func
+        if schema is not None:
+            self._schemas[name] = schema
+        if toolset is not None:
+            self._toolsets[name] = toolset
+
+    def get(self, name):
+        return self._tools.get(name)
+
+    def get_schema(self, name):
+        return self._schemas.get(name)
+
+    def get_toolset_for_tool(self, name):
+        return self._toolsets.get(name)
+
+    def get_all_tool_names(self):
+        return list(self._tools.keys())
+
+
+class TestRealLocalMCPServerDualProfileStdioAndRegistry:
+    """Real tests covering:
+    1. Two profiles having the exact same tool name with distinct results via parent registry.
+    2. Parent registry does not overwrite global functions with profile-specific closures.
+    3. Unauthorized profile calling the registered tool raises PermissionError.
+    4. Real stdio MCP server subprocess.
+    5. include_tools and exclude_tools filtering against stdio server.
+    6. End-to-end tool call passing from WebUI parent registry down to persistent worker.
+    """
+
+    def test_dual_profile_same_tool_name_distinct_results_no_closure_collision_via_registry(self, tmp_path):
+        import types
+        from api.mcp_isolated import ProfileMCPManager
+
+        fake_registry = InMemoryToolRegistry()
+        tools_mod = types.ModuleType("tools")
+        reg_mod = types.ModuleType("tools.registry")
+        reg_mod.registry = fake_registry
+        tools_mod.registry = reg_mod
+
+        # Real local test servers returning distinct results
+        server_john = LocalMCPTestServer(expected_token="tok_john", response_prefix="[John]: ")
+        server_alice = LocalMCPTestServer(expected_token="tok_alice", response_prefix="[Alice]: ")
+
+        mgr = ProfileMCPManager.get_instance()
+        mgr.shutdown_all()
+
+        try:
+            john_home = tmp_path / "profiles" / "john"
+            alice_home = tmp_path / "profiles" / "alice"
+            mario_home = tmp_path / "profiles" / "mario"
+            for p in (john_home, alice_home, mario_home):
+                p.mkdir(parents=True)
+
+            # Both profiles configure server 'custom-relay' with the exact same tool name 'echo'
+            (john_home / "config.yaml").write_text(
+                f"mcp_servers:\n  custom-relay:\n    url: {server_john.url}\n    headers:\n      Authorization: Bearer ${{J_TOKEN}}\n",
+                encoding="utf-8",
+            )
+            (alice_home / "config.yaml").write_text(
+                f"mcp_servers:\n  custom-relay:\n    url: {server_alice.url}\n    headers:\n      Authorization: Bearer ${{A_TOKEN}}\n",
+                encoding="utf-8",
+            )
+            (mario_home / "config.yaml").write_text("agent:\n  name: Mario\n", encoding="utf-8")
+
+            def mock_get_hermes_home(profile):
+                if profile == "john":
+                    return john_home
+                elif profile == "alice":
+                    return alice_home
+                elif profile == "mario":
+                    return mario_home
+                return tmp_path
+
+            with patch.dict("sys.modules", {"tools": tools_mod, "tools.registry": reg_mod}), \
+                 patch("api.profiles.get_hermes_home_for_profile", side_effect=mock_get_hermes_home):
+
+                # 1. Discover for John: registers 'mcp_custom_relay_echo'
+                disc_j = mgr.discover_for_profile("john", john_home, {"J_TOKEN": "tok_john"})
+                assert disc_j["ok"] is True
+                assert any(t["name"] == "mcp_custom_relay_echo" for t in disc_j["tools"])
+                assert "mcp_custom_relay_echo" in fake_registry._tools
+
+                # 2. Discover for Alice: registers 'mcp_custom_relay_echo'
+                disc_a = mgr.discover_for_profile("alice", alice_home, {"A_TOKEN": "tok_alice"})
+                assert disc_a["ok"] is True
+                assert any(t["name"] == "mcp_custom_relay_echo" for t in disc_a["tools"])
+
+                # 3. Discover for Mario: Mario has NO custom-relay configured
+                disc_m = mgr.discover_for_profile("mario", mario_home, {})
+                assert len(disc_m["tools"]) == 0
+
+                # 4. Invocations through WebUI parent registry
+                registered_tool_fn = fake_registry.get("mcp_custom_relay_echo")
+                assert callable(registered_tool_fn)
+
+                # Call under John's profile
+                set_request_profile("john")
+                try:
+                    res_john = registered_tool_fn(message="Hello John")
+                    assert res_john == "[John]: Hello John"
+                finally:
+                    clear_request_profile()
+
+                # Call under Alice's profile using the SAME registered function
+                # (Alice must NOT have overwritten John's closure, and John's closure must not bind Alice)
+                set_request_profile("alice")
+                try:
+                    res_alice = registered_tool_fn(message="Hello Alice")
+                    assert res_alice == "[Alice]: Hello Alice"
+                finally:
+                    clear_request_profile()
+
+                # Call again under John's profile to prove no permanent overwrite occurred
+                set_request_profile("john")
+                try:
+                    res_john_2 = registered_tool_fn(message="Hello again John")
+                    assert res_john_2 == "[John]: Hello again John"
+                finally:
+                    clear_request_profile()
+
+                # Unauthorized profile Mario attempting to call John/Alice's tool via registry
+                set_request_profile("mario")
+                try:
+                    with pytest.raises(PermissionError) as exc_info:
+                        registered_tool_fn(message="Intrusion")
+                    assert "is not configured or available for active profile 'mario'" in str(exc_info.value)
+                finally:
+                    clear_request_profile()
+
+                # 5. Concurrent calls from multiple threads under different profiles
+                results = {}
+                errs = []
+
+                def worker_thread(prof, msg):
+                    try:
+                        set_request_profile(prof)
+                        try:
+                            results[prof] = registered_tool_fn(message=msg)
+                        finally:
+                            clear_request_profile()
+                    except Exception as e:
+                        errs.append(f"{prof}: {e}")
+
+                t1 = threading.Thread(target=worker_thread, args=("john", "Parallel John"))
+                t2 = threading.Thread(target=worker_thread, args=("alice", "Parallel Alice"))
+                t1.start()
+                t2.start()
+                t1.join()
+                t2.join()
+
+                assert not errs, f"Concurrent registry errors: {errs}"
+                assert results["john"] == "[John]: Parallel John"
+                assert results["alice"] == "[Alice]: Parallel Alice"
+
+        finally:
+            mgr.shutdown_all()
+            server_john.shutdown()
+            server_alice.shutdown()
+            clear_request_profile()
+
+    def test_stdio_server_with_include_exclude_filters_and_registry_call(self, tmp_path):
+        import types
+        from api.mcp_isolated import ProfileMCPManager
+
+        fake_registry = InMemoryToolRegistry()
+        tools_mod = types.ModuleType("tools")
+        reg_mod = types.ModuleType("tools.registry")
+        reg_mod.registry = fake_registry
+        tools_mod.registry = reg_mod
+
+        # Create a real stdio MCP server script
+        stdio_script = tmp_path / "local_stdio_server.py"
+        stdio_script.write_text(
+            '''import sys, json
+
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        req = json.loads(line)
+    except Exception:
+        continue
+
+    method = req.get("method")
+    req_id = req.get("id")
+
+    if method == "initialize":
+        resp = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "serverInfo": {"name": "test-stdio", "version": "1.0"},
+            },
+        }
+    elif method == "notifications/initialized":
+        continue
+    elif method == "tools/list":
+        resp = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "tools": [
+                    {
+                        "name": "calc_add",
+                        "description": "Add two numbers",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+                            "required": ["a", "b"],
+                        },
+                    },
+                    {
+                        "name": "calc_sub",
+                        "description": "Subtract two numbers",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+                            "required": ["a", "b"],
+                        },
+                    },
+                    {
+                        "name": "calc_mul",
+                        "description": "Multiply two numbers",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+                            "required": ["a", "b"],
+                        },
+                    },
+                    {
+                        "name": "system_wipe",
+                        "description": "Admin dangerous tool",
+                        "inputSchema": {"type": "object"},
+                    },
+                ],
+            },
+        }
+    elif method == "tools/call":
+        params = req.get("params", {})
+        t_name = params.get("name")
+        args = params.get("arguments", {})
+        if t_name == "calc_add":
+            ans = float(args.get("a", 0)) + float(args.get("b", 0))
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"content": [{"type": "text", "text": str(ans)}]},
+            }
+        elif t_name == "calc_sub":
+            ans = float(args.get("a", 0)) - float(args.get("b", 0))
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"content": [{"type": "text", "text": str(ans)}]},
+            }
+        else:
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"message": f"Tool {t_name} not available or blocked"},
+            }
+    else:
+        resp = {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+    sys.stdout.write(json.dumps(resp) + "\\n")
+    sys.stdout.flush()
+''',
+            encoding="utf-8",
+        )
+
+        bob_home = tmp_path / "profiles" / "bob"
+        bob_home.mkdir(parents=True)
+
+        # Configure stdio server with include_tools and exclude_tools
+        # include: calc_add, calc_sub, system_wipe
+        # exclude: system_wipe
+        # calc_mul is not in include_tools => omitted
+        # system_wipe is in exclude_tools => omitted
+        # Result should ONLY expose: calc_add, calc_sub
+        import yaml
+        config_content = {
+            "mcp_servers": {
+                "calc": {
+                    "command": sys.executable,
+                    "args": ["-u", str(stdio_script)],
+                    "include_tools": ["calc_add", "calc_sub", "system_wipe"],
+                    "exclude_tools": ["system_wipe"],
+                }
+            }
+        }
+        (bob_home / "config.yaml").write_text(yaml.dump(config_content), encoding="utf-8")
+
+        mgr = ProfileMCPManager.get_instance()
+        mgr.shutdown_all()
+
+        try:
+            with patch.dict("sys.modules", {"tools": tools_mod, "tools.registry": reg_mod}), \
+                 patch("api.profiles.get_hermes_home_for_profile", return_value=bob_home):
+
+                # 1. Discover for profile 'bob'
+                disc = mgr.discover_for_profile("bob", bob_home, {})
+                assert disc["ok"] is True
+                tool_names = [t["name"] for t in disc["tools"]]
+
+                # Hermes naming: mcp_calc_calc_add, mcp_calc_calc_sub
+                assert "mcp_calc_calc_add" in tool_names
+                assert "mcp_calc_calc_sub" in tool_names
+                assert "mcp_calc_calc_mul" not in tool_names
+                assert "mcp_calc_system_wipe" not in tool_names
+                assert len(disc["tools"]) == 2
+
+                # Check registry has the tools registered
+                assert "mcp_calc_calc_add" in fake_registry._tools
+                assert "mcp_calc_calc_sub" in fake_registry._tools
+                assert "mcp_calc_calc_mul" not in fake_registry._tools
+                assert "mcp_calc_system_wipe" not in fake_registry._tools
+
+                # 2. Call from WebUI agent layer through registry down to worker
+                set_request_profile("bob")
+                try:
+                    tool_add = fake_registry.get("mcp_calc_calc_add")
+                    res_add = tool_add(a=19, b=23)
+                    assert float(res_add) == 42.0
+
+                    tool_sub = fake_registry.get("mcp_calc_calc_sub")
+                    res_sub = tool_sub(a=100, b=58)
+                    assert float(res_sub) == 42.0
+                finally:
+                    clear_request_profile()
+
+        finally:
+            mgr.shutdown_all()
+            clear_request_profile()
+
 
 
