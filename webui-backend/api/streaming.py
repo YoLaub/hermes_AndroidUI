@@ -10,6 +10,7 @@ import mimetypes
 import os
 import queue
 import re
+import sys
 import threading
 import time
 import traceback
@@ -2865,6 +2866,103 @@ def _refresh_cached_agent_primary_runtime_snapshot(agent) -> None:
             rt['is_anthropic_oauth'] = getattr(agent, '_is_anthropic_oauth')
 
 
+def _sanitize_mcp_error(err_str: str, secret_values: list[str]) -> str:
+    """Sanitize error messages to remove tokens, Bearer headers, and secrets."""
+    if not isinstance(err_str, str):
+        err_str = str(err_str)
+    err_str = re.sub(r'Bearer\s+[A-Za-z0-9_\-\.]+', 'Bearer [REDACTED]', err_str)
+    for val in secret_values:
+        if val and len(val) >= 4 and val in err_str:
+            err_str = err_str.replace(val, '[REDACTED]')
+    return err_str
+
+
+def _discover_profile_mcp_tools(profile_name, profile_home_path, profile_env):
+    """Discover and register MCP tools in the context of the profile.
+
+    Temporarily applies the profile's environment and HERMES_HOME under _ENV_LOCK,
+    then immediately restores os.environ so secrets and HERMES_HOME do not leak
+    globally during agent streaming. Logs failures cleanly with redacted secrets.
+    """
+    profile_str = str(profile_name or 'default')
+    from api.config import get_config as _get_cfg
+    profile_cfg = _get_cfg(profile=profile_str) if profile_str else {}
+    mcp_servers = profile_cfg.get("mcp_servers", {}) if isinstance(profile_cfg, dict) else {}
+    if not mcp_servers:
+        return
+
+    # Check for stale / disconnected server objects in tools.mcp_tool._servers
+    # to ensure retry is possible after an initial connection failure
+    try:
+        _mcp_mod = sys.modules.get("tools.mcp_tool")
+        if _mcp_mod is None:
+            import tools.mcp_tool as _mcp_mod
+        mcp_servers_dict = getattr(_mcp_mod, "_servers", None)
+        if isinstance(mcp_servers_dict, dict):
+            for s_name in list(mcp_servers.keys()):
+                srv_obj = mcp_servers_dict.get(s_name)
+                if srv_obj is not None:
+                    is_active = getattr(srv_obj, "is_connected", None)
+                    if callable(is_active):
+                        is_active = is_active()
+                    elif is_active is None:
+                        is_active = getattr(srv_obj, "connected", True)
+                    if not is_active:
+                        mcp_servers_dict.pop(s_name, None)
+    except Exception:
+        pass
+
+    secrets_to_mask = [v for k, v in (profile_env or {}).items() if "TOKEN" in k or "KEY" in k or "SECRET" in k]
+
+    with _ENV_LOCK:
+        old_env_snapshot = {k: os.environ.get(k) for k in (profile_env or {})}
+        old_home = os.environ.get("HERMES_HOME")
+        had_home = "HERMES_HOME" in os.environ
+        try:
+            if profile_env:
+                os.environ.update(profile_env)
+            if profile_home_path:
+                os.environ["HERMES_HOME"] = str(profile_home_path)
+
+            _mcp_mod = sys.modules.get("tools.mcp_tool")
+            if _mcp_mod is not None and hasattr(_mcp_mod, "discover_mcp_tools"):
+                discover_mcp_tools = getattr(_mcp_mod, "discover_mcp_tools")
+            else:
+                from tools.mcp_tool import discover_mcp_tools
+            discover_mcp_tools()
+            logger.info("[mcp] Successfully discovered MCP tools for profile '%s'", profile_str)
+        except Exception as exc:
+            sanitized_msg = _sanitize_mcp_error(str(exc), secrets_to_mask)
+            logger.warning(
+                "[mcp] Profile '%s' MCP discovery failed (%s: %s). Server will remain usable; retry on next request.",
+                profile_str,
+                type(exc).__name__,
+                sanitized_msg,
+            )
+            # Clean up failed / partial server references from _servers so subsequent retry starts clean
+            try:
+                _mcp_mod = sys.modules.get("tools.mcp_tool")
+                if _mcp_mod is None:
+                    import tools.mcp_tool as _mcp_mod
+                mcp_servers_dict = getattr(_mcp_mod, "_servers", None)
+                if isinstance(mcp_servers_dict, dict):
+                    for s_name in mcp_servers.keys():
+                        mcp_servers_dict.pop(s_name, None)
+            except Exception:
+                pass
+        finally:
+            # Immediately restore os.environ so secrets and HERMES_HOME do not persist globally
+            for k, old_val in old_env_snapshot.items():
+                if old_val is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = old_val
+            if had_home:
+                os.environ["HERMES_HOME"] = old_home or ""
+            else:
+                os.environ.pop("HERMES_HOME", None)
+
+
 def _run_agent_streaming(
     session_id,
     msg_text,
@@ -3175,6 +3273,12 @@ def _run_agent_streaming(
                 _resolved_profile_name = get_active_profile_name()
             except Exception:
                 _resolved_profile_name = None
+        if _resolved_profile_name:
+            try:
+                from api.profiles import set_request_profile
+                set_request_profile(_resolved_profile_name)
+            except Exception:
+                pass
         
         _thread_env = _build_agent_thread_env(
             _profile_runtime_env,
@@ -3192,14 +3296,20 @@ def _run_agent_streaming(
         # The finally block re-acquires to restore — keeping critical sections short
         # and preventing a deadlock where the restore would re-enter the same lock.
         with _ENV_LOCK:
-            old_profile_env = {key: os.environ.get(key) for key in _profile_runtime_env}
+            # Sensitive tokens (e.g. MOBILE_CONTROL_TOKEN) stay safely in thread-local _thread_env
+            # and are not permanently injected into process-global os.environ.
+            _non_secret_runtime_env = {
+                k: v for k, v in _profile_runtime_env.items()
+                if not (k == 'MOBILE_CONTROL_TOKEN' or 'TOKEN' in k or 'SECRET' in k or 'KEY' in k)
+            }
+            old_profile_env = {key: os.environ.get(key) for key in _non_secret_runtime_env}
             old_cwd = os.environ.get('TERMINAL_CWD')
             old_exec_ask = os.environ.get('HERMES_EXEC_ASK')
             old_session_key = os.environ.get('HERMES_SESSION_KEY')
             old_session_id = os.environ.get('HERMES_SESSION_ID')
             old_session_platform = os.environ.get('HERMES_SESSION_PLATFORM')
             old_hermes_home = os.environ.get('HERMES_HOME')
-            os.environ.update(_profile_runtime_env)
+            os.environ.update(_non_secret_runtime_env)
             os.environ['TERMINAL_CWD'] = str(s.workspace)
             os.environ['HERMES_EXEC_ASK'] = '1'
             os.environ['HERMES_SESSION_KEY'] = session_id
@@ -3217,26 +3327,8 @@ def _run_agent_streaming(
                 if patch_skill_home_modules is not None:
                     patch_skill_home_modules(Path(_profile_home))
         # Lock released — agent runs without holding it
-        # ── MCP Server Discovery (lazy import, idempotent) ──
-        # MUST run AFTER the HERMES_HOME mutation above — `discover_mcp_tools()`
-        # reads `~/.hermes/config.yaml` via `get_hermes_home()`, which uses
-        # `os.environ['HERMES_HOME']`.  Calling it before the mutation always
-        # loaded the default profile's `mcp_servers`, even when the session
-        # was stamped with a non-default profile.  See issue #1968.
-        #
-        # NOTE: `_servers` in `tools/mcp_tool.py` is a process-global registry
-        # keyed by server name.  This means once profile A registers a server
-        # named e.g. `postgres`, profile B's discovery sees it as already
-        # connected and skips it — even if B's config points at a different
-        # binary.  Fully fixing multi-profile concurrent use requires keying
-        # `_servers` by `(profile_home, name)` upstream in hermes-agent; that
-        # lives outside this WebUI repo.  This change fixes the headline bug
-        # for users who run a single non-default profile per WebUI process.
-        try:
-            from tools.mcp_tool import discover_mcp_tools
-            discover_mcp_tools()
-        except Exception:
-            pass  # MCP not available or not configured — non-fatal
+        # ── MCP Server Discovery (profile-isolated, resilient) ──
+        _discover_profile_mcp_tools(_resolved_profile_name, _profile_home_path, _profile_runtime_env)
 
         # Register a gateway-style notify callback so the approval system can
         # push the `approval` SSE event the moment a dangerous command is
@@ -3587,12 +3679,12 @@ def _run_agent_streaming(
 
             # Read per-profile config at call time (not module-level snapshot)
             from api.config import get_config as _get_config
-            _cfg = _get_config()
+            _cfg = _get_config(_resolved_profile_name)
 
             # Per-profile toolsets — use _resolve_cli_toolsets() so MCP
             # server toolsets are included, matching native CLI behaviour.
             from api.config import _resolve_cli_toolsets
-            _toolsets = _resolve_cli_toolsets(_cfg)
+            _toolsets = _resolve_cli_toolsets(_cfg, platform="webui")
 
             # Per-session toolset override (#493): if the session has
             # enabled_toolsets set, use that instead of the global config.
@@ -5158,6 +5250,11 @@ def _run_agent_streaming(
             update_active_run(stream_id, phase="finalizing")
             _last_resort_sync_from_core(s, stream_id, _agent_lock)
         _clear_thread_env()  # TD1: always clear thread-local context
+        try:
+            from api.profiles import clear_request_profile
+            clear_request_profile()
+        except Exception:
+            pass
         with STREAMS_LOCK:
             STREAMS.pop(stream_id, None)
             CANCEL_FLAGS.pop(stream_id, None)

@@ -383,8 +383,17 @@ def get_profile_cookie_name() -> str:
 
 
 def get_profile_cookie(handler) -> str | None:
-    """Extract the active-profile cookie value from the request, or None."""
-    cookie_header = handler.headers.get('Cookie', '')
+    """Extract the active-profile value from request headers or cookie, or None."""
+    from api.profiles import _PROFILE_ID_RE
+
+    # Check explicit X-Hermes-Profile header first (e.g. Android app / REST clients)
+    header_val = handler.headers.get('X-Hermes-Profile') if hasattr(handler, 'headers') and handler.headers else None
+    if header_val:
+        header_val = header_val.strip()
+        if header_val == 'default' or _PROFILE_ID_RE.fullmatch(header_val):
+            return header_val
+
+    cookie_header = handler.headers.get('Cookie', '') if hasattr(handler, 'headers') and handler.headers else ''
     if not cookie_header:
         return None
     import http.cookies as _hc
@@ -397,7 +406,6 @@ def get_profile_cookie(handler) -> str | None:
     morsel = cookie.get(cookie_name)
     if morsel and morsel.value:
         # Validate against profile-name pattern before trusting
-        from api.profiles import _PROFILE_ID_RE
         val = morsel.value
         if val == 'default' or _PROFILE_ID_RE.fullmatch(val):
             return val

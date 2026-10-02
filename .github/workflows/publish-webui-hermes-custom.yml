@@ -3,7 +3,7 @@ name: Publish custom Hermes WebUI
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "webui-backend/**"
       - ".github/workflows/publish-webui-hermes-custom.yml"
@@ -38,8 +38,21 @@ jobs:
       - name: Extract Hermes Version
         id: version
         run: |
-          VERSION=$(git describe --tags --always 2>/dev/null || echo "custom-sha-${GITHUB_SHA::7}")
+          # Upstream Hermes WebUI version from baked version file
+          VERSION=$(grep -oE "v[0-9]+\.[0-9]+\.[0-9]+" webui-backend/api/_version.py 2>/dev/null || echo "v0.51.92")
           echo "hermes_version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHA="sha-${{ github.sha }}"
+          TAGS="${{ env.IMAGE_NAME }}:${SHA}"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAGS="${TAGS},${{ env.IMAGE_NAME }}:latest,${{ env.IMAGE_NAME }}:main"
+          elif [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            TAGS="${TAGS},${{ env.IMAGE_NAME }}:dev"
+          fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish
         uses: docker/build-push-action@v6
@@ -49,10 +62,7 @@ jobs:
           push: true
           build-args: |
             HERMES_VERSION=${{ steps.version.outputs.hermes_version }}
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:main
-            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/YoLaub/hermes_AndroidUI
             org.opencontainers.image.description=Custom Hermes WebUI backend image

@@ -10549,7 +10549,14 @@ def _mcp_tools_from_runtime_status(runtime_by_name, server_summaries):
             raw_tools = runtime.get("tool_schemas")
         if not isinstance(raw_tools, list):
             continue
-        server_summary = server_summaries.get(str(server_name), {"name": str(server_name)})
+        s_name_str = str(server_name)
+        server_summary = server_summaries.get(s_name_str)
+        if not server_summary and s_name_str.startswith("mcp-"):
+            server_summary = server_summaries.get(s_name_str[len("mcp-"):])
+        if not server_summary:
+            server_summary = server_summaries.get(f"mcp-{s_name_str}")
+        if not server_summary:
+            continue
         for index, tool in enumerate(raw_tools):
             fallback_name = f"{server_name}:{index}"
             summary = _mcp_tool_summary(fallback_name, tool, server_summary)
@@ -10577,13 +10584,15 @@ def _mcp_tools_from_registry(server_summaries):
         if not isinstance(toolset, str) or not toolset.startswith("mcp-"):
             continue
         server_name = toolset[len("mcp-"):]
+        server_summary = server_summaries.get(server_name)
+        if not server_summary and server_name.startswith("mcp-"):
+            server_summary = server_summaries.get(server_name[len("mcp-"):])
+        if not server_summary:
+            server_summary = server_summaries.get(f"mcp-{server_name}")
+        if not server_summary:
+            # Server not configured for this active profile — do not leak into another profile
+            continue
         schema = registry.get_schema(tool_name) or {}
-        server_summary = server_summaries.get(server_name, {
-            "name": server_name,
-            "enabled": True,
-            "active": False,
-            "status": "configured",
-        })
         tools.append(_mcp_tool_summary(tool_name, schema, server_summary))
     return tools
 

@@ -257,8 +257,18 @@ def _cfg_has_in_memory_overrides() -> bool:
         return False
 
 
-def _get_config_path() -> Path:
-    """Return config.yaml path for the active profile."""
+_cfg_cache_by_path: dict[Path, dict] = {}
+_cfg_mtime_by_path: dict[Path, float] = {}
+
+
+def _get_config_path(profile: str | None = None) -> Path:
+    """Return config.yaml path for the active profile or an explicit profile."""
+    if profile:
+        try:
+            from api.profiles import get_hermes_home_for_profile
+            return Path(get_hermes_home_for_profile(profile)) / "config.yaml"
+        except Exception:
+            pass
     env_override = os.getenv("HERMES_CONFIG_PATH")
     if env_override:
         return Path(env_override).expanduser()
@@ -274,27 +284,46 @@ _WEBUI_SESSION_SAVE_MODES = {"deferred", "eager"}
 _DEFAULT_WEBUI_SESSION_SAVE_MODE = "deferred"
 
 
-def get_config() -> dict:
-    """Return the cached config dict, loading from disk if needed."""
-    config_path = _get_config_path()
+def get_config(profile: str | None = None) -> dict:
+    """Return the cached config dict, loading from disk if needed.
+    
+    Supports per-profile loading so concurrent requests across different profiles
+    do not overwrite each other's configuration cache.
+    """
+    config_path = _get_config_path(profile)
     try:
         current_mtime = config_path.stat().st_mtime
     except OSError:
         current_mtime = 0.0
-    cache_stale = current_mtime != _cfg_mtime or _cfg_path != config_path
-    if not _cfg_cache or (cache_stale and not _cfg_has_in_memory_overrides()):
-        reload_config()
-    # When a test (or runtime caller) has rebound ``cfg`` to a different dict
-    # via monkeypatch.setattr(config, "cfg", ...), return that override rather
-    # than the underlying _cfg_cache. Without this branch, get_config() would
-    # silently bypass the override even though _cfg_has_in_memory_overrides()
-    # correctly suppressed the reload.
-    try:
-        if cfg is not _cfg_cache:
-            return cfg
-    except NameError:
-        pass
-    return _cfg_cache
+
+    with _cfg_lock:
+        cached_entry = _cfg_cache_by_path.get(config_path)
+        last_mtime = _cfg_mtime_by_path.get(config_path, 0.0)
+        cache_stale = current_mtime != last_mtime or cached_entry is None
+
+        if (not cached_entry or cache_stale) and not _cfg_has_in_memory_overrides():
+            loaded = _load_yaml_config_file(config_path)
+            _cfg_cache_by_path[config_path] = loaded
+            _cfg_mtime_by_path[config_path] = current_mtime
+            cached_entry = loaded
+
+        # Maintain legacy _cfg_cache for the active profile
+        if cached_entry is not None:
+            active_path = _get_config_path()
+            if profile is None or config_path == active_path:
+                global _cfg_mtime, _cfg_path, _cfg_fingerprint
+                _cfg_path = config_path
+                _cfg_mtime = current_mtime
+                _cfg_cache.clear()
+                _cfg_cache.update(cached_entry)
+                _cfg_fingerprint = _fingerprint_config(_cfg_cache)
+
+        try:
+            if cfg is not _cfg_cache:
+                return cfg
+        except NameError:
+            pass
+        return cached_entry if cached_entry is not None else _cfg_cache
 
 
 def get_webui_session_save_mode(config_data: dict | None = None) -> str:
@@ -319,36 +348,30 @@ def get_webui_session_save_mode(config_data: dict | None = None) -> str:
     return _DEFAULT_WEBUI_SESSION_SAVE_MODE
 
 
-def reload_config() -> None:
-    """Reload config.yaml from the active profile's directory."""
+def reload_config(profile: str | None = None) -> None:
+    """Reload config.yaml from the active or specified profile's directory."""
     global _cfg_mtime, _cfg_path, _cfg_fingerprint
     with _cfg_lock:
-        _cfg_cache.clear()
-        config_path = _get_config_path()
-        # Remember the old mtime so we can tell whether config actually changed
-        # vs. first-ever load (mtime == 0.0, e.g. server start or profile switch).
-        _old_cfg_mtime = _cfg_mtime
-        _cfg_path = config_path
-        _cfg_mtime = 0.0
+        config_path = _get_config_path(profile)
+        _old_cfg_mtime = _cfg_mtime_by_path.get(config_path, _cfg_mtime)
         try:
-            import yaml as _yaml
+            current_mtime = config_path.stat().st_mtime
+        except OSError:
+            current_mtime = 0.0
 
-            if config_path.exists():
-                loaded = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict):
-                    _cfg_cache.update(loaded)
-                    try:
-                        _cfg_mtime = Path(config_path).stat().st_mtime
-                    except OSError:
-                        _cfg_mtime = 0.0
-        except Exception:
-            logger.debug("Failed to load yaml config from %s", config_path)
-        _cfg_fingerprint = _fingerprint_config(_cfg_cache)
+        loaded = _load_yaml_config_file(config_path)
+        _cfg_cache_by_path[config_path] = loaded
+        _cfg_mtime_by_path[config_path] = current_mtime
+
+        active_path = _get_config_path()
+        if profile is None or config_path == active_path:
+            _cfg_path = config_path
+            _cfg_mtime = current_mtime
+            _cfg_cache.clear()
+            _cfg_cache.update(loaded)
+            _cfg_fingerprint = _fingerprint_config(_cfg_cache)
+
         # Bust the models cache so the next request sees fresh config values.
-        # Only delete the disk cache when config has actually changed -- not on
-        # first-ever load (when _old_cfg_mtime == 0.0, i.e. server start or
-        # profile switch) -- preserving the disk cache so the next restart
-        # still hits the fast path without a cold run.
         if _old_cfg_mtime != 0.0:
             _delete_models_cache_on_disk()
 
@@ -619,17 +642,62 @@ def _normalize_cli_toolsets(toolsets):
     return normalized
 
 
-def _resolve_cli_toolsets(cfg=None):
-    """Resolve CLI toolsets using the agent's _get_platform_tools() so that
-    MCP server toolsets are automatically included, matching CLI behaviour."""
+def _resolve_cli_toolsets(cfg=None, platform="webui"):
+    """Resolve toolsets for the agent session, respecting platform_toolsets
+    (checking api_server, webui, and cli) and ensuring enabled MCP server toolsets
+    for this profile are included while keeping profiles isolated."""
     if cfg is None:
         cfg = get_config()
+    pt = cfg.get("platform_toolsets", {}) if isinstance(cfg, dict) else {}
+
+    # Pick the target platform key in platform_toolsets
+    target_platform = platform
+    if target_platform not in pt:
+        if "api_server" in pt:
+            target_platform = "api_server"
+        elif "webui" in pt:
+            target_platform = "webui"
+        elif "cli" in pt:
+            target_platform = "cli"
+        else:
+            target_platform = platform or "cli"
+
+    resolved = None
     try:
         from hermes_cli.tools_config import _get_platform_tools
-        return _normalize_cli_toolsets(_get_platform_tools(cfg, "cli"))
+        resolved = _get_platform_tools(cfg, target_platform)
     except Exception:
-        # Fallback: read raw list from config (MCP toolsets will be missing)
-        return _normalize_cli_toolsets(cfg.get("platform_toolsets", {}).get("cli", _DEFAULT_TOOLSETS))
+        resolved = None
+
+    if not resolved:
+        raw_list = pt.get(target_platform)
+        if raw_list is None:
+            raw_list = pt.get("api_server") or pt.get("webui") or pt.get("cli") or _DEFAULT_TOOLSETS
+        resolved = list(raw_list)
+
+    normalized = _normalize_cli_toolsets(resolved)
+
+    # Respect configured enabled MCP servers for this profile:
+    # If the profile config defines mcp_servers, include enabled ones if not already present.
+    # When platform_toolsets explicitly lists tools, preserve explicit entries (e.g. John's mcp-mobile).
+    mcp_servers = cfg.get("mcp_servers", {}) if isinstance(cfg, dict) else {}
+    if isinstance(mcp_servers, dict):
+        for s_name, s_cfg in mcp_servers.items():
+            if not isinstance(s_cfg, dict):
+                continue
+            is_enabled = s_cfg.get("enabled", True)
+            if isinstance(is_enabled, str):
+                is_enabled = is_enabled.lower() not in ("false", "0", "no")
+            if is_enabled:
+                tname = f"mcp-{s_name}" if not s_name.startswith("mcp-") else s_name
+                # If platform_toolsets was not specified, or if the server is in the configured list:
+                if not pt or s_name in normalized or tname in normalized or target_platform not in pt:
+                    if tname not in normalized:
+                        normalized.append(tname)
+                    if s_name not in normalized and s_name.startswith("mcp-"):
+                        normalized.append(s_name)
+
+    return normalized
 
 CLI_TOOLSETS = _resolve_cli_toolsets()
 
