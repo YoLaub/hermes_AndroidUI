@@ -29,7 +29,15 @@ def build_server(name: str):
 
     @server.tool()
     async def slow(seconds: float) -> str:
-        """Block for the given number of seconds, then answer."""
+        """Sleep for the given number of seconds, then answer.
+
+        Each execution appends one line to $FIXTURE_CALL_LOG so tests can count
+        how many times the tool really ran (a replayed call shows up twice).
+        """
+        log = os.environ.get("FIXTURE_CALL_LOG")
+        if log:
+            with open(log, "a", encoding="utf-8") as fh:
+                fh.write("slow:start\n")
         await asyncio.sleep(seconds)
         return f"{prefix}slept"
 

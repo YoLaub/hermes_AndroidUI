@@ -26,7 +26,15 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from api.mcp_errors import ResultUnknownError
+
 logger = logging.getLogger(__name__)
+
+# The parent waits for an MCP call for the server's own timeout plus this margin
+# (pipe transmission, worker scheduling), so the MCP timeout always fires first.
+IPC_MARGIN_SECONDS = 10.0
+# Worker default for a server without an explicit `timeout` (see mcp_worker).
+DEFAULT_MCP_CALL_TIMEOUT = 120
 
 # Lock for inventory and status cache updates
 _INVENTORY_LOCK = threading.RLock()
@@ -143,10 +151,13 @@ class ProfileMCPWorkerClient:
                     req_id = data.get("id")
                     if req_id:
                         with self._lock:
-                            self._pending_requests[req_id] = data
                             evt = self._pending_events.get(req_id)
-                            if evt:
-                                evt.set()
+                            if evt is None:
+                                # Nobody waits any more (abandoned call): drop, never store.
+                                logger.debug("Dropping late worker response %s", req_id)
+                                continue
+                            self._pending_requests[req_id] = data
+                            evt.set()
                 except Exception as exc:
                     logger.debug("Failed to parse worker stdout: %s", exc)
         except Exception:
@@ -200,10 +211,31 @@ class ProfileMCPWorkerClient:
             resp = self._pending_requests.pop(req_id, None)
 
         if not signaled or resp is None:
-            if not self.is_alive():
+            alive = self.is_alive()
+            if action == "call_tool":
+                # The request was written: the action may have run. Say so, ask the
+                # worker to drop it explicitly, and never replay it.
+                if alive:
+                    self._send_nowait("cancel", target=req_id)
+                    reason = f"Parent stopped waiting for the MCP call after {timeout:g}s; cancellation requested"
+                else:
+                    reason = f"Worker process for profile '{self.profile_name}' terminated during the MCP call"
+                return {"ok": False, "error_type": "ResultUnknownError",
+                        "error": f"{reason}; outcome unknown, not retried"}
+            if not alive:
                 return {"ok": False, "error": f"Worker process for profile '{self.profile_name}' terminated unexpectedly"}
             return {"ok": False, "error": f"Worker timed out waiting for response to {action}"}
         return resp
+
+    def _send_nowait(self, action: str, **params) -> None:
+        """Fire-and-forget command (its response is dropped by the reader)."""
+        payload = {"id": f"req-{uuid.uuid4().hex[:8]}", "action": action, **params}
+        try:
+            with self._lock:
+                self.proc.stdin.write(json.dumps(payload) + "\n")
+                self.proc.stdin.flush()
+        except Exception as exc:
+            logger.warning("Could not send %s to worker '%s': %s", action, self.profile_name, exc)
 
     def stop(self) -> None:
         """Terminate the worker cleanly."""
@@ -387,13 +419,31 @@ class ProfileMCPManager:
             else:
                 raise RuntimeError(f"No active MCP worker for profile '{profile_str}'")
 
-        resp = worker.send_command("call_tool", server=server_name, tool=tool_name, arguments=arguments)
+        resp = worker.send_command(
+            "call_tool",
+            timeout=self._call_wait_timeout(profile_str, server_name),
+            server=server_name,
+            tool=tool_name,
+            arguments=arguments,
+        )
         if not resp.get("ok"):
             msg = resp.get("error", "Tool execution failed")
-            if resp.get("error_type") == "PermissionError":
+            error_type = resp.get("error_type")
+            if error_type == "PermissionError":
                 raise PermissionError(msg)
+            if error_type == "ResultUnknownError":
+                raise ResultUnknownError(msg)
             raise RuntimeError(msg)
         return resp.get("result")
+
+    @staticmethod
+    def _call_wait_timeout(profile_name: str, server_name: str) -> float:
+        """How long the parent waits: the server's MCP timeout plus a margin."""
+        servers = get_profile_discovered_inventory(profile_name).get("servers", {})
+        mcp_timeout = (servers.get(server_name) or {}).get("timeout")
+        if not isinstance(mcp_timeout, (int, float)) or mcp_timeout <= 0:
+            mcp_timeout = DEFAULT_MCP_CALL_TIMEOUT
+        return float(mcp_timeout) + IPC_MARGIN_SECONDS
 
     def get_status_for_profile(self, profile_name: str) -> dict:
         """Return real live connection status from the worker."""

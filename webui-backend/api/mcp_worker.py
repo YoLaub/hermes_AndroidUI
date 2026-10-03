@@ -23,7 +23,9 @@ import sys
 import threading
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
+
+from api.mcp_errors import ResultUnknownError
 
 # Configure minimal stderr logging
 logging.basicConfig(level=logging.INFO, format="[mcp-worker %(name)s] %(message)s", stream=sys.stderr)
@@ -135,6 +137,17 @@ def _exc_message(exc: BaseException) -> str:
     return str(exc) or type(exc).__name__
 
 
+# JSON-RPC codes the SDK uses for "connection closed" and "request timed out":
+# the request left, but no answer came back, so the outcome is unknown.
+_NO_ANSWER_CODES = {-32000, 408}
+
+
+def _is_server_reported_error(exc: BaseException) -> bool:
+    """True when the server itself answered with an error (outcome is known)."""
+    code = getattr(getattr(exc, "error", None), "code", None)
+    return code is not None and code not in _NO_ANSWER_CODES
+
+
 class _AsyncRunner:
     """One asyncio loop on a daemon thread.
 
@@ -150,11 +163,16 @@ class _AsyncRunner:
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
 
+    def submit(self, coro: Any) -> "concurrent.futures.Future":
+        return asyncio.run_coroutine_threadsafe(coro, self.loop)
+
     def run(self, coro: Any, timeout: Optional[float] = None) -> Any:
-        fut = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        fut = self.submit(coro)
         try:
             return fut.result(timeout)
         except concurrent.futures.TimeoutError:
+            if fut.done():
+                raise  # raised by the coroutine itself: keep its own message
             fut.cancel()
             raise TimeoutError(f"MCP operation timed out after {timeout}s") from None
 
@@ -310,26 +328,55 @@ class BaseMCPServerConnection:
     async def _call(self, tool: str, arguments: dict) -> Any:
         session = self._session
         if session is None:
-            raise ConnectionError(f"MCP server '{self.name}' is not connected")
+            raise ConnectionError(f"MCP server '{self.name}' is not connected")  # nothing was sent
         try:
             return await asyncio.wait_for(session.call_tool(tool, arguments or {}), self.timeout)
         except asyncio.TimeoutError:
-            raise TimeoutError(
-                f"MCP tool '{tool}' on server '{self.name}' timed out after {self.timeout}s"
+            raise ResultUnknownError(
+                f"MCP tool '{tool}' on server '{self.name}' timed out after {self.timeout}s; "
+                "outcome unknown, not retried"
             ) from None
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if _is_server_reported_error(exc):
+                raise RuntimeError(f"MCP tool call error: {_exc_message(exc)}") from exc
+            # The request was sent but no answer came back: drop the dead transport
+            # so the next call reconnects, and never replay this one.
+            if self._stop is not None:
+                self._stop.set()
+            raise ResultUnknownError(
+                f"Connection to MCP server '{self.name}' lost during '{tool}': {_exc_message(exc)}; "
+                "outcome unknown, not retried"
+            ) from exc
 
-    def call_tool(self, tool_name: str, arguments: dict) -> Any:
+    def call_tool(
+        self,
+        tool_name: str,
+        arguments: dict,
+        on_submit: Optional[Callable[["concurrent.futures.Future"], None]] = None,
+    ) -> Any:
         if not self.connected:
             self.connect()
         original = self._find_tool(tool_name).get("original_name") or tool_name
+        fut = _get_runner().submit(self._call(original, arguments))
+        if on_submit is not None:
+            on_submit(fut)
         try:
-            result = _get_runner().run(self._call(original, arguments), timeout=self.timeout + 5)
+            # Backstop only: _call enforces self.timeout itself, a bit earlier.
+            result = fut.result(self.timeout + 5)
+        except concurrent.futures.CancelledError:
+            raise ResultUnknownError(
+                f"MCP tool '{original}' on server '{self.name}' was cancelled; outcome unknown, not retried"
+            ) from None
         except TimeoutError:
+            if not fut.done():
+                fut.cancel()
+                raise ResultUnknownError(
+                    f"MCP tool '{original}' on server '{self.name}' timed out after {self.timeout}s; "
+                    "outcome unknown, not retried"
+                ) from None
             raise
-        except (ConnectionError, OSError) as exc:
-            # Transport is gone: drop it so the next call reconnects. Never replay blindly.
-            self.disconnect()
-            raise ConnectionError(f"MCP server '{self.name}' connection lost: {exc}") from exc
         return _result_to_text(result)
 
     def get_status(self) -> dict:
@@ -413,6 +460,10 @@ class ProfileWorkerEngine:
         self.profile_name = profile_name
         self.home_path = home_path
         self.servers: Dict[str, BaseMCPServerConnection] = {}
+        self._calls_lock = threading.Lock()
+        self._pending_ids: Set[str] = set()
+        self._inflight: Dict[str, "concurrent.futures.Future"] = {}
+        self._cancel_requested: Set[str] = set()
 
     def shutdown(self) -> None:
         """Disconnect and stop all managed server connections."""
@@ -479,17 +530,51 @@ class ProfileWorkerEngine:
             "error": err_msg,
         }
 
-    def call_tool(self, server_name: str, tool_name: str, arguments: dict) -> Any:
+    def call_tool(self, server_name: str, tool_name: str, arguments: dict, call_id: Optional[str] = None) -> Any:
         """Execute a tool call on the exact (server, tool) pair, never by tool name alone."""
         conn = self.servers.get(server_name)
         if conn is None:
             raise KeyError(f"MCP server '{server_name}' not found for profile '{self.profile_name}'")
-        return conn.call_tool(tool_name, arguments)
+        on_submit = None
+        if call_id:
+            with self._calls_lock:
+                self._pending_ids.add(call_id)
+
+            def on_submit(fut: "concurrent.futures.Future") -> None:
+                with self._calls_lock:
+                    self._inflight[call_id] = fut
+                    cancelled = call_id in self._cancel_requested
+                if cancelled:
+                    fut.cancel()
+
+        try:
+            return conn.call_tool(tool_name, arguments, on_submit)
+        finally:
+            if call_id:
+                with self._calls_lock:
+                    self._pending_ids.discard(call_id)
+                    self._inflight.pop(call_id, None)
+                    self._cancel_requested.discard(call_id)
+
+    def cancel(self, call_id: str) -> bool:
+        """Cancel a call the parent stopped waiting for. True if it was still running."""
+        with self._calls_lock:
+            fut = self._inflight.get(call_id)
+            if fut is None:
+                if call_id in self._pending_ids:
+                    self._cancel_requested.add(call_id)  # not submitted yet: cancel on submit
+                    return True
+                return False
+        fut.cancel()
+        return True
 
     def get_status(self) -> dict:
+        with self._calls_lock:
+            in_flight = len(self._inflight)
         return {
             "ok": True,
             "profile": self.profile_name,
+            "in_flight": in_flight,
             "servers": {name: s.get_status() for name, s in self.servers.items()},
         }
 
@@ -508,7 +593,26 @@ def main():
     logger.info("Worker started for profile '%s'. Found %d servers, %d tools",
                 args.profile, len(initial_res["servers"]), len(initial_res["tools"]))
 
-    # Read IPC commands from stdin
+    out_lock = threading.Lock()
+
+    def emit(resp: dict) -> None:
+        with out_lock:
+            sys.stdout.write(json.dumps(resp) + "\n")
+            sys.stdout.flush()
+
+    def run_call(req: dict) -> None:
+        req_id = req.get("id")
+        try:
+            result = engine.call_tool(
+                req.get("server") or "", req.get("tool") or "", req.get("arguments") or {}, call_id=req_id
+            )
+            resp = {"id": req_id, "ok": True, "result": result}
+        except Exception as exc:
+            resp = {"id": req_id, "ok": False, "error": str(exc), "error_type": type(exc).__name__}
+        emit(resp)
+
+    # Read IPC commands from stdin. Tool calls run on their own threads so this
+    # loop keeps reading and can honour a `cancel` while a call is in flight.
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -522,6 +626,9 @@ def main():
         action = req.get("action", "")
 
         try:
+            if action == "call_tool":
+                threading.Thread(target=run_call, args=(req,), name=f"mcp-call-{req_id}", daemon=True).start()
+                continue
             if action == "ping":
                 resp = {"id": req_id, "ok": True}
             elif action == "discover" or action == "reload":
@@ -530,25 +637,18 @@ def main():
             elif action == "status":
                 res = engine.get_status()
                 resp = {"id": req_id, **res}
-            elif action == "call_tool":
-                server_name = req.get("server") or ""
-                tool_name = req.get("tool") or ""
-                arguments = req.get("arguments") or {}
-                result = engine.call_tool(server_name, tool_name, arguments)
-                resp = {"id": req_id, "ok": True, "result": result}
+            elif action == "cancel":
+                resp = {"id": req_id, "ok": True, "cancelled": engine.cancel(str(req.get("target") or ""))}
             elif action == "shutdown":
                 engine.shutdown()
-                resp = {"id": req_id, "ok": True}
-                sys.stdout.write(json.dumps(resp) + "\n")
-                sys.stdout.flush()
+                emit({"id": req_id, "ok": True})
                 break
             else:
                 resp = {"id": req_id, "ok": False, "error": f"Unknown action '{action}'"}
         except Exception as exc:
             resp = {"id": req_id, "ok": False, "error": str(exc), "error_type": type(exc).__name__}
 
-        sys.stdout.write(json.dumps(resp) + "\n")
-        sys.stdout.flush()
+        emit(resp)
 
     engine.shutdown()
     logger.info("Worker exiting cleanly for profile '%s'", args.profile)
