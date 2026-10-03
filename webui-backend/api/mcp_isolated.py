@@ -302,7 +302,8 @@ class ProfileMCPManager:
         via api.profiles.get_active_profile_name().
         """
         try:
-            from tools.registry import registry
+            import importlib
+            registry = getattr(importlib.import_module("tools.registry"), "registry")
         except Exception:
             return
 
