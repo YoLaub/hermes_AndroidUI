@@ -205,3 +205,52 @@ def test_health_and_status_expose_the_same_relay_instance_id():
     inst = client.get("/health").json()["instance_id"]
     assert inst and len(inst) >= 8
     assert inst in status_text()
+
+
+# ── Pairing exactly as the Android app does it ───────────────────────────────
+
+def admin_code():
+    res = client.post("/api/pair/generate", headers={"Authorization": "Bearer test_admin_token_12345"}, json={})
+    assert res.status_code == 200
+    return res.json()["code"]
+
+
+def app_pair(code, device_id="dev_app0001", current=None):
+    body = {"code": f" {code.lower()} ", "device_id": device_id, "device_name": "Pixel"}
+    if current:
+        body["current_device_token"] = current
+    return client.post("/api/pair/verify", json=body)
+
+
+def test_token_issued_by_pairing_authenticates_and_the_session_becomes_visible_to_john():
+    # The app trims the code; the relay uppercases it (app_pair sends it padded and lowercase).
+    res = app_pair(admin_code())
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True and body["device_token"].startswith("tok_")
+
+    with client.websocket_connect("/ws/device") as ws:
+        ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "auth",
+                                 "device_id": "dev_app0001", "device_token": body["device_token"]}))
+        assert ws.receive_json()["type"] == "auth_ok"
+        assert ws.receive_json()["active"] is False
+        ws.send_text(json.dumps(start_msg()))
+        assert ws.receive_json()["type"] == "session_started_ack"
+        assert "Session active trouvée" in status_text()
+
+
+def test_app_style_repair_needs_the_current_token_and_a_locally_invented_token_never_works():
+    first = app_pair(admin_code()).json()["device_token"]
+    # Same device, new code, no current token: refused (403), as the app explains.
+    assert app_pair(admin_code()).status_code == 403
+    # With the current token it is accepted and the old token stops working.
+    second = app_pair(admin_code(), current=first)
+    assert second.status_code == 200
+    new_token = second.json()["device_token"]
+    assert new_token != first
+
+    for token, expected in ((first, "auth_error"), ("tok_invented_BBBB2222", "auth_error"), (new_token, "auth_ok")):
+        with client.websocket_connect("/ws/device") as ws:
+            ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "auth",
+                                     "device_id": "dev_app0001", "device_token": token}))
+            assert ws.receive_json()["type"] == expected

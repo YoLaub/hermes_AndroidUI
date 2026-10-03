@@ -71,9 +71,17 @@ Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config
 4. Dans les paramètres Android, sélectionnez **Hermes** et activez le service.
 
 ### Étape 2 : Appairer le Téléphone avec le Relais VPS
-1. Cliquez sur l'icône d'engrenage dans l'encadré *Relais VPS*.
-2. Vérifiez l'URL de votre serveur (ex: `https://mobile-relay-hermes.john-world.store` ou domaine configuré).
-3. Cliquez sur **Enregistrer** pour valider l'appairage.
+1. Générez un code à usage unique (valable 5 min) depuis un poste de confiance, avec le token administrateur du relais :
+   ```bash
+   curl -s -X POST "$RELAY_URL/api/pair/generate" \
+     -H "Authorization: Bearer $MOBILE_RELAY_ADMIN_TOKEN" \
+     -H "Content-Type: application/json" -d '{}'
+   ```
+2. Cliquez sur l'icône d'engrenage dans l'encadré *Relais VPS*.
+3. Vérifiez l'URL de votre serveur (ex: `https://mobile-relay-hermes.john-world.store` ou domaine configuré).
+4. Saisissez le code, puis cliquez sur **Enregistrer** : c'est le relais qui vérifie le code et délivre le token de l'appareil.
+   L'indicateur passe à « Connecté » seulement quand le relais a authentifié le téléphone.
+5. Si le téléphone est déjà enregistré sur le relais (erreur « déjà enregistré »), son enregistrement doit être supprimé côté relais avant un nouvel appairage.
 
 ### Étape 3 : Démarrer une Session pour LinkedIn
 1. Dans l'écran **Contrôle par Hermes**, cliquez sur **Démarrer une session de contrôle**.

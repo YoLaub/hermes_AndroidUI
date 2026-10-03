@@ -34,7 +34,8 @@ class MobileControlViewModel(
     private val context: Context,
     private val manager: MobileControlManager,
     private val repository: HermesRepository,
-    private val preferences: HermesPreferences
+    private val preferences: HermesPreferences,
+    private val pairingClient: PairingClient = PairingClient(OkHttpPairingTransport())
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -197,19 +198,28 @@ class MobileControlViewModel(
         if (code.isBlank()) return
 
         viewModelScope.launch {
-            val token = "tok_" + UUID.randomUUID().toString()
-            preferences.setMobileDeviceToken(token)
-            _uiState.update {
-                it.copy(
-                    isPaired = true,
-                    successMessage = "Appareil appairé avec succès."
-                )
-            }
-            manager.wsClient.connect(
+            // The relay verifies the one-time code and issues the device token; only then is
+            // anything stored. (A locally invented token is unknown to the relay: auth_error.)
+            val result = pairingClient.pair(
                 relayUrl = _uiState.value.relayUrl,
+                code = code,
                 deviceId = _uiState.value.deviceId,
-                deviceToken = token
+                deviceName = android.os.Build.MODEL ?: "Android Phone",
+                currentDeviceToken = preferences.mobileDeviceToken.firstOrNull()
             )
+            when (result) {
+                is PairingResult.Success -> {
+                    // Storing the token makes the collector above open the authenticated socket.
+                    preferences.setMobileDeviceToken(result.deviceToken)
+                    _uiState.update {
+                        it.copy(isPaired = true, error = null, successMessage = "Appareil appairé avec le relais.")
+                    }
+                }
+                is PairingResult.Failure -> {
+                    android.util.Log.w("MobileControlPairing", "event=pairing_failed reason=${result.reason}")
+                    _uiState.update { it.copy(successMessage = null, error = result.message) }
+                }
+            }
         }
     }
 
