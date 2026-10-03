@@ -173,7 +173,20 @@ class DeviceConnectionManager:
         self.pending_commands[cmd.command_id] = (future, device_id, expires_at)
 
         try:
-            await ws.send_text(cmd.model_dump_json())
+            try:
+                await ws.send_text(cmd.model_dump_json())
+            except Exception as exc:
+                # The socket looked alive but is not: drop it and its session, and say so
+                # instead of failing the whole MCP request.
+                log_event("device_send_failed", logging.WARNING, device_id=device_id,
+                          command_id=cmd.command_id, error=type(exc).__name__)
+                self.unregister_connection(device_id, ws)
+                return MobileCommandResult(
+                    command_id=cmd.command_id,
+                    status="rejected",
+                    error_code="DEVICE_OFFLINE",
+                    message="Le téléphone n'est plus joignable (connexion fermée). La session du relais a été supprimée : redémarrez-la depuis l'app.",
+                )
             result = await asyncio.wait_for(future, timeout=timeout)
             return result
         except asyncio.TimeoutError:
@@ -600,6 +613,9 @@ MCP_TOOLS = [
 
 INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "back"}
 
+# Phone-side answers meaning "the relay thinks a session exists, the phone disagrees".
+PHONE_SESSION_DESYNC_CODES = {"SESSION_NOT_ON_PHONE", "SESSION_ID_MISMATCH"}
+
 SUPPORTED_MCP_PROTOCOL_VERSIONS = ["2025-03-26", "2024-11-05"]
 DEFAULT_MCP_PROTOCOL_VERSION = "2025-03-26"
 
@@ -688,9 +704,10 @@ async def mcp_stream_endpoint(request: Request):
                       instance=INSTANCE_ID)
             if session:
                 remaining = int(session.expires_at - time.time())
+                connected = "oui" if session.device_id in manager.active_connections else "non"
                 return format_mcp_response(
                     req_id,
-                    f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
+                    f"Session active trouvée sur le téléphone.\nSession : {session.session_id}\nAppareil : {session.device_id} (connecté au relais : {connected})\nProfil : {session.allowed_profile}\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
                     protocol_version=negotiated_version
                 )
             else:
@@ -703,14 +720,19 @@ async def mcp_stream_endpoint(request: Request):
         # 2. All other tools require an active validated session for this authenticated profile
         session = manager.get_session_for_profile(authenticated_profile)
         if not session:
+            log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
+                      reason="SESSION_REQUIRED", sessions_known=len(manager.active_sessions),
+                      session_profiles=",".join(sorted({x.allowed_profile for x in manager.active_sessions.values()})))
             return format_mcp_error(
                 req_id,
-                f"SESSION_REQUIRED: Aucune session active pour le profil '{authenticated_profile}'. Demandez à l'utilisateur de lancer une session dans l'app Hermes.",
+                f"SESSION_REQUIRED: Le relais n'a aucune session active pour le profil '{authenticated_profile}'. Demandez à l'utilisateur de lancer une session dans l'app Hermes.",
                 protocol_version=negotiated_version
             )
 
         # Vérifier l'expiration côté relais
         if session.is_expired:
+            log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
+                      reason="SESSION_EXPIRED", session_id=session.session_id)
             manager.end_active_session(session.device_id, session.session_id)
             return format_mcp_error(
                 req_id,
@@ -734,6 +756,8 @@ async def mcp_stream_endpoint(request: Request):
 
         # Permissions: Refuser tout mode autre que l'exact mode 'interaction' pour les opérations interactives
         if op in INTERACTION_OPERATIONS and session.mode != "interaction":
+            log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
+                      reason="MODE_DENIED", session_id=session.session_id, mode=session.mode)
             return format_mcp_error(
                 req_id,
                 f"MODE_DENIED: Le mode actuel de la session est '{session.mode}'. Seul le mode 'interaction' autorise les actions interactives ({op}).",
@@ -755,7 +779,25 @@ async def mcp_stream_endpoint(request: Request):
             )
         )
 
+        log_event("mcp_tool_call", tool=tool_name, profile=authenticated_profile, session_id=session.session_id,
+                  device_id=session.device_id, mode=session.mode, command_id=cmd.command_id,
+                  device_connected=str(session.device_id in manager.active_connections).lower())
         result = await manager.send_command_to_device(session.device_id, cmd)
+        log_event("mcp_tool_result", tool=tool_name, session_id=session.session_id, device_id=session.device_id,
+                  command_id=cmd.command_id, status=result.status, error_code=result.error_code)
+
+        # The phone says it has no (or another) session: the relay's view is stale. Close it,
+        # so the two sides agree again instead of status saying "active" while the phone refuses.
+        if result.error_code in PHONE_SESSION_DESYNC_CODES:
+            manager.end_active_session(session.device_id, session.session_id)
+            log_event("session_desync", logging.WARNING, device_id=session.device_id,
+                      session_id=session.session_id, phone_code=result.error_code)
+            return format_mcp_error(
+                req_id,
+                f"{result.error_code}: {result.message or 'Session absente sur le téléphone.'} "
+                "La session côté relais a été fermée : le téléphone doit démarrer une nouvelle session.",
+                protocol_version=negotiated_version,
+            )
 
         if result.status == "success":
             if result.data and result.data.elements:
