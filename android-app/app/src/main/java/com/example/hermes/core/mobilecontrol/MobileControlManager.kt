@@ -293,32 +293,21 @@ class MobileControlManager(
             return reject(cmd, "DEVICE_LOCKED", "Le téléphone est actuellement verrouillé.")
         }
 
-        // 5. Active Session validation
+        // 5-7. Session, package and mode checks (pure, see CommandSessionGuard).
         val session = _activeSession.value
-        if (session == null) {
-            return reject(cmd, "SESSION_REQUIRED", "Aucune session de contrôle mobile n'est active sur le téléphone.")
+        Log.i(
+            TAG,
+            "event=command_received command_id=${cmd.commandId} operation=${cmd.operation} " +
+                "cmd_session=${cmd.sessionId} local_session=${session?.id ?: "-"} " +
+                "pending=${_pendingSession.value?.id ?: "-"} ws_authenticated=${wsClient.isAuthenticated.value}"
+        )
+        val rejection = CommandSessionGuard.validate(session, _pendingSession.value?.id, cmd, now)
+        if (rejection != null) {
+            Log.w(TAG, "event=command_rejected command_id=${cmd.commandId} code=${rejection.code}")
+            if (rejection.code == "SESSION_EXPIRED") stopSession("session_timeout")
+            return reject(cmd, rejection.code, rejection.message)
         }
-
-        if (session.id != cmd.sessionId) {
-            return reject(cmd, "SESSION_REQUIRED", "Identifiant de session invalide ou expiré.")
-        }
-
-        if (session.isExpired) {
-            stopSession("session_timeout")
-            return reject(cmd, "SESSION_EXPIRED", "La session a expiré.")
-        }
-
-        // 6. Target Package allowed?
-        if (cmd.targetPackage != session.targetPackage) {
-            return reject(cmd, "APP_NOT_ALLOWED", "Le package demandé (${cmd.targetPackage}) ne correspond pas à la session (${session.targetPackage}).")
-        }
-
-        // 7. Mode check (observation vs interaction)
-        if (session.mode == MobileControlMode.OBSERVATION) {
-            if (cmd.operation != "observe" && cmd.operation != "end_session") {
-                return reject(cmd, "MODE_DENIED", "La session est en mode observation seule. Clics et saisies refusés.")
-            }
-        }
+        session!!
 
         // 8. Foreground check (except for launch_app)
         val fgPackage = service.getForegroundPackage()

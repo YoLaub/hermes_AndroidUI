@@ -152,9 +152,15 @@ so the user must see and be able to stop it). The relay drops a device's session
 Both sides log `event=... key=value` lines with ids only, never tokens:
 relay: `device_authenticated`, `device_auth_failed`, `connection_closed` (code, reason),
 `session_start_received` (`profile_requested`), `session_registered` / `session_refused`,
-`session_ack_sent`, `status_lookup` (`profile` searched, `session_profiles` held, `match`).
+`session_ack_sent`, `status_lookup` (`profile` searched, `session_profiles` held, `match`),
+`mcp_tool_call` (profile, session, device, mode, `device_connected`), `mcp_tool_result` (status, `error_code`),
+`mcp_tool_refused` (reason), `session_desync` (phone code), `device_send_failed`.
 Android (logcat tag `MobileControlWS` / `MobileControlManager`): `ws_open`, `auth_ok`, `auth_error`,
-`session_start_sent`, `session_ack`, `session_error`, `session_state`, `ws_closed`.
+`session_start_sent`, `session_ack`, `session_error`, `session_state`, `ws_closed`,
+and in `MobileControlManager`: `command_received` (command session vs local session vs pending, `ws_authenticated`),
+`command_rejected` (code). Reading one `mobile_observe` across both logs: the relay's `mcp_tool_call` and the
+phone's `command_received` share the `command_id`; a `command_rejected code=SESSION_NOT_ON_PHONE` means the
+session is absent locally, a `mcp_tool_refused reason=SESSION_REQUIRED` means it is absent on the relay.
 `/health` and `mobile_control_status` both expose the relay `instance_id`: if they differ, the phone
 and the agent are talking to different relay instances.
 
@@ -165,7 +171,10 @@ and the agent are talking to different relay instances.
 | Code d'Erreur | Signification |
 |---|---|
 | `DEVICE_OFFLINE` | Le téléphone n'est pas connecté au relais WebSocket |
-| `SESSION_REQUIRED` | Aucune session n'a été démarrée par l'utilisateur |
+| `SESSION_REQUIRED` | **Le relais** n'a aucune session active pour le profil (le téléphone n'a pas été interrogé) |
+| `SESSION_NOT_ON_PHONE` | Le relais a une session, **le téléphone n'en a aucune** (le relais ferme alors la sienne) |
+| `SESSION_ID_MISMATCH` | Le téléphone a une **autre** session que celle du relais (le relais ferme la sienne) |
+| `SESSION_PENDING_ON_PHONE` | Le téléphone attend encore la confirmation du relais pour cette session : réessayer (le relais ne ferme rien) |
 | `SESSION_EXPIRED` | La durée maximale de la session (5/15/30 min) a expiré |
 | `PROFILE_DENIED` | Le profil demandeur (ex: Gaston) n'est pas celui autorisé (ex: Mario) |
 | `APP_NOT_ALLOWED` | Le package demandé n'a pas été autorisé sur le téléphone |
