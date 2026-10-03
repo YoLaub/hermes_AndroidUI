@@ -40,6 +40,24 @@ from models import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("mobile-relay")
 
+# Identifies this running relay. Exposed by /health and by mobile_control_status so
+# the phone and John can prove they talk to the same instance (state is in memory).
+INSTANCE_ID = uuid.uuid4().hex[:12]
+
+
+def log_event(event: str, level: int = logging.INFO, **fields: Any) -> None:
+    """One `event=... key=value` line, built from explicit fields only.
+
+    Never pass tokens: keys that look like credentials are dropped as a safety net.
+    """
+    parts = [f"event={event}"]
+    for key, value in fields.items():
+        if any(w in key.lower() for w in ("token", "secret", "password")):
+            continue
+        text = "-" if value is None or value == "" else "_".join(str(value).split())
+        parts.append(f"{key}={text[:96]}")
+    logger.log(level, " ".join(parts))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -84,7 +102,10 @@ class DeviceConnectionManager:
         self.device_in_flight: Dict[str, str] = {}
 
     def register_connection(self, device_id: str, websocket: WebSocket):
+        previous = self.active_connections.get(device_id)
         self.active_connections[device_id] = websocket
+        if previous is not None and previous is not websocket:
+            log_event("connection_superseded", device_id=device_id)
         logger.info(f"Device connected: {device_id}")
 
     def unregister_connection(self, device_id: str, websocket: Optional[WebSocket] = None):
@@ -256,7 +277,7 @@ def authenticate_hermes_profile(request: Request) -> str:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "hermes-mobile-relay", "connected_devices": len(manager.active_connections)}
+    return {"status": "ok", "service": "hermes-mobile-relay", "instance_id": INSTANCE_ID, "connected_devices": len(manager.active_connections)}
 
 @app.post("/api/pair/generate", response_model=PairingGenerateResponse)
 def generate_pairing_code(request: Request, req: PairingGenerateRequest):
@@ -330,6 +351,36 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
 
 # ── WebSocket Device Endpoint ────────────────────────────────────────────────
 
+def session_state_message(device_id: str) -> dict:
+    """The relay's own view of this device's session (the source of truth)."""
+    session = manager.active_sessions.get(device_id)
+    if session is not None and session.is_expired:
+        manager.active_sessions.pop(device_id, None)
+        session = None
+    msg: Dict[str, Any] = {"protocol": "mobile-control/1", "type": "session_state", "active": session is not None}
+    if session is not None:
+        msg.update({
+            "session_id": session.session_id,
+            "profile": session.allowed_profile,
+            "device_id": session.device_id,
+            "target_package": session.target_package,
+            "mode": session.mode,
+            "expires_in_seconds": max(0, int(session.expires_at - time.time())),
+        })
+    return msg
+
+
+async def refuse_session(websocket: WebSocket, device_id: Optional[str], session_id: str, code: str, message: str):
+    log_event("session_refused", logging.WARNING, device_id=device_id, session_id=session_id, reason=code)
+    await websocket.send_text(json.dumps({
+        "protocol": "mobile-control/1",
+        "type": "session_error",
+        "session_id": session_id,
+        "error_code": code,
+        "message": message,
+    }))
+
+
 @app.websocket("/ws/device")
 async def websocket_device_endpoint(
     websocket: WebSocket,
@@ -338,12 +389,15 @@ async def websocket_device_endpoint(
 ):
     await websocket.accept()
     authenticated_device_id = None
+    close_code: Any = None
+    close_reason = "unknown"
 
     try:
         # Initial authentication via headers if present
         if x_device_id and x_device_token and verify_device_token(x_device_id, x_device_token):
             authenticated_device_id = x_device_id
             manager.register_connection(authenticated_device_id, websocket)
+            log_event("device_authenticated", device_id=authenticated_device_id, via="header")
 
         while True:
             text = await websocket.receive_text()
@@ -360,26 +414,38 @@ async def websocket_device_endpoint(
                 if dev_id and token and verify_device_token(dev_id, token):
                     authenticated_device_id = dev_id
                     manager.register_connection(dev_id, websocket)
+                    log_event("device_authenticated", device_id=dev_id, via="message")
                     await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "auth_ok"}))
+                    # Reconnection sync: tell the phone what the relay actually holds.
+                    await websocket.send_text(json.dumps(session_state_message(dev_id)))
                 else:
-                    await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "auth_error", "message": "Identifiants invalides."}))
+                    log_event("device_auth_failed", logging.WARNING, device_id=dev_id,
+                              reason="UNKNOWN_DEVICE_OR_BAD_CREDENTIALS")
+                    await websocket.send_text(json.dumps({
+                        "protocol": "mobile-control/1", "type": "auth_error",
+                        "error_code": "DEVICE_AUTH_FAILED",
+                        "message": "Identifiants invalides.",
+                    }))
+                    close_reason = "auth_failed"
                     await websocket.close()
                     break
 
             elif msg_type == "session_start":
+                req_session_id = str(data.get("session_id", ""))[:64]
+                req_profile = str(data.get("allowed_profile", "")).strip().lower()
+                log_event("session_start_received", device_id=authenticated_device_id,
+                          session_id=req_session_id, profile_requested=req_profile,
+                          target=data.get("target_package"), mode=data.get("mode"))
+
                 if not authenticated_device_id:
+                    await refuse_session(websocket, None, req_session_id, "DEVICE_NOT_AUTHENTICATED",
+                                         "Appareil non authentifié : appairez à nouveau le téléphone.")
                     continue
 
-                req_profile = str(data.get("allowed_profile", "")).strip().lower()
                 # Server-side restriction: Reject any session whose allowed_profile is not 'john'
                 if req_profile != "john":
-                    logger.warning(f"Rejected session_start from device {authenticated_device_id}: unauthorized profile '{req_profile}'. Only 'john' is permitted.")
-                    await websocket.send_text(json.dumps({
-                        "protocol": "mobile-control/1",
-                        "type": "session_error",
-                        "error_code": "PROFILE_NOT_ALLOWED",
-                        "message": f"Seul le profil 'john' est autorisé pour le contrôle mobile (reçu: '{req_profile}')."
-                    }))
+                    await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED",
+                                         f"Seul le profil 'john' est autorisé pour le contrôle mobile (reçu: '{req_profile}').")
                     continue
 
                 # Durée maximale bornée côté relais (max 1800s / 30 min)
@@ -399,17 +465,27 @@ async def websocket_device_endpoint(
                         expires_at=time.time() + bounded_duration
                     )
                 except ValueError as ve:
-                    await websocket.send_text(json.dumps({
-                        "protocol": "mobile-control/1",
-                        "type": "session_error",
-                        "error_code": "PROFILE_NOT_ALLOWED",
-                        "message": str(ve)
-                    }))
+                    await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED", str(ve))
                     continue
 
-                manager.set_active_session(session)
+                if not manager.set_active_session(session):
+                    await refuse_session(websocket, authenticated_device_id, session.session_id,
+                                         "SESSION_REJECTED", "Le relais a refusé d'enregistrer la session.")
+                    continue
+
+                log_event("session_registered", device_id=session.device_id, session_id=session.session_id,
+                          profile=session.allowed_profile, target=session.target_package,
+                          mode=session.mode, expires_in=bounded_duration)
                 log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s")
-                await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "session_started_ack", "session_id": session.session_id}))
+                await websocket.send_text(json.dumps({
+                    "protocol": "mobile-control/1",
+                    "type": "session_started_ack",
+                    "session_id": session.session_id,
+                    "profile": session.allowed_profile,
+                    "device_id": session.device_id,
+                    "expires_in_seconds": bounded_duration,
+                }))
+                log_event("session_ack_sent", device_id=session.device_id, session_id=session.session_id)
 
             elif msg_type == "session_end":
                 if not authenticated_device_id:
@@ -429,13 +505,18 @@ async def websocket_device_endpoint(
             elif msg_type == "ping":
                 await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "pong"}))
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect as wd:
+        close_code, close_reason = wd.code, (wd.reason or "client_disconnected")
         if authenticated_device_id:
             manager.unregister_connection(authenticated_device_id, websocket)
     except Exception as e:
-        logger.error(f"WebSocket exception for device {authenticated_device_id}: {e}")
+        # Log the exception type only: its message could echo request content.
+        close_reason = f"error:{type(e).__name__}"
+        logger.error(f"WebSocket exception for device {authenticated_device_id}: {type(e).__name__}")
         if authenticated_device_id:
             manager.unregister_connection(authenticated_device_id, websocket)
+    finally:
+        log_event("connection_closed", device_id=authenticated_device_id, code=close_code, reason=close_reason)
 
 # ── MCP Streamable HTTP Endpoint for Hermes Profiles ─────────────────────────
 
@@ -599,18 +680,23 @@ async def mcp_stream_endpoint(request: Request):
 
         # 1. mobile_control_status
         if tool_name == "mobile_control_status":
+            known_profiles = sorted({sess.allowed_profile for sess in manager.active_sessions.values()})
+            sessions_known = len(manager.active_sessions)
             session = manager.get_session_for_profile(authenticated_profile)
+            log_event("status_lookup", profile=authenticated_profile, sessions_known=sessions_known,
+                      session_profiles=",".join(known_profiles), match=str(session is not None).lower(),
+                      instance=INSTANCE_ID)
             if session:
                 remaining = int(session.expires_at - time.time())
                 return format_mcp_response(
                     req_id,
-                    f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s",
+                    f"Session active trouvée sur le téléphone.\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
                     protocol_version=negotiated_version
                 )
             else:
                 return format_mcp_response(
                     req_id,
-                    f"Aucune session de contrôle mobile n'est actuellement active pour le profil '{authenticated_profile}'. L'utilisateur doit démarrer une session sur son application Hermes Android.",
+                    f"Aucune session de contrôle mobile n'est actuellement active pour le profil '{authenticated_profile}'. L'utilisateur doit démarrer une session sur son application Hermes Android. (Relais : {INSTANCE_ID})",
                     protocol_version=negotiated_version
                 )
 
