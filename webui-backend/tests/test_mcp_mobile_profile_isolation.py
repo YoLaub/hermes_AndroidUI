@@ -944,12 +944,11 @@ class InMemoryToolRegistry:
         self._schemas = {}
         self._toolsets = {}
 
-    def register(self, name, func, schema=None, toolset=None):
-        self._tools[name] = func
-        if schema is not None:
-            self._schemas[name] = schema
-        if toolset is not None:
-            self._toolsets[name] = toolset
+    def register(self, name, toolset, schema, handler, **_):
+        # Same signature as the real hermes-agent tools.registry.ToolRegistry.register
+        self._tools[name] = handler
+        self._schemas[name] = schema
+        self._toolsets[name] = toolset
 
     def get(self, name):
         return self._tools.get(name)

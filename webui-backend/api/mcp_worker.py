@@ -13,17 +13,15 @@ Guarantees:
 """
 
 import argparse
+import asyncio
+import concurrent.futures
 import json
 import logging
 import os
 import re
-import subprocess
 import sys
 import threading
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -112,26 +110,85 @@ def _filter_and_format_tools(
     return out
 
 
-def _extract_content_text(result: Any) -> Any:
-    """Extract plain text from MCP tool result structure."""
-    if isinstance(result, dict) and "content" in result:
-        content = result["content"]
-        if isinstance(content, list):
-            parts = []
-            for item in content:
-                if isinstance(item, dict):
-                    if item.get("type") == "text":
-                        parts.append(str(item.get("text", "")))
-                    else:
-                        parts.append(json.dumps(item))
-                else:
-                    parts.append(str(item))
-            return "\n".join(parts)
-    return result
+def _result_to_text(result: Any) -> str:
+    """Flatten an SDK CallToolResult into text; tool-level errors raise."""
+    parts: List[str] = []
+    for item in getattr(result, "content", None) or []:
+        if getattr(item, "type", None) == "text":
+            parts.append(str(item.text))
+        else:
+            parts.append(item.model_dump_json(exclude_none=True))
+    text = "\n".join(parts)
+    if not text:
+        structured = getattr(result, "structuredContent", None)
+        if structured is not None:
+            text = json.dumps(structured)
+    if getattr(result, "isError", False):
+        raise RuntimeError(f"MCP tool call error: {text or 'tool reported an error'}")
+    return text
+
+
+def _exc_message(exc: BaseException) -> str:
+    """Return the innermost message of an (anyio) exception group."""
+    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
+        exc = exc.exceptions[0]
+    return str(exc) or type(exc).__name__
+
+
+class _AsyncRunner:
+    """One asyncio loop on a daemon thread.
+
+    The MCP SDK is async while the IPC loop below is a plain blocking
+    stdin reader, so every SDK coroutine is submitted to this loop.
+    """
+
+    def __init__(self) -> None:
+        self.loop = asyncio.new_event_loop()
+        threading.Thread(target=self._run, name="mcp-sdk-loop", daemon=True).start()
+
+    def _run(self) -> None:
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
+    def run(self, coro: Any, timeout: Optional[float] = None) -> Any:
+        fut = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        try:
+            return fut.result(timeout)
+        except concurrent.futures.TimeoutError:
+            fut.cancel()
+            raise TimeoutError(f"MCP operation timed out after {timeout}s") from None
+
+
+_RUNNER: Optional[_AsyncRunner] = None
+_RUNNER_LOCK = threading.Lock()
+
+
+def _get_runner() -> _AsyncRunner:
+    global _RUNNER
+    with _RUNNER_LOCK:
+        if _RUNNER is None:
+            _RUNNER = _AsyncRunner()
+        return _RUNNER
+
+
+def _create_http_client(headers: Dict[str, str]) -> Any:
+    """httpx client carrying the configured headers (mcp 1.x and 2.x)."""
+    try:
+        from mcp.shared._httpx_utils import create_mcp_http_client
+    except ImportError:
+        from mcp.client.streamable_http import create_mcp_http_client
+    return create_mcp_http_client(headers=headers or None)
 
 
 class BaseMCPServerConnection:
-    """Base class for persistent MCP server connections."""
+    """Persistent MCP server connection backed by the official MCP SDK.
+
+    A dedicated task owns the transport and the ClientSession for the whole
+    lifetime of the connection (anyio scopes must be exited by the task that
+    entered them); calls are issued on that same live session.
+    """
+
+    transport = ""
 
     def __init__(self, name: str, cfg: dict):
         self.name = name
@@ -143,347 +200,210 @@ class BaseMCPServerConnection:
         self.exclude_tools = cfg.get("exclude_tools")
         self.connected = False
         self.tools: List[dict] = []
+        self._session: Any = None
+        self._task: Optional["asyncio.Task"] = None
+        self._stop: Optional[asyncio.Event] = None
+
+    # -- transport hook ---------------------------------------------------
+    def _has_target(self) -> bool:
+        raise NotImplementedError
+
+    async def _open_transport(self, stack: AsyncExitStack) -> Any:
+        """Enter the SDK transport on `stack` and return its (read, write)."""
+        raise NotImplementedError
+
+    # -- lifecycle --------------------------------------------------------
+    async def _list_all_tools(self, session: Any) -> List[dict]:
+        from mcp import types
+
+        raw: List[dict] = []
+        result = await session.list_tools()
+        while True:
+            raw.extend(t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in result.tools)
+            cursor = getattr(result, "nextCursor", None)
+            if not cursor:
+                return raw
+            result = await session.list_tools(params=types.PaginatedRequestParams(cursor=cursor))
+
+    async def _lifecycle(self, ready: "asyncio.Future") -> None:
+        from mcp import ClientSession
+
+        try:
+            async with AsyncExitStack() as stack:
+                streams = await self._open_transport(stack)
+                session = await stack.enter_async_context(ClientSession(streams[0], streams[1]))
+                await session.initialize()
+                raw_tools = await self._list_all_tools(session)
+                self.tools = _filter_and_format_tools(
+                    self.name, raw_tools, self.include_tools, self.exclude_tools
+                )
+                self._session = session
+                self.connected = True
+                if not ready.done():
+                    ready.set_result(None)
+                await self._stop.wait()
+        except BaseException as exc:  # noqa: BLE001 - reported to the waiting caller
+            if not ready.done():
+                ready.set_exception(ConnectionError(_exc_message(exc)))
+            elif not isinstance(exc, asyncio.CancelledError):
+                logger.warning("MCP server '%s' connection ended: %s", self.name, _exc_message(exc))
+        finally:
+            self.connected = False
+            self._session = None
+
+    async def _start(self) -> None:
+        loop = asyncio.get_running_loop()
+        ready: asyncio.Future = loop.create_future()
+        self._stop = asyncio.Event()
+        self._task = loop.create_task(self._lifecycle(ready))
+        try:
+            await asyncio.wait_for(asyncio.shield(ready), self.connect_timeout)
+        except asyncio.TimeoutError:
+            await self._stop_async()
+            raise ConnectionError(f"Timed out after {self.connect_timeout}s connecting to '{self.name}'") from None
+        except BaseException:
+            await self._stop_async()
+            raise
+
+    async def _stop_async(self) -> None:
+        task, stop = self._task, self._stop
+        self._task = None
+        if stop is not None:
+            stop.set()
+        if task is not None:
+            try:
+                await asyncio.wait_for(task, 3)
+            except BaseException:  # noqa: BLE001 - best effort teardown
+                task.cancel()
+        self.connected = False
+        self._session = None
 
     def connect(self) -> None:
-        raise NotImplementedError
-
-    def call_tool(self, tool_name: str, arguments: dict) -> Any:
-        raise NotImplementedError
+        self.disconnect()
+        if not self.enabled or not self._has_target():
+            self.tools = []
+            return
+        try:
+            _get_runner().run(self._start(), timeout=self.connect_timeout + 5)
+        except ImportError as exc:
+            raise ConnectionError(f"MCP SDK is not installed in the worker interpreter: {exc}") from exc
 
     def disconnect(self) -> None:
+        if self._task is not None:
+            try:
+                _get_runner().run(self._stop_async(), timeout=6)
+            except Exception:
+                pass
         self.connected = False
         self.tools = []
 
+    # -- calls ------------------------------------------------------------
+    def _find_tool(self, tool_name: str) -> dict:
+        """Exact match on this server's discovered (post-filter) tools only."""
+        for t in self.tools:
+            if tool_name in (t.get("original_name"), t.get("name")):
+                return t
+        raise PermissionError(
+            f"MCP tool '{tool_name}' is not available on server '{self.name}'"
+        )
+
+    async def _call(self, tool: str, arguments: dict) -> Any:
+        session = self._session
+        if session is None:
+            raise ConnectionError(f"MCP server '{self.name}' is not connected")
+        try:
+            return await asyncio.wait_for(session.call_tool(tool, arguments or {}), self.timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(
+                f"MCP tool '{tool}' on server '{self.name}' timed out after {self.timeout}s"
+            ) from None
+
+    def call_tool(self, tool_name: str, arguments: dict) -> Any:
+        if not self.connected:
+            self.connect()
+        original = self._find_tool(tool_name).get("original_name") or tool_name
+        try:
+            result = _get_runner().run(self._call(original, arguments), timeout=self.timeout + 5)
+        except TimeoutError:
+            raise
+        except (ConnectionError, OSError) as exc:
+            # Transport is gone: drop it so the next call reconnects. Never replay blindly.
+            self.disconnect()
+            raise ConnectionError(f"MCP server '{self.name}' connection lost: {exc}") from exc
+        return _result_to_text(result)
+
     def get_status(self) -> dict:
-        raise NotImplementedError
+        status = {
+            "name": self.name,
+            "transport": self.transport,
+            "enabled": self.enabled,
+            "active": self.connected,
+            "status": "active" if self.connected else ("disabled" if not self.enabled else "configured"),
+            "tool_count": len(self.tools) if self.connected else 0,
+            "timeout": self.timeout,
+            "connect_timeout": self.connect_timeout,
+        }
+        status.update(self._status_extra())
+        return status
+
+    def _status_extra(self) -> dict:
+        return {}
 
 
 class HTTPMCPServerConnection(BaseMCPServerConnection):
-    """Persistent connection client for an HTTP/Streamable MCP server."""
+    """Streamable-HTTP server: the SDK keeps the MCP session id across calls."""
+
+    transport = "http"
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         self.url = str(cfg.get("url", "")).strip()
-        self.headers = dict(cfg.get("headers", {}) or {})
-        self._req_id = 0
+        self.headers = {str(k): str(v) for k, v in (cfg.get("headers") or {}).items()}
 
-    def _post_json(self, payload: dict, timeout: Optional[int] = None) -> dict:
-        """Send JSON-RPC payload to HTTP MCP endpoint."""
-        body_bytes = json.dumps(payload).encode("utf-8")
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            **self.headers,
-        }
-        req = urllib.request.Request(self.url, data=body_bytes, headers=headers, method="POST")
-        effective_timeout = timeout or self.timeout
-        try:
-            with urllib.request.urlopen(req, timeout=effective_timeout) as resp:
-                resp_bytes = resp.read()
-                if not resp_bytes:
-                    return {}
-                resp_str = resp_bytes.decode("utf-8")
-                # Handle possible SSE framing
-                for line in resp_str.splitlines():
-                    line = line.strip()
-                    if line.startswith("data:"):
-                        line = line[len("data:"):].strip()
-                    if line.startswith("{") and line.endswith("}"):
-                        try:
-                            return json.loads(line)
-                        except Exception:
-                            continue
-                return json.loads(resp_str)
-        except urllib.error.HTTPError as he:
-            err_body = he.read().decode("utf-8", errors="replace")
-            raise ConnectionError(f"HTTP {he.code}: {err_body}") from he
-        except Exception as e:
-            raise ConnectionError(str(e)) from e
+    def _has_target(self) -> bool:
+        return bool(self.url)
 
-    def connect(self) -> None:
-        """Perform MCP initialize handshake and tools/list."""
-        if not self.enabled or not self.url:
-            self.connected = False
-            self.tools = []
-            return
+    async def _open_transport(self, stack: AsyncExitStack) -> Any:
+        from mcp.client.streamable_http import streamable_http_client
 
-        self._req_id += 1
-        init_payload = {
-            "jsonrpc": "2.0",
-            "id": self._req_id,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "hermes-worker", "version": "1.0"},
-            },
-        }
-        init_resp = self._post_json(init_payload, timeout=self.connect_timeout)
-        if "error" in init_resp:
-            err = init_resp["error"]
-            err_msg = err.get("message") if isinstance(err, dict) else str(err)
-            raise ConnectionError(f"Initialize error: {err_msg}")
+        http_client = await stack.enter_async_context(_create_http_client(self.headers))
+        return await stack.enter_async_context(streamable_http_client(self.url, http_client=http_client))
 
-        # Post-initialization notification
-        try:
-            self._post_json({
-                "jsonrpc": "2.0",
-                "method": "notifications/initialized",
-                "params": {},
-            }, timeout=self.connect_timeout)
-        except Exception:
-            pass
-
-        # Discover tools
-        self._req_id += 1
-        tools_payload = {
-            "jsonrpc": "2.0",
-            "id": self._req_id,
-            "method": "tools/list",
-            "params": {},
-        }
-        tools_resp = self._post_json(tools_payload, timeout=self.connect_timeout)
-        if "error" in tools_resp:
-            err = tools_resp["error"]
-            err_msg = err.get("message") if isinstance(err, dict) else str(err)
-            raise ConnectionError(f"tools/list error: {err_msg}")
-
-        raw_tools = []
-        if isinstance(tools_resp.get("result"), dict):
-            raw_tools = tools_resp["result"].get("tools", [])
-        elif isinstance(tools_resp.get("tools"), list):
-            raw_tools = tools_resp["tools"]
-
-        self.tools = _filter_and_format_tools(
-            self.name,
-            raw_tools if isinstance(raw_tools, list) else [],
-            self.include_tools,
-            self.exclude_tools,
-        )
-        self.connected = True
-
-    def call_tool(self, tool_name: str, arguments: dict) -> Any:
-        """Call an MCP tool on this active server connection."""
-        if not self.connected:
-            self.connect()
-
-        self._req_id += 1
-        payload = {
-            "jsonrpc": "2.0",
-            "id": self._req_id,
-            "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments or {},
-            },
-        }
-        resp = self._post_json(payload, timeout=self.timeout)
-        if "error" in resp:
-            err = resp["error"]
-            msg = err.get("message") if isinstance(err, dict) else str(err)
-            raise RuntimeError(f"MCP tool call error: {msg}")
-
-        result = resp.get("result")
-        return _extract_content_text(result)
-
-    def get_status(self) -> dict:
-        return {
-            "name": self.name,
-            "transport": "http",
-            "url": self.url,
-            "enabled": self.enabled,
-            "active": self.connected,
-            "status": "active" if self.connected else ("disabled" if not self.enabled else "configured"),
-            "tool_count": len(self.tools) if self.connected else 0,
-            "timeout": self.timeout,
-            "connect_timeout": self.connect_timeout,
-        }
+    def _status_extra(self) -> dict:
+        return {"url": self.url}
 
 
 class StdioMCPServerConnection(BaseMCPServerConnection):
-    """Persistent connection client for an stdio subprocess MCP server."""
+    """Stdio subprocess server, spawned and framed by the SDK."""
+
+    transport = "stdio"
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         self.command = str(cfg.get("command", "")).strip()
-        self.args = list(cfg.get("args") or [])
-        self.env = dict(cfg.get("env") or {})
+        self.args = [str(a) for a in (cfg.get("args") or [])]
+        self.env = {str(k): str(v) for k, v in (cfg.get("env") or {}).items()}
         self.cwd = cfg.get("cwd")
-        self.proc: Optional[subprocess.Popen] = None
-        self._lock = threading.RLock()
-        self._req_id = 0
 
-    def _send_rpc(self, payload: dict, timeout: Optional[float] = None) -> dict:
-        """Send JSON-RPC request to subprocess stdin and read response from stdout."""
-        with self._lock:
-            if not self.proc or self.proc.poll() is not None:
-                raise ConnectionError(f"Subprocess for server '{self.name}' is not running")
+    def _has_target(self) -> bool:
+        return bool(self.command)
 
-            line = json.dumps(payload) + "\n"
-            try:
-                self.proc.stdin.write(line)
-                self.proc.stdin.flush()
-            except Exception as e:
-                raise ConnectionError(f"Failed to write to stdio server '{self.name}': {e}") from e
+    async def _open_transport(self, stack: AsyncExitStack) -> Any:
+        from mcp import StdioServerParameters
+        from mcp.client.stdio import stdio_client
 
-            # Read response with timeout
-            effective_timeout = timeout or self.timeout
-            start_t = time.time()
-            expected_id = payload.get("id")
+        # No env configured -> the SDK passes only its safe default variables,
+        # so this profile's other secrets do not leak into the child.
+        params = StdioServerParameters(
+            command=self.command,
+            args=self.args,
+            env=self.env or None,
+            cwd=str(self.cwd) if self.cwd else None,
+        )
+        return await stack.enter_async_context(stdio_client(params))
 
-            while time.time() - start_t < effective_timeout:
-                if self.proc.poll() is not None:
-                    raise ConnectionError(f"Subprocess for server '{self.name}' exited prematurely")
-                
-                resp_line = self.proc.stdout.readline()
-                if not resp_line:
-                    time.sleep(0.05)
-                    continue
-                resp_line = resp_line.strip()
-                if not resp_line:
-                    continue
-                try:
-                    data = json.loads(resp_line)
-                    if expected_id is None or data.get("id") == expected_id:
-                        return data
-                except Exception:
-                    continue
-
-            raise TimeoutError(f"Timed out waiting for response from stdio server '{self.name}'")
-
-    def connect(self) -> None:
-        if not self.enabled or not self.command:
-            self.connected = False
-            self.tools = []
-            return
-
-        with self._lock:
-            self.disconnect()
-
-            cmd = [self.command] + [str(a) for a in self.args]
-            sub_env = dict(os.environ)
-            if self.env:
-                sub_env.update({k: str(v) for k, v in self.env.items()})
-
-            try:
-                self.proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                    cwd=str(self.cwd) if self.cwd else None,
-                    env=sub_env,
-                )
-            except Exception as e:
-                raise ConnectionError(f"Failed to spawn stdio server '{self.name}': {e}") from e
-
-            self._req_id += 1
-            init_payload = {
-                "jsonrpc": "2.0",
-                "id": self._req_id,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "hermes-worker", "version": "1.0"},
-                },
-            }
-            init_resp = self._send_rpc(init_payload, timeout=self.connect_timeout)
-            if "error" in init_resp:
-                err = init_resp["error"]
-                err_msg = err.get("message") if isinstance(err, dict) else str(err)
-                raise ConnectionError(f"Initialize error: {err_msg}")
-
-            # Send initialized notification
-            try:
-                line = json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}) + "\n"
-                self.proc.stdin.write(line)
-                self.proc.stdin.flush()
-            except Exception:
-                pass
-
-            # List tools
-            self._req_id += 1
-            tools_payload = {
-                "jsonrpc": "2.0",
-                "id": self._req_id,
-                "method": "tools/list",
-                "params": {},
-            }
-            tools_resp = self._send_rpc(tools_payload, timeout=self.connect_timeout)
-            if "error" in tools_resp:
-                err = tools_resp["error"]
-                err_msg = err.get("message") if isinstance(err, dict) else str(err)
-                raise ConnectionError(f"tools/list error: {err_msg}")
-
-            raw_tools = []
-            if isinstance(tools_resp.get("result"), dict):
-                raw_tools = tools_resp["result"].get("tools", [])
-            elif isinstance(tools_resp.get("tools"), list):
-                raw_tools = tools_resp["tools"]
-
-            self.tools = _filter_and_format_tools(
-                self.name,
-                raw_tools if isinstance(raw_tools, list) else [],
-                self.include_tools,
-                self.exclude_tools,
-            )
-            self.connected = True
-
-    def call_tool(self, tool_name: str, arguments: dict) -> Any:
-        if not self.connected:
-            self.connect()
-
-        with self._lock:
-            self._req_id += 1
-            payload = {
-                "jsonrpc": "2.0",
-                "id": self._req_id,
-                "method": "tools/call",
-                "params": {
-                    "name": tool_name,
-                    "arguments": arguments or {},
-                },
-            }
-            resp = self._send_rpc(payload, timeout=self.timeout)
-            if "error" in resp:
-                err = resp["error"]
-                msg = err.get("message") if isinstance(err, dict) else str(err)
-                raise RuntimeError(f"MCP tool call error: {msg}")
-
-            result = resp.get("result")
-            return _extract_content_text(result)
-
-    def disconnect(self) -> None:
-        with self._lock:
-            if self.proc:
-                try:
-                    self.proc.terminate()
-                    self.proc.wait(timeout=1.0)
-                except Exception:
-                    try:
-                        self.proc.kill()
-                    except Exception:
-                        pass
-                self.proc = None
-            self.connected = False
-            self.tools = []
-
-    def get_status(self) -> dict:
-        return {
-            "name": self.name,
-            "transport": "stdio",
-            "command": self.command,
-            "args": self.args,
-            "enabled": self.enabled,
-            "active": self.connected,
-            "status": "active" if self.connected else ("disabled" if not self.enabled else "configured"),
-            "tool_count": len(self.tools) if self.connected else 0,
-            "timeout": self.timeout,
-            "connect_timeout": self.connect_timeout,
-        }
+    def _status_extra(self) -> dict:
+        return {"command": self.command, "args": self.args}
 
 
 class ProfileWorkerEngine:
@@ -560,32 +480,11 @@ class ProfileWorkerEngine:
         }
 
     def call_tool(self, server_name: str, tool_name: str, arguments: dict) -> Any:
-        """Execute a tool call against the server."""
+        """Execute a tool call on the exact (server, tool) pair, never by tool name alone."""
         conn = self.servers.get(server_name)
-        if not conn and server_name.startswith("mcp-"):
-            conn = self.servers.get(server_name[len("mcp-"):])
-        if not conn:
-            # Search by tool name match if server_name is empty or ambiguous
-            for s_name, s_conn in self.servers.items():
-                for t in s_conn.tools:
-                    if t.get("name") == tool_name or t.get("original_name") == tool_name:
-                        conn = s_conn
-                        server_name = s_name
-                        break
-                if conn:
-                    break
-
-        if not conn:
+        if conn is None:
             raise KeyError(f"MCP server '{server_name}' not found for profile '{self.profile_name}'")
-
-        # Strip prefixes to send original tool name to the server
-        clean_server = re.sub(r"[^a-zA-Z0-9_]", "_", server_name.removeprefix("mcp-").removeprefix("mcp_"))
-        target_tool = tool_name
-        prefix = f"mcp_{clean_server}_"
-        if target_tool.startswith(prefix):
-            target_tool = target_tool[len(prefix):]
-
-        return conn.call_tool(target_tool, arguments)
+        return conn.call_tool(tool_name, arguments)
 
     def get_status(self) -> dict:
         return {

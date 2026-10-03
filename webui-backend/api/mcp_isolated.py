@@ -313,21 +313,34 @@ class ProfileMCPManager:
             if not tool_name:
                 continue
 
-            schema = t.get("schema") or t.get("inputSchema") or {}
+            input_schema = t.get("schema") or t.get("inputSchema") or {}
+            if not isinstance(input_schema, dict) or input_schema.get("type") != "object":
+                input_schema = {"type": "object", "properties": {}}
+            schema = {
+                "name": tool_name,
+                "description": t.get("description") or f"MCP tool {orig_name} from {server_name}",
+                "parameters": input_schema,
+            }
             toolset_name = f"mcp-{server_name}" if not server_name.startswith("mcp-") else server_name
 
             # Dynamic profile dispatcher: does NOT bind a hardcoded profile in closure!
             def make_dynamic_dispatcher(s_name: str, o_name: str, full_name: str):
-                def dynamic_profile_tool_caller(**kwargs):
+                def dynamic_profile_tool_caller(args=None, **kwargs):
+                    # The registry calls handler(args_dict, **agent_kwargs); keyword
+                    # arguments are then agent context (task_id...), never tool params.
+                    # Without an args dict, keywords are the tool params (direct call).
+                    params = dict(args) if isinstance(args, dict) else dict(kwargs)
                     from api.profiles import get_active_profile_name
                     active_p = str(get_active_profile_name() or "default")
                     mgr = ProfileMCPManager.get_instance()
 
-                    # Verify active_p has access to this tool
+                    # The active profile must own this exact (server, tool) pair.
+                    # A same-named tool on another server must never authorize it.
                     inv = get_profile_discovered_inventory(active_p)
                     profile_tools = inv.get("tools", [])
                     has_access = any(
-                        pt.get("name") == full_name or pt.get("original_name") == o_name
+                        pt.get("server") == s_name
+                        and (pt.get("original_name") or pt.get("name")) == o_name
                         for pt in profile_tools
                     )
                     if not has_access:
@@ -335,7 +348,7 @@ class ProfileMCPManager:
                             f"MCP tool '{full_name}' from server '{s_name}' is not configured or available for active profile '{active_p}'"
                         )
 
-                    return mgr.call_tool(active_p, s_name, o_name, kwargs)
+                    return mgr.call_tool(active_p, s_name, o_name, params)
 
                 dynamic_profile_tool_caller.__name__ = full_name
                 dynamic_profile_tool_caller.__doc__ = f"Profile-isolated dynamic MCP tool dispatcher for {full_name}"
@@ -344,14 +357,17 @@ class ProfileMCPManager:
             dispatcher = make_dynamic_dispatcher(server_name, orig_name, tool_name)
 
             try:
-                registry.register(tool_name, dispatcher, schema=schema, toolset=toolset_name)
-            except Exception:
-                if hasattr(registry, "_tools") and isinstance(registry._tools, dict):
-                    registry._tools[tool_name] = dispatcher
-                if hasattr(registry, "_schemas") and isinstance(registry._schemas, dict):
-                    registry._schemas[tool_name] = schema
-                if hasattr(registry, "_toolsets") and isinstance(registry._toolsets, dict):
-                    registry._toolsets[tool_name] = toolset_name
+                registry.register(
+                    name=tool_name,
+                    toolset=toolset_name,
+                    schema=schema,
+                    handler=dispatcher,
+                    description=schema["description"],
+                )
+            except Exception as exc:
+                # Never write into the registry's private state: a raw function
+                # where an entry is expected breaks every later agent creation.
+                logger.error("Failed to register MCP tool '%s' for profile '%s': %s", tool_name, profile_name, exc)
 
     def call_tool(self, profile_name: str, server_name: str, tool_name: str, arguments: dict) -> Any:
         """Call a tool via the live persistent worker."""
@@ -372,7 +388,10 @@ class ProfileMCPManager:
 
         resp = worker.send_command("call_tool", server=server_name, tool=tool_name, arguments=arguments)
         if not resp.get("ok"):
-            raise RuntimeError(resp.get("error", "Tool execution failed"))
+            msg = resp.get("error", "Tool execution failed")
+            if resp.get("error_type") == "PermissionError":
+                raise PermissionError(msg)
+            raise RuntimeError(msg)
         return resp.get("result")
 
     def get_status_for_profile(self, profile_name: str) -> dict:
