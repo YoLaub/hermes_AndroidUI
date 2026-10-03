@@ -20,6 +20,8 @@ data class MobileControlUiState(
     val deviceId: String = "",
     val isPaired: Boolean = false,
     val activeSession: MobileControlSession? = null,
+    /** Start requested, relay has not confirmed yet (never displayed as active). */
+    val pendingSession: MobileControlSession? = null,
     val allowedApps: List<AllowedApp> = emptyList(),
     val auditLogs: List<AuditLogEntry> = emptyList(),
     val availableProfiles: List<String> = emptyList(),
@@ -51,10 +53,32 @@ class MobileControlViewModel(
             }
         }
 
-        // Collect WS connection state
+        // "Connected" means authenticated by the relay, not merely a socket that is open.
         viewModelScope.launch {
-            manager.wsClient.isConnected.collect { connected ->
-                _uiState.update { it.copy(isRelayConnected = connected) }
+            manager.wsClient.isAuthenticated.collect { authenticated ->
+                _uiState.update { it.copy(isRelayConnected = authenticated) }
+            }
+        }
+
+        viewModelScope.launch {
+            manager.wsClient.connectionError.collect { err ->
+                if (err != null) _uiState.update { it.copy(error = err) }
+            }
+        }
+
+        viewModelScope.launch {
+            manager.pendingSession.collect { pending ->
+                _uiState.update { it.copy(pendingSession = pending) }
+            }
+        }
+
+        // Relay answers (confirmed / refused / lost on reconnection) shown to the user.
+        viewModelScope.launch {
+            manager.notices.collect { n ->
+                _uiState.update {
+                    if (n.isError) it.copy(error = n.text, successMessage = null)
+                    else it.copy(error = null, successMessage = n.text)
+                }
             }
         }
 
@@ -234,7 +258,8 @@ class MobileControlViewModel(
         if (res.isFailure) {
             _uiState.update { it.copy(error = res.exceptionOrNull()?.localizedMessage ?: "Erreur de démarrage") }
         } else {
-            _uiState.update { it.copy(error = null, successMessage = "Session démarrée pour $targetAppName avec le profil John.") }
+            // Requested only: the session is shown as active once the relay confirms it.
+            _uiState.update { it.copy(error = null, successMessage = "Démarrage demandé pour $targetAppName : en attente de confirmation du relais…") }
         }
     }
 

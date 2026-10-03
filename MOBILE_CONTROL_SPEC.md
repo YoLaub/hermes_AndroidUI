@@ -130,6 +130,36 @@ sequenceDiagram
 
 ---
 
+### 2.6 Session confirmation and state sync (relay → phone)
+
+A session is **active only after the relay confirms it**. The phone shows it as pending
+until `session_started_ack` arrives and never as active on `session_error` or timeout.
+
+| Message | When | Key fields |
+|---|---|---|
+| `auth_ok` | device authenticated | — |
+| `auth_error` | unknown device or bad credentials (socket then closed) | `error_code: DEVICE_AUTH_FAILED` |
+| `session_state` | right after `auth_ok` (reconnection sync) | `active`, and if active: `session_id`, `profile`, `device_id`, `target_package`, `mode`, `expires_in_seconds` |
+| `session_started_ack` | session registered | `session_id`, `profile`, `device_id`, `expires_in_seconds` |
+| `session_error` | session refused | `session_id`, `error_code` (`DEVICE_NOT_AUTHENTICATED`, `PROFILE_NOT_ALLOWED`, `SESSION_REJECTED`), `message` |
+
+The relay is the source of truth. On `session_state` the phone ends a local session the relay
+no longer holds, and adopts one it holds but the phone does not know (the agent could act on it,
+so the user must see and be able to stop it). The relay drops a device's session when its socket closes.
+
+### 2.7 Correlating logs (no secrets)
+
+Both sides log `event=... key=value` lines with ids only, never tokens:
+relay: `device_authenticated`, `device_auth_failed`, `connection_closed` (code, reason),
+`session_start_received` (`profile_requested`), `session_registered` / `session_refused`,
+`session_ack_sent`, `status_lookup` (`profile` searched, `session_profiles` held, `match`).
+Android (logcat tag `MobileControlWS` / `MobileControlManager`): `ws_open`, `auth_ok`, `auth_error`,
+`session_start_sent`, `session_ack`, `session_error`, `session_state`, `ws_closed`.
+`/health` and `mobile_control_status` both expose the relay `instance_id`: if they differ, the phone
+and the agent are talking to different relay instances.
+
+---
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |

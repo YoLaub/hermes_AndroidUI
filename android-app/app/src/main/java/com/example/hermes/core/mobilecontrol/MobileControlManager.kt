@@ -8,9 +8,13 @@ import android.util.Log
 import com.example.hermes.core.accessibility.HermesAccessibilityService
 import com.example.hermes.core.data.HermesPreferences
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
@@ -22,17 +26,29 @@ class MobileControlManager(
     companion object {
         private const val TAG = "MobileControlManager"
         private const val MAX_LOGS = 50
+        private const val CONFIRMATION_TIMEOUT_MS = 10_000L
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val commandMutex = Mutex()
     private var sessionTimerJob: Job? = null
+    private var confirmationTimeoutJob: Job? = null
 
     val wsClient = MobileControlWebSocketClient()
     private val notificationHelper = MobileControlNotificationHelper(context)
 
+    /** A start was requested but the relay has not confirmed it: NOT an active session. */
+    private val _pendingSession = MutableStateFlow<MobileControlSession?>(null)
+    val pendingSession: StateFlow<MobileControlSession?> = _pendingSession.asStateFlow()
+
+    /** Active only after the relay confirmed it (session_started_ack / session_state). */
     private val _activeSession = MutableStateFlow<MobileControlSession?>(null)
     val activeSession: StateFlow<MobileControlSession?> = _activeSession.asStateFlow()
+
+    data class SessionNotice(val text: String, val isError: Boolean)
+
+    private val _notices = MutableSharedFlow<SessionNotice>(extraBufferCapacity = 8)
+    val notices: SharedFlow<SessionNotice> = _notices.asSharedFlow()
 
     private val _allowedApps = MutableStateFlow<List<AllowedApp>>(
         listOf(
@@ -63,6 +79,89 @@ class MobileControlManager(
         wsClient.onSessionEndReceived = { sid ->
             if (_activeSession.value?.id == sid) {
                 stopSession("server_requested")
+            }
+        }
+
+        // The relay decides: nothing becomes active without its confirmation.
+        wsClient.onSessionAck = { ack ->
+            scope.launch { apply(SessionConfirmation.onAck(currentView(), ack, System.currentTimeMillis())) }
+        }
+        wsClient.onSessionError = { err ->
+            scope.launch { apply(SessionConfirmation.onError(currentView(), err), refused = true) }
+        }
+        wsClient.onSessionState = { state ->
+            scope.launch { apply(SessionConfirmation.onServerState(currentView(), state, System.currentTimeMillis())) }
+        }
+
+        // The relay drops a device's session when its socket closes: do not keep showing it.
+        scope.launch {
+            wsClient.isAuthenticated.collect { authenticated ->
+                if (!authenticated && _activeSession.value != null) {
+                    Log.w(TAG, "event=auth_lost_with_active_session session_id=${_activeSession.value?.id}")
+                    apply(
+                        SessionConfirmation.onServerState(currentView(), MobileSessionState(active = false), System.currentTimeMillis()),
+                        lostConnection = true
+                    )
+                }
+            }
+        }
+    }
+
+    private fun currentView() = SessionView(pending = _pendingSession.value, active = _activeSession.value)
+
+    /** Applies a pure transition and runs the side effects of what actually changed. */
+    private fun apply(t: SessionTransition, refused: Boolean = false, lostConnection: Boolean = false) {
+        val before = currentView()
+        _pendingSession.value = t.view.pending
+        _activeSession.value = t.view.active
+
+        if (before.pending != null && t.view.pending == null) {
+            confirmationTimeoutJob?.cancel()
+            confirmationTimeoutJob = null
+            if (t.view.active == null) {
+                logAudit("SESSION_START", before.pending.targetPackage,
+                    if (refused) "REFUSED" else "NOT_CONFIRMED", t.notice, before.pending.allowedProfile)
+            }
+        }
+
+        val newlyActive = t.view.active
+        if (newlyActive != null && newlyActive.id != before.active?.id) {
+            Log.i(TAG, "event=session_confirmed session_id=${newlyActive.id} profile=${newlyActive.allowedProfile}")
+            processedCommandIds.clear()
+            notificationHelper.showActiveSessionNotification(newlyActive)
+            logAudit("SESSION_START", newlyActive.targetPackage, "CONFIRMED",
+                "Confirmée par le relais (profil ${newlyActive.allowedProfile})", newlyActive.allowedProfile)
+            startExpiryMonitor()
+            if (before.pending != null) {
+                _notices.tryEmit(SessionNotice("Session active : confirmée par le relais.", isError = false))
+            }
+        }
+
+        val gone = t.endedLocally ?: if (before.active != null && newlyActive == null) before.active else null
+        if (gone != null) {
+            sessionTimerJob?.cancel()
+            sessionTimerJob = null
+            notificationHelper.cancelSessionNotification()
+            logAudit("SESSION_END", gone.targetPackage,
+                if (lostConnection) "CONNECTION_LOST" else "SYNC_ENDED", t.notice, gone.allowedProfile)
+        }
+
+        t.notice?.let {
+            _notices.tryEmit(SessionNotice(it, isError = newlyActive == null || lostConnection))
+        }
+    }
+
+    private fun startExpiryMonitor() {
+        sessionTimerJob?.cancel()
+        sessionTimerJob = scope.launch {
+            while (isActive) {
+                delay(1000)
+                val current = _activeSession.value ?: break
+                if (current.isExpired) {
+                    Log.i(TAG, "Session expired monotonically: ${current.id}")
+                    stopSession("session_timeout")
+                    break
+                }
             }
         }
     }
@@ -108,41 +207,45 @@ class MobileControlManager(
             expiresAt = expiresAt
         )
 
-        _activeSession.value = session
-        processedCommandIds.clear()
+        // Not active yet: the relay must confirm. Ask it, and never claim more than that.
+        if (!wsClient.sendSessionStart(session)) {
+            val reason = if (wsClient.isConnected.value) {
+                "Le relais n'a pas authentifié cet appareil : appairez le téléphone avec le relais. Aucune session n'est active."
+            } else {
+                "Relais injoignable : aucune session n'a pu être demandée."
+            }
+            Log.w(TAG, "event=session_start_blocked session_id=${session.id} socket_open=${wsClient.isConnected.value}")
+            logAudit("SESSION_START", targetPackage, "NOT_SENT", reason, allowedProfile)
+            return Result.failure(IllegalStateException(reason))
+        }
 
-        // Show ongoing notification with quick kill-switch
-        notificationHelper.showActiveSessionNotification(session)
-
-        // Notify Relay via WebSocket
-        wsClient.sendSessionStart(session)
-
+        _pendingSession.value = session
         logAudit(
             operation = "SESSION_START",
             targetPackage = targetPackage,
-            status = "STARTED",
-            details = "Mode: ${mode.name}, Durée: ${duration / 60} min",
+            status = "REQUESTED",
+            details = "Mode: ${mode.name}, Durée: ${duration / 60} min, en attente du relais",
             profile = allowedProfile
         )
 
-        // Start monotonic expiration monitor
-        sessionTimerJob?.cancel()
-        sessionTimerJob = scope.launch {
-            while (isActive) {
-                delay(1000)
-                val current = _activeSession.value ?: break
-                if (current.isExpired) {
-                    Log.i(TAG, "Session expired monotonically: ${current.id}")
-                    stopSession("session_timeout")
-                    break
-                }
-            }
+        confirmationTimeoutJob?.cancel()
+        confirmationTimeoutJob = scope.launch {
+            delay(CONFIRMATION_TIMEOUT_MS)
+            Log.w(TAG, "event=session_confirmation_timeout session_id=${session.id}")
+            apply(SessionConfirmation.onTimeout(currentView(), session.id))
         }
 
         return Result.success(session)
     }
 
     fun stopSession(reason: String = "user_cancelled") {
+        _pendingSession.value?.let { pending ->
+            // Stopping before the relay answered: withdraw the request too.
+            _pendingSession.value = null
+            confirmationTimeoutJob?.cancel()
+            confirmationTimeoutJob = null
+            wsClient.sendSessionEnd(pending.id, reason)
+        }
         val current = _activeSession.value
         if (current != null) {
             _activeSession.value = null

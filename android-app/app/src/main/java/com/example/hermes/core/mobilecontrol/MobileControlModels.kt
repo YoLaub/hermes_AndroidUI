@@ -104,6 +104,49 @@ data class MobileAuthMsg(
     @SerialName("device_token") val deviceToken: String
 )
 
+/** Relay → phone: the session was registered. Only this makes a session "active". */
+@Serializable
+data class MobileSessionStartedAck(
+    val protocol: String = "mobile-control/1",
+    val type: String = "session_started_ack",
+    @SerialName("session_id") val sessionId: String,
+    val profile: String? = null,
+    @SerialName("device_id") val deviceId: String? = null,
+    @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null
+)
+
+/** Relay → phone: the session was refused (never becomes active). */
+@Serializable
+data class MobileSessionError(
+    val protocol: String = "mobile-control/1",
+    val type: String = "session_error",
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("error_code") val errorCode: String,
+    val message: String? = null
+)
+
+/** Relay → phone, right after auth_ok: what the relay itself holds for this device. */
+@Serializable
+data class MobileSessionState(
+    val protocol: String = "mobile-control/1",
+    val type: String = "session_state",
+    val active: Boolean,
+    @SerialName("session_id") val sessionId: String? = null,
+    val profile: String? = null,
+    @SerialName("device_id") val deviceId: String? = null,
+    @SerialName("target_package") val targetPackage: String? = null,
+    val mode: String? = null,
+    @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null
+)
+
+@Serializable
+data class MobileAuthError(
+    val protocol: String = "mobile-control/1",
+    val type: String = "auth_error",
+    @SerialName("error_code") val errorCode: String? = null,
+    val message: String? = null
+)
+
 @Serializable
 data class MobileDeviceStatusMsg(
     val protocol: String = "mobile-control/1",
