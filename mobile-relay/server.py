@@ -6,35 +6,32 @@ import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Dict, Optional, Any, Tuple
-
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from typing import Any, Dict, Optional, Tuple
 
 from database import (
-    init_db,
-    verify_device_token,
-    register_device,
     atomic_register_or_update_device,
-    is_device_registered,
-    save_pairing_code,
+    check_and_record_pairing_attempt,
     consume_pairing_code,
     count_active_pairing_codes,
-    check_and_record_pairing_attempt,
+    init_db,
+    log_audit,
     reset_pairing_attempts,
+    save_pairing_code,
     verify_admin_token,
+    verify_device_token,
     verify_profile_token_in_db,
-    log_audit
 )
+from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from models import (
     MobileCommand,
-    MobileCommandResult,
     MobileCommandArguments,
+    MobileCommandResult,
     PairingGenerateRequest,
     PairingGenerateResponse,
     PairingVerifyRequest,
-    PairingVerifyResponse
+    PairingVerifyResponse,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -135,7 +132,6 @@ class DeviceConnectionManager:
 
     def get_session_for_profile(self, profile: str) -> Optional[ActiveSession]:
         p = profile.lower()
-        now = time.time()
         for session in list(self.active_sessions.values()):
             if session.allowed_profile == p:
                 if session.is_expired:
@@ -628,7 +624,7 @@ async def mcp_stream_endpoint(request: Request):
     try:
         body = await request.json()
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON-RPC request")
+        raise HTTPException(status_code=400, detail="Invalid JSON-RPC request") from None
 
     method = body.get("method")
     req_id = body.get("id")
@@ -804,9 +800,12 @@ async def mcp_stream_endpoint(request: Request):
                 elements_summary = []
                 for el in result.data.elements:
                     attrs = []
-                    if el.clickable: attrs.append("clickable")
-                    if el.editable: attrs.append("editable")
-                    if el.scrollable: attrs.append("scrollable")
+                    if el.clickable:
+                        attrs.append("clickable")
+                    if el.editable:
+                        attrs.append("editable")
+                    if el.scrollable:
+                        attrs.append("scrollable")
                     attr_str = f" [{', '.join(attrs)}]" if attrs else ""
                     c_name = el.class_name or "View"
                     text_display = f"\"{el.text}\"" if el.text else (f"desc=\"{el.content_desc}\"" if el.content_desc else c_name)

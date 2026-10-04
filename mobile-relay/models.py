@@ -1,5 +1,7 @@
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+
 
 class MobileElementInfo(BaseModel):
     element_ref: str

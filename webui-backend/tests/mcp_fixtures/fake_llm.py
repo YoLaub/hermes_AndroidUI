@@ -3,7 +3,9 @@
 Usage: fake_llm.py PORT LOGFILE TOOL_NAME
 Turn 1 answers with a tool call to TOOL_NAME, turn 2 echoes the tool result.
 """
-import json, sys, http.server, threading, os
+import http.server
+import json
+import sys
 
 LOG = sys.argv[2]
 TOOL = sys.argv[3]

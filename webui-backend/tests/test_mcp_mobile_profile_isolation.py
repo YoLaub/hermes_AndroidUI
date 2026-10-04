@@ -26,15 +26,13 @@ if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
 from api.config import (
-    _cfg_cache_by_path,
-    _cfg_mtime_by_path,
     _resolve_cli_toolsets,
     get_config,
 )
 from api.helpers import get_profile_cookie
 from api.profiles import clear_request_profile, get_active_profile_name, set_request_profile
 from api.routes import _mcp_tools_from_registry
-from api.streaming import _discover_profile_mcp_tools, _sanitize_mcp_error
+from api.streaming import _discover_profile_mcp_tools
 
 
 class DummyHandler:
@@ -505,7 +503,8 @@ class TestConcurrentSameServerNameDifferentCredentials:
                 # Store server connection in profile-aware dictionary under SAME key
                 servers["custom-server"] = srv_obj
                 # Sleep briefly to ensure concurrent interleave
-                import time; time.sleep(0.01)
+                import time
+                time.sleep(0.01)
                 # Read back
                 retrieved = servers.get("custom-server")
                 results[p_name] = retrieved
@@ -537,8 +536,9 @@ class TestConcurrentSameServerNameDifferentCredentials:
 class TestGastonMarioMobileExclusion:
     def test_gaston_mario_default_strict_exclusion(self, tmp_path):
         """Ensure Gaston, Mario, and Default have NO mobile tools or servers."""
-        from api.routes import _handle_mcp_servers_list, _handle_mcp_tools_list
         import json
+
+        from api.routes import _handle_mcp_servers_list, _handle_mcp_tools_list
 
         john_home = tmp_path / "profiles" / "john"
         gaston_home = tmp_path / "profiles" / "gaston"
@@ -632,8 +632,9 @@ class TestGastonMarioMobileExclusion:
 
 class TestMcpSaveParameterPreservationAndTrueDiscovery:
     def test_mcp_server_save_preserves_all_parameters(self, tmp_path):
-        from api.routes import _handle_mcp_server_update
         import json
+
+        from api.routes import _handle_mcp_server_update
 
         john_home = tmp_path / "profiles" / "john"
         john_home.mkdir(parents=True)
@@ -715,9 +716,10 @@ class TestMcpSaveParameterPreservationAndTrueDiscovery:
         assert srv_disk["description"] == "Custom Mobile Relay"
 
     def test_real_discovery_results_reporting(self, tmp_path):
+        import json
+
         from api.mcp_isolated import set_profile_discovery_inventory
         from api.routes import _handle_mcp_tools_list
-        import json
 
         john_home = tmp_path / "profiles" / "john"
         john_home.mkdir(parents=True)
@@ -812,8 +814,8 @@ class TestRealLocalMCPServerIntegration:
         """
         from api.mcp_isolated import (
             ProfileMCPManager,
-            invalidate_profile_mcp_server,
             get_profile_discovered_inventory,
+            invalidate_profile_mcp_server,
         )
 
         token_john = "token_john_live_secret_777"
@@ -975,6 +977,7 @@ class TestRealLocalMCPServerDualProfileStdioAndRegistry:
 
     def test_dual_profile_same_tool_name_distinct_results_no_closure_collision_via_registry(self, tmp_path):
         import types
+
         from api.mcp_isolated import ProfileMCPManager
 
         fake_registry = InMemoryToolRegistry()
@@ -1106,6 +1109,7 @@ class TestRealLocalMCPServerDualProfileStdioAndRegistry:
 
     def test_stdio_server_with_include_exclude_filters_and_registry_call(self, tmp_path):
         import types
+
         from api.mcp_isolated import ProfileMCPManager
 
         fake_registry = InMemoryToolRegistry()

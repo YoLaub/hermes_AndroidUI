@@ -1,7 +1,8 @@
-import os
-import json
-import pytest
 import asyncio
+import json
+import os
+
+import pytest
 from fastapi.testclient import TestClient
 
 os.environ["MOBILE_RELAY_DB_PATH"] = "/tmp/test_mobile_relay.db"
@@ -10,9 +11,9 @@ os.environ["MOBILE_CONTROL_TOKEN_MARIO"] = "token_for_mario"
 os.environ["MOBILE_CONTROL_TOKEN_GASTON"] = "token_for_gaston"
 os.environ["MOBILE_CONTROL_TOKEN_JOHN"] = "token_for_john"
 
-from server import app, manager, ActiveSession
-from database import init_db, verify_device_token, register_device, reset_pairing_attempts
-from models import MobileCommand, MobileCommandResult, MobileScreenData, MobileElementInfo
+from database import init_db, verify_device_token
+from models import MobileCommand, MobileCommandResult, MobileElementInfo, MobileScreenData
+from server import ActiveSession, app, manager
 
 client = TestClient(app)
 

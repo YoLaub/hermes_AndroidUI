@@ -15,8 +15,8 @@ os.environ["MOBILE_RELAY_DB_PATH"] = "/tmp/test_mobile_relay.db"
 os.environ["MOBILE_RELAY_ADMIN_TOKEN"] = "test_admin_token_12345"
 os.environ["MOBILE_CONTROL_TOKEN_JOHN"] = "token_for_john"
 
-from server import app, manager
 from database import init_db, register_device
+from server import app, manager
 
 client = None  # one TestClient (one event loop) shared by HTTP and WebSocket, like production
 
@@ -152,8 +152,9 @@ def test_dead_socket_gives_device_offline_not_a_server_error():
     class DeadSocket:
         async def send_text(self, _):
             raise RuntimeError("socket is dead")
-    from server import ActiveSession
     import time
+
+    from server import ActiveSession
     manager.active_connections[DEVICE_ID] = DeadSocket()
     manager.set_active_session(ActiveSession("ses_dead", DEVICE_ID, "com.linkedin.android", "john", "interaction", time.time() + 600))
     is_error, text = mcp_call("mobile_observe")

@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from api.mcp_errors import ResultUnknownError
 
@@ -84,7 +84,7 @@ class ProfileMCPWorkerClient:
             if self.is_alive():
                 return
 
-            from api.config import PYTHON_EXE, REPO_ROOT, _AGENT_DIR
+            from api.config import _AGENT_DIR, PYTHON_EXE, REPO_ROOT
 
             isolated_env = dict(os.environ)
             # Secrets strictly passed only to child process
@@ -335,7 +335,8 @@ class ProfileMCPManager:
         """
         try:
             import importlib
-            registry = getattr(importlib.import_module("tools.registry"), "registry")
+            # getattr on purpose: a dynamic module is opaque to type checkers, which flag `.registry`.
+            registry = getattr(importlib.import_module("tools.registry"), "registry")  # noqa: B009
         except Exception:
             return
 
@@ -568,9 +569,9 @@ def ensure_servers_profile_aware() -> Optional[ProfileAwareMCPServers]:
     if isinstance(current_servers, ProfileAwareMCPServers):
         return current_servers
 
-    if isinstance(current_servers, dict) and not ("mock" in type(current_servers).__module__):
+    if isinstance(current_servers, dict) and "mock" not in type(current_servers).__module__:
         new_servers = ProfileAwareMCPServers(initial=current_servers)
-        setattr(_mcp_mod, "_servers", new_servers)
+        setattr(_mcp_mod, "_servers", new_servers)  # noqa: B010  (module resolved dynamically)
         return new_servers
 
     return None

@@ -63,7 +63,7 @@ class HttpFixture:
         raise RuntimeError("HTTP fixture did not start")
 
     def requests(self):
-        return [json.loads(l) for l in self.logfile.read_text().splitlines() if l.strip()]
+        return [json.loads(line) for line in self.logfile.read_text().splitlines() if line.strip()]
 
     def stop(self):
         self.proc.terminate()

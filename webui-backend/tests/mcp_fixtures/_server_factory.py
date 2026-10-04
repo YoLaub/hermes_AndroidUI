@@ -3,8 +3,8 @@
 mcp 1.x exposes ``mcp.server.fastmcp.FastMCP``; mcp 2.x exposes
 ``mcp.server.mcpserver.MCPServer``. Both register tools with ``@server.tool()``.
 """
-import os
 import asyncio
+import os
 
 
 def build_server(name: str):

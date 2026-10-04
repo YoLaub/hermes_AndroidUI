@@ -17,8 +17,8 @@ os.environ["MOBILE_RELAY_DB_PATH"] = "/tmp/test_mobile_relay.db"
 os.environ["MOBILE_RELAY_ADMIN_TOKEN"] = "test_admin_token_12345"
 os.environ["MOBILE_CONTROL_TOKEN_JOHN"] = "token_for_john"
 
-from server import app, manager
 from database import init_db, register_device
+from server import app, manager
 
 client = TestClient(app)
 
@@ -188,8 +188,9 @@ def test_every_step_is_logged_without_any_secret(caplog):
 
 def test_status_lookup_log_exposes_a_profile_mismatch(caplog):
     caplog.set_level(logging.INFO, logger="mobile-relay")
-    from server import ActiveSession
     import time
+
+    from server import ActiveSession
     # A session exists for the device but under a different profile key: lookup must say no match.
     s = ActiveSession("ses_x", DEVICE_ID, "com.linkedin.android", "john", "interaction", time.time() + 600)
     s.allowed_profile = "other"

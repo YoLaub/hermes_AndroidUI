@@ -18,11 +18,10 @@ _BACKEND_DIR = Path(__file__).parent.parent.resolve()
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-from test_mcp_worker_sdk import FIXTURES
-
 from api import mcp_isolated
 from api.mcp_errors import ResultUnknownError
 from api.mcp_isolated import ProfileMCPManager
+from test_mcp_worker_sdk import FIXTURES
 
 
 @pytest.fixture
@@ -60,7 +59,7 @@ def slow_profile(tmp_path):
 
 
 def _runs(call_log: Path) -> int:
-    return len([l for l in call_log.read_text().splitlines() if l.strip()])
+    return len([line for line in call_log.read_text().splitlines() if line.strip()])
 
 
 def test_parent_wait_covers_the_mcp_timeout_plus_a_margin(slow_profile):

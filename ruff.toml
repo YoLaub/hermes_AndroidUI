@@ -1,0 +1,24 @@
+# Lint scope: code written in this project only. The WebUI under webui-backend/ is vendored
+# upstream code that this project does not own, so it is excluded except for our MCP files and tests.
+target-version = "py311"
+line-length = 120
+
+extend-exclude = [
+  "webui-backend/api/[!m]*.py",       # every upstream api module except those starting with "m" ...
+  "webui-backend/api/metering.py",    # ... and the two upstream ones that do start with "m"
+  "webui-backend/api/models.py",
+  "webui-backend/server.py",
+  "webui-backend/bootstrap.py",
+  "webui-backend/mcp_server.py",
+  "webui-backend/scripts",
+  "webui-backend/docs",
+  "webui-backend/static",
+  "generate_icons.py",
+]
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]
+
+[lint.per-file-ignores]
+# Tests insert the project into sys.path before importing it and use a compact style.
+"**/tests/**" = ["E402", "E701", "E702"]
