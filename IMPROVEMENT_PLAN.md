@@ -54,7 +54,10 @@ the spec and not changed unless asked.
   and a foreground service (declared type, notification reuse) active only during a session.
 - **Done when.** Unit tests green and, on the phone: rotate during a session keeps it; screen off for
   60 s keeps it. Verified on a rebuilt APK.
-- **Decision.** Foreground service type (`specialUse` vs `connectedDevice`) and Android 14 rules.
+- **Outcome (2026-10-04).** Done, confirmed on the phone by the user. No `MobileControlManager.close()`
+  was needed: the manager is process-scoped, so nothing leaks. Added after review: `ForegroundSync`
+  (delayed stop, retry of a refused start) and a receiver independent of the UI.
+- **Decision (made).** `specialUse`, running only while a session is pending or active.
 
 ### WP2: secrets at rest (finding 2)
 - **Problem.** `HermesPreferences` stores password, session cookie, OpenBao token and device token in
@@ -133,5 +136,5 @@ WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicati
 They are asked when their WP starts, not now.
 
 ## 5. Ledger
-- [ ] WP1  - [ ] WP2  - [ ] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
+- [x] WP1  - [ ] WP2  - [ ] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
 - [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13
