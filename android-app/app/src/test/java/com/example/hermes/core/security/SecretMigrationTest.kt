@@ -70,4 +70,25 @@ class SecretMigrationTest {
         val stored = mapOf("password" to "hunter2")
         assertTrue(SecretMigration.legacyToSealed(stored, SecretKeys.NAMES, broken).isEmpty())
     }
+
+    @Test
+    fun aSealedFormatWeDoNotKnowIsNeverReturnedAsAPlaintextSecret() {
+        // e.g. a future "enc:v2:" value read by this version: unreadable, not a password.
+        val r = codec.open("enc:v2:AAAA")
+        assertNull(r.value)
+        assertFalse(r.wasLegacyPlaintext)
+    }
+
+    @Test
+    fun migrationNeverReSealsAValueInASealedFormat() {
+        val stored = mapOf("password" to "enc:v2:AAAA", "openbao_token" to "enc:v1:garbage")
+        assertTrue(SecretMigration.legacyToSealed(stored, SecretKeys.NAMES, codec).isEmpty())
+    }
+
+    @Test
+    fun sealOrNullReturnsNullInsteadOfThrowingWhenSealingIsImpossible() {
+        val broken = SecretCodec(AesGcmSecretCipher { throw IllegalStateException("keystore unavailable") })
+        assertNull(broken.sealOrNull("hunter2"))
+        assertNotNull(codec.sealOrNull("hunter2"))
+    }
 }

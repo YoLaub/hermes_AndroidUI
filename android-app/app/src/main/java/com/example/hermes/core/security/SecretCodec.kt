@@ -16,9 +16,23 @@ class SecretCodec(private val cipher: SecretCipher) {
 
     fun seal(plain: String): String = cipher.encrypt(plain)
 
-    fun open(stored: String): Opened =
-        if (stored.startsWith(AesGcmSecretCipher.PREFIX)) Opened(cipher.decrypt(stored), false)
-        else Opened(stored, true)
+    /** Null instead of an exception when sealing is impossible (keystore unavailable). */
+    fun sealOrNull(plain: String): String? = try {
+        seal(plain)
+    } catch (e: Exception) {
+        null
+    }
+
+    fun open(stored: String): Opened = when {
+        stored.startsWith(AesGcmSecretCipher.PREFIX) -> Opened(cipher.decrypt(stored), false)
+        // A sealed format this version does not know (a future "enc:v2:"): never handed back as a secret.
+        stored.startsWith(SEALED_FAMILY) -> Opened(null, false)
+        else -> Opened(stored, true)
+    }
+
+    private companion object {
+        const val SEALED_FAMILY = "enc:"
+    }
 }
 
 object SecretMigration {

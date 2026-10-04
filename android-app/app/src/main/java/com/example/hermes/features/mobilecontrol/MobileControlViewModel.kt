@@ -210,9 +210,21 @@ class MobileControlViewModel(
             when (result) {
                 is PairingResult.Success -> {
                     // Storing the token makes the collector above open the authenticated socket.
-                    preferences.setMobileDeviceToken(result.deviceToken)
-                    _uiState.update {
-                        it.copy(isPaired = true, error = null, successMessage = "Appareil appairé avec le relais.")
+                    val stored = preferences.setMobileDeviceToken(result.deviceToken)
+                    if (stored) {
+                        _uiState.update {
+                            it.copy(isPaired = true, error = null, successMessage = "Appareil appairé avec le relais.")
+                        }
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                isPaired = false,
+                                successMessage = null,
+                                error = "Le relais a appairé l'appareil mais le téléphone n'a pas pu stocker le jeton " +
+                                    "de façon sécurisée (Keystore indisponible). Réessayez ; si besoin, le relais doit " +
+                                    "supprimer l'enregistrement de cet appareil avant un nouvel appairage."
+                            )
+                        }
                     }
                 }
                 is PairingResult.Failure -> {

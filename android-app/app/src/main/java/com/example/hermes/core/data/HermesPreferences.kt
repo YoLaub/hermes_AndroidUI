@@ -8,7 +8,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import com.example.hermes.core.security.SecretCodec
 import com.example.hermes.core.security.SecretKeys
 import com.example.hermes.core.security.SecretCipher
@@ -25,21 +28,31 @@ class HermesPreferences(
 
     private val codec = SecretCodec(cipher)
 
-    /** Reads a secret: sealed values are opened, legacy plaintext is still readable until migrated. */
-    private fun Preferences.secret(key: Preferences.Key<String>): String? =
-        this[key]?.let { codec.open(it).value }
+    /**
+     * A secret as a flow. The raw value is compared first so a change to an unrelated preference does
+     * not decrypt again, and keystore work runs off the collector's thread (often the main one).
+     */
+    private fun secretFlow(key: Preferences.Key<String>): Flow<String?> =
+        context.dataStore.data
+            .map { it[key] }
+            .distinctUntilChanged()
+            .map { stored -> stored?.let { codec.open(it).value } }
+            .flowOn(Dispatchers.IO)
 
     /**
-     * Stores a secret sealed. If sealing is impossible (keystore unavailable) nothing is stored:
-     * failing closed, the user re-enters it, rather than writing it in plaintext.
+     * Stores a secret sealed and returns whether it was stored. If sealing is impossible (keystore
+     * unavailable) nothing is written in plaintext and the previous value is removed, so a stale
+     * credential is never used silently: the caller can tell the user and they re-enter it.
      */
-    private fun MutablePreferences.putSecret(key: Preferences.Key<String>, value: String) {
-        try {
-            this[key] = codec.seal(value)
-        } catch (e: Exception) {
-            Log.w("HermesPreferences", "event=secret_not_stored key=${key.name} error=${e.javaClass.simpleName}")
+    private fun MutablePreferences.putSecret(key: Preferences.Key<String>, value: String): Boolean {
+        val sealed = codec.sealOrNull(value)
+        if (sealed == null) {
+            Log.w("HermesPreferences", "event=secret_not_stored key=${key.name}")
             remove(key)
+            return false
         }
+        this[key] = sealed
+        return true
     }
 
     /** Rewrites secrets written in plaintext by older versions. Idempotent; safe to run at every start. */
@@ -80,21 +93,15 @@ class HermesPreferences(
         preferences[KEY_MOBILE_DEVICE_ID]
     }
 
-    val mobileDeviceToken: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences.secret(KEY_MOBILE_DEVICE_TOKEN)
-    }
+    val mobileDeviceToken: Flow<String?> = secretFlow(KEY_MOBILE_DEVICE_TOKEN)
 
     val mobileRelayUrl: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[KEY_MOBILE_RELAY_URL]
     }
 
-    val sessionCookie: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences.secret(KEY_SESSION_COOKIE)
-    }
+    val sessionCookie: Flow<String?> = secretFlow(KEY_SESSION_COOKIE)
 
-    val password: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences.secret(KEY_PASSWORD)
-    }
+    val password: Flow<String?> = secretFlow(KEY_PASSWORD)
 
     val activeProfile: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_ACTIVE_PROFILE] ?: "default"
@@ -112,9 +119,7 @@ class HermesPreferences(
         preferences[KEY_OPENBAO_URL] ?: DEFAULT_OPENBAO_URL
     }
 
-    val openbaoToken: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences.secret(KEY_OPENBAO_TOKEN)
-    }
+    val openbaoToken: Flow<String?> = secretFlow(KEY_OPENBAO_TOKEN)
 
     val openbaoMount: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_OPENBAO_MOUNT] ?: DEFAULT_OPENBAO_MOUNT
@@ -127,24 +132,29 @@ class HermesPreferences(
         }
     }
 
-    suspend fun setSessionCookie(cookie: String?) {
+    /** Returns false if the cookie could not be stored securely (and was therefore not stored). */
+    suspend fun setSessionCookie(cookie: String?): Boolean {
+        var stored = true
         context.dataStore.edit { preferences ->
             if (cookie != null) {
-                preferences.putSecret(KEY_SESSION_COOKIE, cookie)
+                stored = preferences.putSecret(KEY_SESSION_COOKIE, cookie)
             } else {
                 preferences.remove(KEY_SESSION_COOKIE)
             }
         }
+        return stored
     }
 
-    suspend fun setPassword(pwd: String?) {
+    suspend fun setPassword(pwd: String?): Boolean {
+        var stored = true
         context.dataStore.edit { preferences ->
             if (!pwd.isNullOrBlank()) {
-                preferences.putSecret(KEY_PASSWORD, pwd)
+                stored = preferences.putSecret(KEY_PASSWORD, pwd)
             } else {
                 preferences.remove(KEY_PASSWORD)
             }
         }
+        return stored
     }
 
     suspend fun clearPassword() {
@@ -186,14 +196,16 @@ class HermesPreferences(
         }
     }
 
-    suspend fun setOpenbaoToken(token: String?) {
+    suspend fun setOpenbaoToken(token: String?): Boolean {
+        var stored = true
         context.dataStore.edit { preferences ->
             if (token != null && token.isNotBlank()) {
-                preferences.putSecret(KEY_OPENBAO_TOKEN, token.trim())
+                stored = preferences.putSecret(KEY_OPENBAO_TOKEN, token.trim())
             } else {
                 preferences.remove(KEY_OPENBAO_TOKEN)
             }
         }
+        return stored
     }
 
     suspend fun setOpenbaoMount(mount: String) {
@@ -209,14 +221,17 @@ class HermesPreferences(
         }
     }
 
-    suspend fun setMobileDeviceToken(token: String?) {
+    /** Returns false if the token could not be stored securely (pairing must then be reported as failed). */
+    suspend fun setMobileDeviceToken(token: String?): Boolean {
+        var stored = true
         context.dataStore.edit { preferences ->
             if (token != null && token.isNotBlank()) {
-                preferences.putSecret(KEY_MOBILE_DEVICE_TOKEN, token.trim())
+                stored = preferences.putSecret(KEY_MOBILE_DEVICE_TOKEN, token.trim())
             } else {
                 preferences.remove(KEY_MOBILE_DEVICE_TOKEN)
             }
         }
+        return stored
     }
 
     suspend fun setMobileRelayUrl(url: String) {
