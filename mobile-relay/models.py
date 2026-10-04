@@ -13,16 +13,26 @@ class MobileElementInfo(BaseModel):
     scrollable: bool = False
     bounds: Optional[str] = None
 
+class MobileScreenshot(BaseModel):
+    """A downscaled JPEG of the target app, base64. Held in memory only, never stored or logged."""
+    mime_type: str
+    width: int
+    height: int
+    data: str
+
 class MobileScreenData(BaseModel):
     screen_revision: str
     package_name: str
     title: Optional[str] = None
     elements: List[MobileElementInfo] = Field(default_factory=list)
+    screenshot: Optional[MobileScreenshot] = None
 
 class MobileCommandArguments(BaseModel):
     element_ref: Optional[str] = None
     text: Optional[str] = None
     direction: Optional[str] = None
+    x: Optional[int] = None
+    y: Optional[int] = None
 
 class MobileCommand(BaseModel):
     protocol: str = "mobile-control/1"
@@ -54,6 +64,7 @@ class MobileSessionStartMsg(BaseModel):
     allowed_profile: str
     mode: str
     duration_seconds: int
+    allow_screenshots: bool = False
 
 class MobileSessionEndMsg(BaseModel):
     protocol: str = "mobile-control/1"

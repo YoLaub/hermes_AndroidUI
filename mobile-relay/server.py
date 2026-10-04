@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import binascii
 import ipaddress
 import json
 import logging
@@ -112,7 +114,8 @@ app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
 # ── Active State & Connection Management (In-Memory) ─────────────────────────
 
 class ActiveSession:
-    def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str, expires_at: float):
+    def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str,
+                 expires_at: float, allow_screenshots: bool = False):
         prof = allowed_profile.strip().lower()
         if prof != "john":
             raise ValueError(f"Profil non autorisé '{allowed_profile}'. Seul le profil 'john' est autorisé.")
@@ -122,6 +125,8 @@ class ActiveSession:
         self.allowed_profile = "john"
         self.mode = mode.lower()
         self.expires_at = expires_at
+        # Explicit, per-session consent given by the user on the phone. Off unless literally true.
+        self.allow_screenshots = allow_screenshots is True
 
     @property
     def is_expired(self) -> bool:
@@ -478,6 +483,7 @@ def session_state_message(device_id: str) -> dict:
             "device_id": session.device_id,
             "target_package": session.target_package,
             "mode": session.mode,
+            "allow_screenshots": session.allow_screenshots,
             "expires_in_seconds": max(0, int(session.expires_at - time.time())),
         })
     return msg
@@ -594,7 +600,8 @@ async def websocket_device_endpoint(
                         target_package=data.get("target_package", ""),
                         allowed_profile="john",
                         mode=data.get("mode", "interaction"),
-                        expires_at=time.time() + bounded_duration
+                        expires_at=time.time() + bounded_duration,
+                        allow_screenshots=data.get("allow_screenshots") is True,
                     )
                 except ValueError as ve:
                     await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED", str(ve))
@@ -607,14 +614,16 @@ async def websocket_device_endpoint(
 
                 log_event("session_registered", device_id=session.device_id, session_id=session.session_id,
                           profile=session.allowed_profile, target=session.target_package,
-                          mode=session.mode, expires_in=bounded_duration)
-                log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s")
+                          mode=session.mode, expires_in=bounded_duration,
+                          screenshots="on" if session.allow_screenshots else "off")
+                log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s, screenshots: {'on' if session.allow_screenshots else 'off'}")
                 await websocket.send_text(json.dumps({
                     "protocol": "mobile-control/1",
                     "type": "session_started_ack",
                     "session_id": session.session_id,
                     "profile": session.allowed_profile,
                     "device_id": session.device_id,
+                    "allow_screenshots": session.allow_screenshots,
                     "expires_in_seconds": bounded_duration,
                 }))
                 log_event("session_ack_sent", device_id=session.device_id, session_id=session.session_id)
@@ -721,6 +730,27 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "mobile_screenshot",
+        "description": "Capture l'écran de l'application autorisée (image JPEG réduite, champs de mot de passe masqués) et renvoie aussi la liste des éléments. À utiliser seulement quand mobile_observe ne suffit pas (interface personnalisée, canvas). Nécessite que l'utilisateur ait autorisé les captures pour la session.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "mobile_tap_xy",
+        "description": "Touche un point de l'écran, en pixels de la DERNIÈRE capture (mobile_screenshot) et avec la screen_revision renvoyée avec elle. Seulement en mode interaction et si les captures sont autorisées. À utiliser quand mobile_click_element ne peut pas atteindre l'élément.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "integer", "description": "Abscisse en pixels de la capture"},
+                "y": {"type": "integer", "description": "Ordonnée en pixels de la capture"},
+                "screen_revision": {"type": "string", "description": "Révision renvoyée avec la capture"}
+            },
+            "required": ["x", "y", "screen_revision"]
+        }
+    },
+    {
         "name": "mobile_end_session",
         "description": "Termine la session de contrôle mobile.",
         "inputSchema": {
@@ -730,7 +760,11 @@ MCP_TOOLS = [
     }
 ]
 
-INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "back"}
+INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "back", "tap_xy"}
+
+# Screenshots: what the phone may send. 1 MB of JPEG is far more than a 1280 px capture needs.
+MAX_SCREENSHOT_BYTES = 1_000_000
+SCREENSHOT_OPERATIONS = {"screenshot", "tap_xy"}  # both need the user's consent for the session
 
 # Phone-side answers meaning "the relay thinks a session exists, the phone disagrees".
 PHONE_SESSION_DESYNC_CODES = {"SESSION_NOT_ON_PHONE", "SESSION_ID_MISMATCH"}
@@ -826,7 +860,7 @@ async def mcp_stream_endpoint(request: Request):
                 connected = "oui" if session.device_id in manager.active_connections else "non"
                 return format_mcp_response(
                     req_id,
-                    f"Session active trouvée sur le téléphone.\nSession : {session.session_id}\nAppareil : {session.device_id} (connecté au relais : {connected})\nProfil : {session.allowed_profile}\nApplication : {session.target_package}\nMode : {session.mode}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
+                    f"Session active trouvée sur le téléphone.\nSession : {session.session_id}\nAppareil : {session.device_id} (connecté au relais : {connected})\nProfil : {session.allowed_profile}\nApplication : {session.target_package}\nMode : {session.mode}\nCaptures d'écran : {'autorisées' if session.allow_screenshots else 'non autorisées'}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
                     protocol_version=negotiated_version
                 )
             else:
@@ -866,7 +900,9 @@ async def mcp_stream_endpoint(request: Request):
             "mobile_scroll": "scroll",
             "mobile_set_text": "set_text",
             "mobile_back": "back",
-            "mobile_end_session": "end_session"
+            "mobile_end_session": "end_session",
+            "mobile_screenshot": "screenshot",
+            "mobile_tap_xy": "tap_xy",
         }
 
         op = op_map.get(tool_name)
@@ -883,6 +919,29 @@ async def mcp_stream_endpoint(request: Request):
                 protocol_version=negotiated_version
             )
 
+        # Screenshots and coordinate taps only with the user's consent for THIS session. Refused here,
+        # before anything is sent to the phone (the phone enforces the same rule on its side).
+        if op in SCREENSHOT_OPERATIONS and not session.allow_screenshots:
+            log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
+                      reason="SCREENSHOTS_NOT_ALLOWED", session_id=session.session_id)
+            return format_mcp_error(
+                req_id,
+                "SCREENSHOTS_NOT_ALLOWED: L'utilisateur n'a pas autorisé les captures d'écran pour cette session. "
+                "Utilisez mobile_observe, ou demandez-lui de démarrer une session avec les captures autorisées.",
+                protocol_version=negotiated_version,
+            )
+
+        if op == "tap_xy":
+            x, y, rev = arguments.get("x"), arguments.get("y"), arguments.get("screen_revision")
+            is_int = lambda v: isinstance(v, int) and not isinstance(v, bool)  # noqa: E731
+            if not (is_int(x) and is_int(y) and isinstance(rev, str) and rev):
+                return format_mcp_error(
+                    req_id,
+                    "INVALID_ARGUMENTS: mobile_tap_xy demande x et y (entiers, en pixels de la dernière capture) "
+                    "et la screen_revision renvoyée avec cette capture.",
+                    protocol_version=negotiated_version,
+                )
+
         cmd = MobileCommand(
             command_id="cmd_" + str(uuid.uuid4()),
             session_id=session.session_id,
@@ -894,7 +953,9 @@ async def mcp_stream_endpoint(request: Request):
             arguments=MobileCommandArguments(
                 element_ref=arguments.get("element_ref"),
                 text=arguments.get("text"),
-                direction=arguments.get("direction", "down")
+                direction=arguments.get("direction", "down"),
+                x=arguments.get("x") if op == "tap_xy" else None,
+                y=arguments.get("y") if op == "tap_xy" else None,
             )
         )
 
@@ -919,28 +980,40 @@ async def mcp_stream_endpoint(request: Request):
             )
 
         if result.status == "success":
-            if result.data and result.data.elements:
-                elements_summary = []
-                for el in result.data.elements:
-                    attrs = []
-                    if el.clickable:
-                        attrs.append("clickable")
-                    if el.editable:
-                        attrs.append("editable")
-                    if el.scrollable:
-                        attrs.append("scrollable")
-                    attr_str = f" [{', '.join(attrs)}]" if attrs else ""
-                    c_name = el.class_name or "View"
-                    text_display = f"\"{el.text}\"" if el.text else (f"desc=\"{el.content_desc}\"" if el.content_desc else c_name)
-                    elements_summary.append(f"- [{el.element_ref}] {c_name}: {text_display}{attr_str}")
+            shot = result.data.screenshot if result.data else None
+            elements_text = summarize_screen(result.data) if result.data and result.data.elements else None
 
-                content = (
-                    f"Observation de {result.data.package_name} (Révision: {result.data.screen_revision}):\n" +
-                    "\n".join(elements_summary)
+            if op == "screenshot":
+                problem, size = check_screenshot(shot)
+                if problem:
+                    code, why = problem
+                    log_event("screenshot_rejected", logging.WARNING, session_id=session.session_id,
+                              device_id=session.device_id, reason=code)
+                    return format_mcp_error(req_id, f"{code}: {why}", protocol_version=negotiated_version)
+                # Only sizes are recorded: the image is held in memory for this response and nothing more.
+                log_audit(str(uuid.uuid4()), session.device_id, session.allowed_profile, "SCREENSHOT", "OK",
+                          f"bytes={size}, {shot.width}x{shot.height}")
+                log_event("screenshot_forwarded", session_id=session.session_id, device_id=session.device_id,
+                          bytes=size, width=shot.width, height=shot.height)
+                text = (
+                    f"Capture de {result.data.package_name} (Révision: {result.data.screen_revision}), "
+                    f"{shot.width}x{shot.height} px, JPEG. Les coordonnées de mobile_tap_xy sont en pixels de "
+                    f"cette image et valables avec cette révision.\n\n"
+                    + (elements_text or "(aucun élément textuel)")
                 )
-                return format_mcp_response(req_id, content, protocol_version=negotiated_version)
-            else:
-                return format_mcp_response(req_id, result.message or "Action exécutée avec succès.", protocol_version=negotiated_version)
+                return format_mcp_blocks(req_id, [
+                    {"type": "text", "text": text},
+                    {"type": "image", "data": shot.data, "mimeType": shot.mime_type},
+                ], protocol_version=negotiated_version)
+
+            if shot is not None:
+                # An image nobody asked for (any other operation): never forwarded.
+                log_event("screenshot_dropped", logging.WARNING, session_id=session.session_id,
+                          device_id=session.device_id, operation=op)
+
+            if elements_text:
+                return format_mcp_response(req_id, elements_text, protocol_version=negotiated_version)
+            return format_mcp_response(req_id, result.message or "Action exécutée avec succès.", protocol_version=negotiated_version)
         else:
             error_code = result.error_code or "ACTION_FAILED"
             error_message = (
@@ -965,6 +1038,55 @@ async def mcp_stream_endpoint(request: Request):
                 }
             }
         )
+
+def summarize_screen(data) -> str:
+    """Text description of an observation: package, revision and one line per element."""
+    lines = []
+    for el in data.elements:
+        attrs = []
+        if el.clickable:
+            attrs.append("clickable")
+        if el.editable:
+            attrs.append("editable")
+        if el.scrollable:
+            attrs.append("scrollable")
+        attr_str = f" [{', '.join(attrs)}]" if attrs else ""
+        c_name = el.class_name or "View"
+        text_display = f"\"{el.text}\"" if el.text else (f"desc=\"{el.content_desc}\"" if el.content_desc else c_name)
+        lines.append(f"- [{el.element_ref}] {c_name}: {text_display}{attr_str}")
+    return f"Observation de {data.package_name} (Révision: {data.screen_revision}):\n" + "\n".join(lines)
+
+
+def check_screenshot(shot):
+    """Validate what the phone sent. Returns ((code, reason) or None, decoded size in bytes)."""
+    if shot is None:
+        return ("SCREENSHOT_INVALID", "Le téléphone n'a pas renvoyé de capture."), 0
+    if shot.mime_type != "image/jpeg":
+        return ("SCREENSHOT_INVALID", "Format de capture non accepté (JPEG attendu)."), 0
+    if not shot.data:
+        return ("SCREENSHOT_INVALID", "Capture vide."), 0
+    # Reject oversized payloads from the text length first: no need to decode what we will refuse.
+    if len(shot.data) > (MAX_SCREENSHOT_BYTES * 4) // 3 + 8:
+        return ("SCREENSHOT_TOO_LARGE", "La capture dépasse la taille maximale acceptée."), 0
+    try:
+        raw = base64.b64decode(shot.data, validate=True)
+    except (binascii.Error, ValueError):
+        return ("SCREENSHOT_INVALID", "Capture illisible (base64 invalide)."), 0
+    if not raw:
+        return ("SCREENSHOT_INVALID", "Capture vide."), 0
+    if len(raw) > MAX_SCREENSHOT_BYTES:
+        return ("SCREENSHOT_TOO_LARGE", "La capture dépasse la taille maximale acceptée."), len(raw)
+    return None, len(raw)
+
+
+def format_mcp_blocks(req_id: Any, blocks: list, protocol_version: str = DEFAULT_MCP_PROTOCOL_VERSION) -> JSONResponse:
+    """A tool result made of several MCP content blocks (text and image)."""
+    return JSONResponse(
+        status_code=200,
+        headers={"MCP-Protocol-Version": protocol_version},
+        content={"jsonrpc": "2.0", "id": req_id, "result": {"content": blocks}},
+    )
+
 
 def format_mcp_response(req_id: Any, text: str, protocol_version: str = DEFAULT_MCP_PROTOCOL_VERSION) -> JSONResponse:
     return JSONResponse(
