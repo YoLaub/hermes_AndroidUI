@@ -112,22 +112,73 @@ def _filter_and_format_tools(
     return out
 
 
-def _result_to_text(result: Any) -> str:
-    """Flatten an SDK CallToolResult into text; tool-level errors raise."""
-    parts: List[str] = []
-    for item in getattr(result, "content", None) or []:
-        if getattr(item, "type", None) == "text":
-            parts.append(str(item.text))
+def _field(obj: Any, camel: str, default: Any = None) -> Any:
+    """Read an SDK field under either naming style: mcp 1.x uses mimeType/isError/nextCursor, mcp 2.x uses
+    mime_type/is_error/next_cursor. Reading only one silently returns the default on the other version."""
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", camel).lower()
+    for name in (camel, snake):
+        if hasattr(obj, name):
+            return getattr(obj, name)
+    return default
+
+
+# What may travel to the model as an image: a strict allowlist, so a hostile server cannot smuggle
+# anything into the `data:` URI built below.
+_IMAGE_MIME = re.compile(r"image/(jpeg|png|webp|gif)")
+_BASE64 = re.compile(r"[A-Za-z0-9+/]+={0,2}")
+_MAX_IMAGE_BASE64_CHARS = 2_000_000  # about 1.5 MB of image: above the relay's own 1 MB limit
+
+
+def _image_block_to_part(block: Any) -> Optional[dict]:
+    mime = _field(block, "mimeType")
+    data = _field(block, "data")
+    # fullmatch, not match: with `$`, Python accepts a trailing newline ("image/jpeg\n").
+    if not isinstance(mime, str) or not _IMAGE_MIME.fullmatch(mime):
+        return None
+    if not isinstance(data, str) or not data or len(data) > _MAX_IMAGE_BASE64_CHARS or not _BASE64.fullmatch(data):
+        return None
+    return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+
+
+def _result_to_payload(result: Any) -> Any:
+    """An SDK CallToolResult as what Hermes's tool registry accepts.
+
+    Text only: a plain string. With at least one usable image: Hermes's multimodal envelope
+    (`_multimodal`, text and `image_url` parts, `text_summary` for providers that cannot read images).
+    Flattening an image into JSON text would put base64 in the model's context as text.
+    Tool-level errors raise; they never forward an image.
+    """
+    texts: List[str] = []
+    parts: List[dict] = []
+    dropped = 0
+    for item in _field(result, "content", None) or []:
+        kind = getattr(item, "type", None)
+        if kind == "text":
+            texts.append(str(item.text))
+        elif kind == "image":
+            part = _image_block_to_part(item)
+            if part is None:
+                dropped += 1
+            else:
+                parts.append(part)
         else:
-            parts.append(item.model_dump_json(exclude_none=True))
-    text = "\n".join(parts)
+            texts.append(item.model_dump_json(exclude_none=True))
+    if dropped:
+        texts.append(f"[{dropped} image(s) not forwarded: unsupported type, malformed or too large]")
+    text = "\n".join(texts)
     if not text:
-        structured = getattr(result, "structuredContent", None)
+        structured = _field(result, "structuredContent")
         if structured is not None:
             text = json.dumps(structured)
-    if getattr(result, "isError", False):
+    if _field(result, "isError", False):
         raise RuntimeError(f"MCP tool call error: {text or 'tool reported an error'}")
-    return text
+    if not parts:
+        return text
+    return {
+        "_multimodal": True,
+        "content": [{"type": "text", "text": text or "(image)"}, *parts],
+        "text_summary": (text + "\n" if text else "") + f"[{len(parts)} image(s) attached, not readable here]",
+    }
 
 
 def _exc_message(exc: BaseException) -> str:
@@ -238,7 +289,7 @@ class BaseMCPServerConnection:
         result = await session.list_tools()
         while True:
             raw.extend(t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in result.tools)
-            cursor = getattr(result, "nextCursor", None)
+            cursor = _field(result, "nextCursor")
             if not cursor:
                 return raw
             result = await session.list_tools(params=types.PaginatedRequestParams(cursor=cursor))
@@ -377,7 +428,7 @@ class BaseMCPServerConnection:
                     "outcome unknown, not retried"
                 ) from None
             raise
-        return _result_to_text(result)
+        return _result_to_payload(result)
 
     def get_status(self) -> dict:
         status = {
