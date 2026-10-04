@@ -100,6 +100,15 @@ the spec and not changed unless asked.
 - **Tests first.** No wildcard CORS with credentials; N failed `/mcp` token checks or WebSocket auth
   attempts from one IP are throttled (429 / close); `audit_logs` older than the retention are purged.
 - **Done when.** Relay suite green and a local relay process shows throttling and purge in its logs.
+- **Outcome (2026-10-04).** Done. Wildcard CORS removed; failed authentication is throttled per source
+  (429 / `AUTH_RATE_LIMITED`, even for a correct token, successful calls never count); `audit_logs` and
+  stale counters are purged at startup and hourly. Review and real-process checks changed the design twice:
+  `FORWARDED_ALLOW_IPS=*` lets an attacker forge the source address (evade the limit or lock a victim
+  out), so the proxy *network* is listed instead; and internal sources (private/loopback) are never
+  throttled, so an unconfigured proxy or a stale token on one profile cannot lock anybody out (it fails
+  safe: no protection for internet clients until `FORWARDED_ALLOW_IPS` is set). The relay logs showed
+  `gateway-john` (`10.0.2.9`) calling `/mcp` every 3 minutes and Docker health checks from loopback: both
+  internal. The repo compose file is deliberately untouched: settings go on the `mobile-relay` service only.
 
 ### WP6: cleartext policy (finding 12)
 - **Constraint.** Android's network security config cannot whitelist IP ranges, only host names or exact IPs.
@@ -149,5 +158,5 @@ WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicati
 They are asked when their WP starts, not now.
 
 ## 5. Ledger
-- [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
+- [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [x] WP5  - [ ] WP6  - [ ] WP7
 - [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13
