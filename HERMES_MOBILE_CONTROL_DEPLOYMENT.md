@@ -45,11 +45,17 @@ volumes:
 
 ### Réglages de sécurité du relais (variables d'environnement)
 
+À ajouter **sur le seul service `mobile-relay`**, dans les variables d'environnement de Coolify. Le fichier
+`compose-hermes-openbao.yaml` du dépôt n'est pas modifié : rien n'oblige à redéployer les autres services
+(`gateway-john`, `gateway-mario`, `gateway-gaston`, WebUI…), et il faut comparer ce fichier à la pile réellement
+déployée avant de le réutiliser.
+
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `FORWARDED_ALLOW_IPS` | non défini | **À définir derrière un proxy (Coolify/Traefik), avec le réseau du proxy et non `*`** : `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. Non défini, tous les clients ont l'adresse du proxy et quelques échecs de n'importe qui bloquent tout le monde. Avec `*`, l'en-tête `X-Forwarded-For` est cru de n'importe quel pair : un attaquant peut le falsifier pour contourner la limite ou bloquer une victime (vérifié sur un vrai processus). Le relais avertit au démarrage dans les deux cas. Si un CDN (Cloudflare…) est placé devant, ses plages doivent aussi être listées. |
-| `MOBILE_RELAY_AUTH_MAX_FAILURES` | `10` | Échecs d'authentification (token présenté mais invalide) par adresse avant blocage en 429, y compris pour un bon token. `0` désactive le blocage. |
+| `FORWARDED_ALLOW_IPS` | non défini | Réseau du proxy, pour que le relais voie la vraie adresse du client : `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. Non défini, les clients d'Internet ressemblent au proxy (adresse interne) et la limite ci-dessous est **inactive pour eux** (personne n'est bloqué). Avec `*`, l'en-tête `X-Forwarded-For` est cru de n'importe quel pair : un attaquant peut le falsifier pour contourner la limite ou bloquer une victime (vérifié sur un vrai processus). Le relais avertit au démarrage dans les deux cas. Si un CDN est placé devant, ses plages doivent aussi être listées. |
+| `MOBILE_RELAY_AUTH_MAX_FAILURES` | `10` | Échecs d'authentification (token présenté mais invalide) par adresse avant blocage en 429, y compris pour un bon token. `0` désactive la limite. |
 | `MOBILE_RELAY_AUTH_WINDOW_SECONDS` | `300` | Fenêtre de comptage et durée du blocage. |
+| `MOBILE_RELAY_AUTH_THROTTLE_INTERNAL` | `0` | Les adresses internes (réseau Docker, proxy, loopback) ne sont **jamais** bloquées : plusieurs profils partagent l'adresse du conteneur WebUI et un token périmé de l'un ne doit pas bloquer John. `1` les soumet aussi à la limite. |
 | `MOBILE_RELAY_AUDIT_RETENTION_DAYS` | `90` | Âge maximal des lignes d'audit. `0` les garde indéfiniment. |
 | `MOBILE_RELAY_PURGE_INTERVAL_SECONDS` | `3600` | Fréquence de la purge (aussi faite au démarrage). |
 
