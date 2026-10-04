@@ -181,7 +181,10 @@ the spec and not changed unless asked.
      the target app must still be in the foreground right before the tap, a disabled or hidden element is never
      tapped, the node is re-read first, the tap goes to the centre of the visible part and an element less than
      half visible is refused, and a timed-out gesture answers `RESULT_UNKNOWN` (never replay) instead of a failure.
-  2. **WP14b, screenshot on the phone and relay.** `allow_screenshots` in `session_start` (UI toggle, default off,
+  2. **WP14b, screenshot on the phone and relay.** *Status (2026-10-05): relay done (95 tests, checked on a real
+     process); phone coded, 147 Android tests green, NOT verified on the phone. Two reviews changed the design:
+     the consent is the intersection of phone and relay (the relay can never grant it), and the capture is of the
+     target window only, which needs Android 14.* `allow_screenshots` in `session_start` (UI toggle, default off,
      notification text); `mobile_screenshot` and `mobile_tap_xy(x, y, screen_revision)` MCP tools; new codes
      `SCREENSHOTS_NOT_ALLOWED`, `SCREENSHOT_UNSUPPORTED`, `SCREENSHOT_BLOCKED_SECURE_WINDOW`,
      `SCREENSHOT_TOO_LARGE`, `SCREENSHOT_TOO_FAST`. Pure, tested pieces: consent guard, password-region

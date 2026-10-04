@@ -18,7 +18,8 @@ object ForegroundPolicy {
         return when {
             active != null -> ForegroundNotificationContent(
                 title = "Contrôle Hermes actif : ${active.targetAppName}",
-                text = "Profil autorisé : ${active.allowedProfile} • Mode : ${active.mode.name.lowercase()}"
+                text = "Profil autorisé : ${active.allowedProfile} • Mode : ${active.mode.name.lowercase()}" +
+                    if (active.allowScreenshots) " • Captures autorisées" else ""
             )
             view.pending != null -> ForegroundNotificationContent(
                 title = "Contrôle Hermes : démarrage",

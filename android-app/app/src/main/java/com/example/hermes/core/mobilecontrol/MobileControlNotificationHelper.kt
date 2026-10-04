@@ -39,10 +39,8 @@ class MobileControlNotificationHelper(private val context: Context) {
     }
 
     fun showActiveSessionNotification(session: MobileControlSession) {
-        notificationManager.notify(NOTIFICATION_ID, buildNotification(
-            title = "Contrôle Hermes actif : ${session.targetAppName}",
-            text = "Profil autorisé : ${session.allowedProfile} • Mode : ${session.mode.name.lowercase()}"
-        ))
+        val content = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session))
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(content.title, content.text))
     }
 
     /** Notification used both for the ongoing session and as the foreground service's notification. */

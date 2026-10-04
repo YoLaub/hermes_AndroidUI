@@ -10,10 +10,12 @@ class CommandSessionGuardTest {
     private fun session(
         id: String = "ses_1",
         mode: MobileControlMode = MobileControlMode.INTERACTION,
-        expiresAt: Long = now + 600_000L
+        expiresAt: Long = now + 600_000L,
+        allowScreenshots: Boolean = false
     ) = MobileControlSession(
         id = id, targetPackage = "com.linkedin.android", targetAppName = "LinkedIn",
-        allowedProfile = "john", mode = mode, startedAt = now, durationSeconds = 900, expiresAt = expiresAt
+        allowedProfile = "john", mode = mode, startedAt = now, durationSeconds = 900, expiresAt = expiresAt,
+        allowScreenshots = allowScreenshots
     )
 
     private fun cmd(op: String = "observe", sessionId: String = "ses_1", pkg: String = "com.linkedin.android") =
@@ -94,5 +96,44 @@ class CommandSessionGuardTest {
     fun theSessionIsCheckedBeforeTheMode() {
         // With no session at all the answer is about the session, not about the mode.
         assertEquals("SESSION_NOT_ON_PHONE", check(null, cmd("click_element"))!!.code)
+    }
+
+    // ── Screenshots: the user's consent for this session, enforced on the phone too ──
+
+    @Test
+    fun withoutConsentScreenshotAndTapByCoordinatesAreRefusedOnThePhoneToo() {
+        for (op in listOf("screenshot", "tap_xy")) {
+            val r = check(session(), cmd(op))!!
+            assertEquals(op, "SCREENSHOTS_NOT_ALLOWED", r.code)
+            assertTrue(r.message.contains("téléphone", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun withConsentBothAreAccepted() {
+        val s = session(allowScreenshots = true)
+        assertNull(check(s, cmd("screenshot")))
+        assertNull(check(s, cmd("tap_xy")))
+    }
+
+    @Test
+    fun observationModeAllowsAConsentedScreenshotButNeverATap() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, allowScreenshots = true)
+        assertNull(check(obs, cmd("screenshot")))
+        assertEquals("MODE_DENIED", check(obs, cmd("tap_xy"))!!.code)
+    }
+
+    @Test
+    fun consentDoesNotOpenAnythingElseInObservationMode() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, allowScreenshots = true)
+        for (op in listOf("click_element", "set_text", "scroll", "launch_app", "back")) {
+            assertEquals(op, "MODE_DENIED", check(obs, cmd(op))!!.code)
+        }
+    }
+
+    @Test
+    fun theSessionAndPackageAreStillCheckedBeforeConsent() {
+        assertEquals("SESSION_NOT_ON_PHONE", check(null, cmd("screenshot"))!!.code)
+        assertEquals("APP_NOT_ALLOWED", check(session(allowScreenshots = true), cmd("screenshot", pkg = "com.other"))!!.code)
     }
 }

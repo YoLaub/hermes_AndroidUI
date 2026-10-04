@@ -147,7 +147,8 @@ fun MobileControlScreen(
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "Profil autorisé : John (${session.allowedProfile}) • Mode : ${session.mode.name.lowercase()}",
+                                text = "Profil autorisé : John (${session.allowedProfile}) • Mode : ${session.mode.name.lowercase()}" +
+                                    if (session.allowScreenshots) " • Captures autorisées" else "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -398,14 +399,15 @@ fun MobileControlScreen(
             availableProfiles = state.availableProfiles,
             activeProfile = state.activeProfile,
             onDismiss = { showStartSessionDialog = false },
-            onConfirm = { app, profile, mode, duration ->
+            onConfirm = { app, profile, mode, duration, allowScreenshots ->
                 showStartSessionDialog = false
                 viewModel.startSession(
                     targetPackage = app.packageName,
                     targetAppName = app.appName,
                     profile = profile,
                     mode = mode,
-                    durationMinutes = duration
+                    durationMinutes = duration,
+                    allowScreenshots = allowScreenshots
                 )
             }
         )
@@ -496,9 +498,11 @@ private fun StartSessionDialog(
     availableProfiles: List<String>,
     activeProfile: String,
     onDismiss: () -> Unit,
-    onConfirm: (AllowedApp, String, MobileControlMode, Int) -> Unit
+    onConfirm: (AllowedApp, String, MobileControlMode, Int, Boolean) -> Unit
 ) {
     var selectedApp by remember { mutableStateOf(allowedApps.firstOrNull()) }
+    // Always off when the dialog opens: the consent is given again, on purpose, for each session.
+    var allowScreenshots by remember { mutableStateOf(false) }
     val isJohnAvailable = availableProfiles.contains("john")
     var selectedMode by remember { mutableStateOf(MobileControlMode.INTERACTION) }
     var selectedDuration by remember { mutableStateOf(15) } // minutes
@@ -567,6 +571,27 @@ private fun StartSessionDialog(
                         )
                     }
                 }
+
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Autoriser les captures d'écran", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            "Pendant cette session seulement, l'agent peut demander une image de la fenêtre de " +
+                                "l'application cible (Android 14 ou plus récent). Elle est envoyée au modèle de John " +
+                                "(le fournisseur que ce profil utilise) et peut montrer messages, noms ou photos. " +
+                                "Les champs de mot de passe cachés sont masqués ; un mot de passe affiché en clair ne " +
+                                "peut pas l'être. Les fenêtres protégées ne sont jamais capturées.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HermesTextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(checked = allowScreenshots, onCheckedChange = { allowScreenshots = it })
+                }
             }
         },
         confirmButton = {
@@ -574,7 +599,7 @@ private fun StartSessionDialog(
                 onClick = {
                     val app = selectedApp
                     if (app != null && isJohnAvailable) {
-                        onConfirm(app, "john", selectedMode, selectedDuration)
+                        onConfirm(app, "john", selectedMode, selectedDuration, allowScreenshots)
                     }
                 },
                 enabled = selectedApp != null && isJohnAvailable

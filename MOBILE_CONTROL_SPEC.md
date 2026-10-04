@@ -181,7 +181,14 @@ the user on the phone and enforced on **both** sides.
   `{"mime_type": "image/jpeg", "width", "height", "data": "<base64>"}`. The relay accepts JPEG only, valid base64,
   at most 1,000,000 decoded bytes, and forwards it to the agent as an MCP `image` block next to a text block.
   An image sent for any other operation is dropped.
-- Phone command `tap_xy` carries `arguments.x`, `arguments.y` and `screen_revision`.
+- Phone command `tap_xy` carries `arguments.x`, `arguments.y` and `screen_revision`. The coordinates are pixels of
+  the last screenshot; the tap is refused unless it is for that capture's revision, no older than 15 s, and the
+  screen did not change since (a new window or a scroll drops the capture's context); every attempt spends it.
+- **What is captured.** Only the **window of the target app** (never the whole display), and only while that
+  app is still in the foreground before and after the frame. Password fields that are hidden are blacked out
+  before encoding; a password shown in clear cannot be detected. Protected (`FLAG_SECURE`) windows are refused
+  by Android. The consent is the **intersection** of the user's choice on the phone and the relay's echo: the
+  relay can remove it but never grant it, and a session adopted from the relay never has screenshots.
 - **Never stored, never logged.** The relay keeps the image in memory for the response only. The audit log
   records `SCREENSHOT` with byte count and dimensions, and logs `screenshot_forwarded` / `screenshot_rejected` /
   `screenshot_dropped` without content.
@@ -196,7 +203,7 @@ the user on the phone and enforced on **both** sides.
 | `SESSION_ID_MISMATCH` | Le téléphone a une **autre** session que celle du relais (le relais ferme la sienne) |
 | `SESSION_PENDING_ON_PHONE` | Le téléphone attend encore la confirmation du relais pour cette session : réessayer (le relais ne ferme rien) |
 | `SCREENSHOTS_NOT_ALLOWED` | L'utilisateur n'a pas autorisé les captures pour cette session (refusé côté relais et côté téléphone) |
-| `SCREENSHOT_UNSUPPORTED` | Android < 11 (API 30) : l'API de capture n'existe pas |
+| `SCREENSHOT_UNSUPPORTED` | Android < 14 (API 34) : seule la capture d'une fenêtre unique y est possible ; sur les versions antérieures la seule option serait tout l'écran, ce qui inclurait notifications et surimpressions d'autres applications |
 | `SCREENSHOT_BLOCKED_SECURE_WINDOW` | La fenêtre est protégée (`FLAG_SECURE`) : Android refuse la capture |
 | `SCREENSHOT_TOO_FAST` | Capture demandée trop tôt après la précédente : réessayer |
 | `SCREENSHOT_TOO_LARGE` | Image au-delà de 1 000 000 octets décodés |

@@ -261,7 +261,8 @@ class MobileControlViewModel(
         targetAppName: String,
         profile: String,
         mode: MobileControlMode,
-        durationMinutes: Int
+        durationMinutes: Int,
+        allowScreenshots: Boolean = false
     ) {
         if (!_uiState.value.availableProfiles.contains("john")) {
             _uiState.update {
@@ -275,7 +276,8 @@ class MobileControlViewModel(
             targetAppName = targetAppName,
             allowedProfile = "john",
             mode = mode,
-            durationSeconds = durationMinutes * 60
+            durationSeconds = durationMinutes * 60,
+            allowScreenshots = allowScreenshots
         )
         if (res.isFailure) {
             _uiState.update { it.copy(error = res.exceptionOrNull()?.localizedMessage ?: "Erreur de démarrage") }

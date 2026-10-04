@@ -25,7 +25,7 @@ object SessionConfirmation {
     fun onAck(view: SessionView, ack: MobileSessionStartedAck, nowMs: Long): SessionTransition {
         val pending = view.pending
         if (pending == null || pending.id != ack.sessionId) return SessionTransition(view)
-        val confirmed = withServerExpiry(pending, ack.expiresInSeconds, nowMs)
+        val confirmed = withServerFields(pending, ack.expiresInSeconds, ack.allowScreenshots, nowMs)
         return SessionTransition(SessionView(pending = null, active = confirmed))
     }
 
@@ -61,11 +61,13 @@ object SessionConfirmation {
         val serverId = state.sessionId ?: return SessionTransition(view)
 
         if (pending != null && pending.id == serverId) {
-            val confirmed = withServerExpiry(pending, state.expiresInSeconds, nowMs)
+            val confirmed = withServerFields(pending, state.expiresInSeconds, state.allowScreenshots, nowMs)
             return SessionTransition(SessionView(pending = null, active = confirmed))
         }
         if (active != null && active.id == serverId) {
-            return SessionTransition(view.copy(active = withServerExpiry(active, state.expiresInSeconds, nowMs)))
+            return SessionTransition(
+                view.copy(active = withServerFields(active, state.expiresInSeconds, state.allowScreenshots, nowMs))
+            )
         }
 
         // The relay holds a session this phone does not know (or a different one). The relay
@@ -78,7 +80,9 @@ object SessionConfirmation {
             mode = if (state.mode == "observation") MobileControlMode.OBSERVATION else MobileControlMode.INTERACTION,
             startedAt = nowMs,
             durationSeconds = state.expiresInSeconds ?: 0,
-            expiresAt = nowMs + (state.expiresInSeconds ?: 0) * 1000L
+            expiresAt = nowMs + (state.expiresInSeconds ?: 0) * 1000L,
+            // The user never consented to this session on this phone: no screenshots, whatever the relay says.
+            allowScreenshots = false
         )
         return SessionTransition(
             SessionView(pending = pending, active = adopted),
@@ -86,9 +90,21 @@ object SessionConfirmation {
         )
     }
 
-    private fun withServerExpiry(session: MobileControlSession, expiresInSeconds: Int?, nowMs: Long): MobileControlSession {
-        if (expiresInSeconds == null) return session
-        return session.copy(expiresAt = nowMs + expiresInSeconds * 1000L)
+    /**
+     * The relay is the authority on the remaining time. For the screenshot consent BOTH sides must say yes:
+     * the user's choice on this phone AND an explicit `true` echoed by the relay. The relay can therefore
+     * remove the consent (or an older relay that cannot enforce it can fail to confirm it) but can never
+     * grant what the user did not give.
+     */
+    private fun withServerFields(
+        session: MobileControlSession,
+        expiresInSeconds: Int?,
+        relayAllowsScreenshots: Boolean?,
+        nowMs: Long
+    ): MobileControlSession {
+        val withConsent = session.copy(allowScreenshots = session.allowScreenshots && relayAllowsScreenshots == true)
+        if (expiresInSeconds == null) return withConsent
+        return withConsent.copy(expiresAt = nowMs + expiresInSeconds * 1000L)
     }
 
     private fun describeError(err: MobileSessionError): String = when (err.errorCode) {
