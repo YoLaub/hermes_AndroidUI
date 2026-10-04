@@ -37,6 +37,7 @@ to `main` without an explicit request.
 | WP11 | 19 | MCP registry name collision | no | yes (WebUI image) |
 | WP12 | 15 | Split oversized files | no | no |
 | WP13 | 16, 17 | Release build, README and docs | no | no |
+| WP14 | Artemis review | Visual fallback: screenshots on consent, tap by coordinates | yes | yes (relay and WebUI images) |
 
 Finding 10 (`john` hard-coded in app, relay and spec) is **accepted as designed**; it is recorded in
 the spec and not changed unless asked.
@@ -153,10 +154,54 @@ the spec and not changed unless asked.
   environment variables (nothing committed), `README.md` covering mobile control, Kanban, workspace and OpenBao.
 - **Decisions.** Renaming `applicationId` (a new id means reinstall and re-pairing); docs language policy.
 
+### WP14: visual fallback, with per-session consent (idea taken from the Artemis review, validated by the user)
+- **Why.** `observe` returns the accessibility tree as text. Custom views, Compose canvases and Flutter UIs can
+  expose nothing the agent can use, and `click_element` fails (`ACTION_FAILED`) on nodes that are not clickable.
+  Artemis solves this with screenshots read by a vision model plus coordinate taps.
+- **Privacy boundary, decided up front.** A screenshot is far more revealing than the tree: it can show messages,
+  names, photos. So: off by default, enabled **per session** by the user with a plain warning ("captures sent to the
+  agent's model"), visible in the notification, enforced on **both** the relay and the phone, never stored
+  and never logged (audit rows record the operation and the byte count only), only of the session's target app,
+  password fields blacked out before encoding, secure windows refused by Android (`FLAG_SECURE`).
+- **Facts checked (not assumed).**
+  - Android: `AccessibilityService.takeScreenshot(displayId, executor, callback)` exists from API 30, needs
+    `canTakeScreenshot` in the service config, errors include `ERROR_TAKE_SCREENSHOT_SECURE_WINDOW` (6) and
+    `..._INTERVAL_TIME_SHORT` (3). minSdk is 24, so API < 30 must answer `SCREENSHOT_UNSUPPORTED`.
+  - Hermes: a tool may return `{"_multimodal": true, "content": [{"type":"text",...}, {"type":"image_url",
+    "image_url": {"url": "data:image/jpeg;base64,..."}}], "text_summary": "..."}` (the `computer_use` tool does).
+    If the active model cannot read images, Hermes routes the capture through an auxiliary vision model
+    (`tools/computer_use/vision_routing.py`).
+  - Our worker today flattens any non-text MCP block into JSON text (`_result_to_text`), which would put a
+    base64 image in the model's context as text: it must return the envelope instead.
+- **Steps, in order, each test-first and independently shippable.**
+  1. **WP14a, tap by bounds (no privacy impact).** When `performAction(CLICK)` fails, tap the centre of the element's
+     bounds with `dispatchGesture` (already permitted), under the same revision, package and mode checks.
+     Pure function for the centre and bounds validation, plus guard tests.
+  2. **WP14b, screenshot on the phone and relay.** `allow_screenshots` in `session_start` (UI toggle, default off,
+     notification text); `mobile_screenshot` and `mobile_tap_xy(x, y, screen_revision)` MCP tools; new codes
+     `SCREENSHOTS_NOT_ALLOWED`, `SCREENSHOT_UNSUPPORTED`, `SCREENSHOT_BLOCKED_SECURE_WINDOW`,
+     `SCREENSHOT_TOO_LARGE`, `SCREENSHOT_TOO_FAST`. Pure, tested pieces: consent guard, password-region
+     redaction geometry, downscale and size cap (target: long side <= 1280 px, JPEG ~70, payload <= 1 MB).
+  3. **WP14c, WebUI worker and agent.** Return the `_multimodal` envelope from the worker for MCP image blocks;
+     real-agent end-to-end test with a local MCP fixture that returns an image and a fake LLM that must receive
+     an `image_url` part; route through Hermes's vision routing when the model is not vision-capable.
+  4. **WP14d, docs and agent rules.** Spec (messages, codes, consent), deployment guide, and behaviour rules for
+     John's persona (observe first; screenshot only when the tree is not enough; tap by coordinates only
+     right after a screenshot; never press "Publish").
+- **Gates.** `code-review` on each step and `security-review` on WP14b and WP14c (data leaves the phone).
+- **Done when.** Unit and relay tests green, real-process relay checks (no image bytes in logs or audit),
+  real-agent end-to-end test green, and on the phone: with captures on, `mobile_screenshot` returns an image of the
+  target app with a password field blacked out; with captures off it answers `SCREENSHOTS_NOT_ALLOWED` on both sides.
+- **Decisions (taken by the user, 2026-10-05).** The toggle is always off at the start of a session (no memory
+  of the last choice). Vision goes through Hermes's routing: the model receives the image directly if it can
+  read images, otherwise an auxiliary vision model describes it as text. Screenshots are allowed in observation
+  mode when the user consented for the session; `mobile_tap_xy` stays interaction-only.
+- **Out of scope.** Continuous video, OCR, an autonomous planner like Artemis's.
+
 ## 4. Decisions still open
 WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicationId` and docs language.
 They are asked when their WP starts, not now.
 
 ## 5. Ledger
 - [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [x] WP5  - [ ] WP6  - [ ] WP7
-- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13
+- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [ ] WP14
