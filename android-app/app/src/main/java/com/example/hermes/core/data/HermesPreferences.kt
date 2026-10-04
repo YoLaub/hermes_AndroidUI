@@ -2,16 +2,57 @@ package com.example.hermes.core.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import android.util.Log
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import com.example.hermes.core.security.SecretCodec
+import com.example.hermes.core.security.SecretKeys
+import com.example.hermes.core.security.SecretCipher
+import com.example.hermes.core.security.SecretMigration
+import com.example.hermes.core.security.keystoreSecretCipher
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "hermes_preferences")
 
-class HermesPreferences(private val context: Context) {
+class HermesPreferences(
+    private val context: Context,
+    cipher: SecretCipher = keystoreSecretCipher()
+) {
+
+    private val codec = SecretCodec(cipher)
+
+    /** Reads a secret: sealed values are opened, legacy plaintext is still readable until migrated. */
+    private fun Preferences.secret(key: Preferences.Key<String>): String? =
+        this[key]?.let { codec.open(it).value }
+
+    /**
+     * Stores a secret sealed. If sealing is impossible (keystore unavailable) nothing is stored:
+     * failing closed, the user re-enters it, rather than writing it in plaintext.
+     */
+    private fun MutablePreferences.putSecret(key: Preferences.Key<String>, value: String) {
+        try {
+            this[key] = codec.seal(value)
+        } catch (e: Exception) {
+            Log.w("HermesPreferences", "event=secret_not_stored key=${key.name} error=${e.javaClass.simpleName}")
+            remove(key)
+        }
+    }
+
+    /** Rewrites secrets written in plaintext by older versions. Idempotent; safe to run at every start. */
+    suspend fun migrateSecrets() {
+        context.dataStore.edit { preferences ->
+            val stored = SecretKeys.NAMES.mapNotNull { name ->
+                preferences[stringPreferencesKey(name)]?.let { name to it }
+            }.toMap()
+            SecretMigration.legacyToSealed(stored, SecretKeys.NAMES, codec).forEach { (name, sealed) ->
+                preferences[stringPreferencesKey(name)] = sealed
+            }
+        }
+    }
 
     companion object {
         val KEY_SERVER_URL = stringPreferencesKey("server_url")
@@ -40,7 +81,7 @@ class HermesPreferences(private val context: Context) {
     }
 
     val mobileDeviceToken: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_MOBILE_DEVICE_TOKEN]
+        preferences.secret(KEY_MOBILE_DEVICE_TOKEN)
     }
 
     val mobileRelayUrl: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -48,11 +89,11 @@ class HermesPreferences(private val context: Context) {
     }
 
     val sessionCookie: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_SESSION_COOKIE]
+        preferences.secret(KEY_SESSION_COOKIE)
     }
 
     val password: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_PASSWORD]
+        preferences.secret(KEY_PASSWORD)
     }
 
     val activeProfile: Flow<String> = context.dataStore.data.map { preferences ->
@@ -72,7 +113,7 @@ class HermesPreferences(private val context: Context) {
     }
 
     val openbaoToken: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_OPENBAO_TOKEN]
+        preferences.secret(KEY_OPENBAO_TOKEN)
     }
 
     val openbaoMount: Flow<String> = context.dataStore.data.map { preferences ->
@@ -89,7 +130,7 @@ class HermesPreferences(private val context: Context) {
     suspend fun setSessionCookie(cookie: String?) {
         context.dataStore.edit { preferences ->
             if (cookie != null) {
-                preferences[KEY_SESSION_COOKIE] = cookie
+                preferences.putSecret(KEY_SESSION_COOKIE, cookie)
             } else {
                 preferences.remove(KEY_SESSION_COOKIE)
             }
@@ -99,7 +140,7 @@ class HermesPreferences(private val context: Context) {
     suspend fun setPassword(pwd: String?) {
         context.dataStore.edit { preferences ->
             if (!pwd.isNullOrBlank()) {
-                preferences[KEY_PASSWORD] = pwd
+                preferences.putSecret(KEY_PASSWORD, pwd)
             } else {
                 preferences.remove(KEY_PASSWORD)
             }
@@ -148,7 +189,7 @@ class HermesPreferences(private val context: Context) {
     suspend fun setOpenbaoToken(token: String?) {
         context.dataStore.edit { preferences ->
             if (token != null && token.isNotBlank()) {
-                preferences[KEY_OPENBAO_TOKEN] = token.trim()
+                preferences.putSecret(KEY_OPENBAO_TOKEN, token.trim())
             } else {
                 preferences.remove(KEY_OPENBAO_TOKEN)
             }
@@ -171,7 +212,7 @@ class HermesPreferences(private val context: Context) {
     suspend fun setMobileDeviceToken(token: String?) {
         context.dataStore.edit { preferences ->
             if (token != null && token.isNotBlank()) {
-                preferences[KEY_MOBILE_DEVICE_TOKEN] = token.trim()
+                preferences.putSecret(KEY_MOBILE_DEVICE_TOKEN, token.trim())
             } else {
                 preferences.remove(KEY_MOBILE_DEVICE_TOKEN)
             }
