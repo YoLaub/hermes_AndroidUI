@@ -39,6 +39,14 @@ class MobileControlNotificationHelper(private val context: Context) {
     }
 
     fun showActiveSessionNotification(session: MobileControlSession) {
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(
+            title = "Contrôle Hermes actif : ${session.targetAppName}",
+            text = "Profil autorisé : ${session.allowedProfile} • Mode : ${session.mode.name.lowercase()}"
+        ))
+    }
+
+    /** Notification used both for the ongoing session and as the foreground service's notification. */
+    fun buildNotification(title: String, text: String): android.app.Notification {
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -59,10 +67,10 @@ class MobileControlNotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
-            .setContentTitle("Contrôle Hermes actif : ${session.targetAppName}")
-            .setContentText("Profil autorisé : ${session.allowedProfile} • Mode : ${session.mode.name.lowercase()}")
+            .setContentTitle(title)
+            .setContentText(text)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
             .addAction(
@@ -72,8 +80,6 @@ class MobileControlNotificationHelper(private val context: Context) {
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-
-        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     fun cancelSessionNotification() {

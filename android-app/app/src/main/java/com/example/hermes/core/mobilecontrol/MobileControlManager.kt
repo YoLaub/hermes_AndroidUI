@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
@@ -91,6 +94,16 @@ class MobileControlManager(
         }
         wsClient.onSessionState = { state ->
             scope.launch { apply(SessionConfirmation.onServerState(currentView(), state, System.currentTimeMillis())) }
+        }
+
+        // Keep the process alive and visible while a session is pending or active.
+        scope.launch {
+            combine(_pendingSession, _activeSession) { pending, active -> SessionView(pending, active) }
+                .map { ForegroundPolicy.shouldRunForeground(it) }
+                .distinctUntilChanged()
+                .collect { run ->
+                    if (run) MobileControlService.start(context) else MobileControlService.stop(context)
+                }
         }
 
         // The relay drops a device's session when its socket closes: do not keep showing it.
