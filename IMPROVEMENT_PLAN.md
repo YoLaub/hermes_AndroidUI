@@ -81,6 +81,13 @@ the spec and not changed unless asked.
   files written in this project, excluding vendored upstream code.
 - **Done when.** Commands run clean from a fresh checkout and venv locally; the workflow is green once
   pushed (needs your push).
+- **Outcome (2026-10-04).** Done. `tests.yml` runs ruff, the relay (Python 3.11), the Android unit tests
+  and debug build, and the WebUI MCP tests twice (mcp 1.26 with the real agent, mcp 2.x without it).
+  `ruff.toml` scopes lint to project code; the 982 findings were almost all vendored upstream code.
+  First run on GitHub: 4 of 5 jobs green, the Android job failed inside `android-actions/setup-android`
+  (licences) before Gradle ran, so the action was dropped and the licences are accepted directly.
+  Second run: all 5 green on `dev` and on `main` (`446829d`). Lesson: a Gradle result of `FROM-CACHE`
+  is not a test run; bypass the build cache when verifying.
 
 ### WP4: `/api/media` and sensitive files (finding 3)
 - **Coordinate first.** The avatar work touches the same route; agree on one design before editing.
@@ -142,5 +149,5 @@ WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicati
 They are asked when their WP starts, not now.
 
 ## 5. Ledger
-- [x] WP1  - [x] WP2  - [ ] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
+- [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
 - [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13
