@@ -308,6 +308,13 @@ services:
     environment:
       - SERVICE_URL_MOBILERELAY_8765
       - MOBILE_RELAY_DB_PATH=/data/mobile_relay.db
+      # Required behind Coolify's proxy: use the real client address from X-Forwarded-For. Without it
+      # every client looks like the proxy and failed logins from anyone would lock everybody out.
+      - FORWARDED_ALLOW_IPS=*
+      # Failed-authentication throttling (per source address) and audit-log retention.
+      - MOBILE_RELAY_AUTH_MAX_FAILURES=10
+      - MOBILE_RELAY_AUTH_WINDOW_SECONDS=300
+      - MOBILE_RELAY_AUDIT_RETENTION_DAYS=90
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - 'MOBILE_RELAY_ADMIN_TOKEN=${MOBILE_RELAY_ADMIN_TOKEN:?Configurer un token administrateur du relais}'

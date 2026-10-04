@@ -43,6 +43,20 @@ volumes:
 
 ---
 
+### Réglages de sécurité du relais (variables d'environnement)
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `FORWARDED_ALLOW_IPS` | non défini | **À définir derrière un proxy (Coolify/Traefik)**, par exemple `*` si le relais n'est joignable que par le proxy. Sans elle, tous les clients ont l'adresse du proxy : quelques échecs d'authentification de n'importe qui bloqueraient tout le monde. Le relais le signale au démarrage. |
+| `MOBILE_RELAY_AUTH_MAX_FAILURES` | `10` | Échecs d'authentification (token présenté mais invalide) par adresse avant blocage en 429, y compris pour un bon token. `0` désactive le blocage. |
+| `MOBILE_RELAY_AUTH_WINDOW_SECONDS` | `300` | Fenêtre de comptage et durée du blocage. |
+| `MOBILE_RELAY_AUDIT_RETENTION_DAYS` | `90` | Âge maximal des lignes d'audit. `0` les garde indéfiniment. |
+| `MOBILE_RELAY_PURGE_INTERVAL_SECONDS` | `3600` | Fréquence de la purge (aussi faite au démarrage). |
+
+Il n'y a plus de CORS : l'app et les clients MCP n'en ont pas besoin.
+
+---
+
 ## 2. Configuration MCP pour le Profil Pilote Hermes (`mario`)
 
 Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config.json` de `mario`), ajoutez l'endpoint Streamable HTTP authentifié avec son token dédié :
