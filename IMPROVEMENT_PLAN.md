@@ -68,6 +68,12 @@ the spec and not changed unless asked.
 - **Change.** Keystore-backed AES-GCM for the four secrets, one-time migration, backup disabled.
 - **Done when.** Tests green; on the phone an upgrade install keeps the pairing and the stored file no
   longer contains the token (checked with `adb shell run-as`, debug build).
+- **Outcome (2026-10-04).** Done, verified on a Pixel 7a by `adb`: the installed build has no
+  `ALLOW_BACKUP` flag, the DataStore holds 4 sealed values (`enc:v1:`) and no readable secret, and the
+  app still authenticates to the relay after the in-place upgrade (`auth_ok`). Review fixes: startup
+  crash on a DataStore error, keystore work off the main thread, pairing reports a storage failure,
+  unknown sealed formats are never returned as plaintext. Not cleaned on purpose: undecryptable
+  ciphertext (a transient keystore failure is indistinguishable from a lost key).
 
 ### WP3: tests in CI, scoped lint (findings 4, 18)
 - **Change.** A `tests` workflow: relay pytest (Python 3.11), Android unit tests (JDK 17), WebUI MCP
@@ -136,5 +142,5 @@ WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicati
 They are asked when their WP starts, not now.
 
 ## 5. Ledger
-- [x] WP1  - [ ] WP2  - [ ] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
+- [x] WP1  - [x] WP2  - [ ] WP3  - [ ] WP4  - [ ] WP5  - [ ] WP6  - [ ] WP7
 - [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13
