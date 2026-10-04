@@ -189,10 +189,10 @@ the spec and not changed unless asked.
      `SCREENSHOTS_NOT_ALLOWED`, `SCREENSHOT_UNSUPPORTED`, `SCREENSHOT_BLOCKED_SECURE_WINDOW`,
      `SCREENSHOT_TOO_LARGE`, `SCREENSHOT_TOO_FAST`. Pure, tested pieces: consent guard, password-region
      redaction geometry, downscale and size cap (target: long side <= 1280 px, JPEG ~70, payload <= 1 MB).
-  3. **WP14c, WebUI worker and agent.** Return the `_multimodal` envelope from the worker for MCP image blocks;
+  3. **WP14c, WebUI worker and agent.** *Status (2026-10-05): done and tested with the real agent under mcp 1.26 and 2.x. Finding: the agent reads `model.supports_vision` from the root `HERMES_HOME` config, not the profile's.*  Return the `_multimodal` envelope from the worker for MCP image blocks;
      real-agent end-to-end test with a local MCP fixture that returns an image and a fake LLM that must receive
      an `image_url` part; route through Hermes's vision routing when the model is not vision-capable.
-  4. **WP14d, docs and agent rules.** Spec (messages, codes, consent), deployment guide, and behaviour rules for
+  4. **WP14d, docs and agent rules.** *Status: docs written; not verified on the phone.* Spec (messages, codes, consent), deployment guide, and behaviour rules for
      John's persona (observe first; screenshot only when the tree is not enough; tap by coordinates only
      right after a screenshot; never press "Publish").
 - **Gates.** `code-review` on each step and `security-review` on WP14b and WP14c (data leaves the phone).

@@ -80,6 +80,26 @@ Dans la configuration MCP du profil Hermes (fichier `config.yaml` ou `mcp_config
 }
 ```
 
+### Captures d'écran (repli visuel, facultatif)
+
+Désactivées par défaut. L'utilisateur les autorise **session par session** sur le téléphone (Android 14 ou plus
+récent ; après une mise à jour, couper puis rallumer le service d'accessibilité pour qu'il reprenne la capacité de capture).
+Pour que le modèle de John lise l'image :
+
+- si son modèle lit les images, mettre `model.supports_vision: true` dans la configuration que l'agent lit.
+  Constat des tests : l'agent lit cette clé dans la configuration **racine** de `HERMES_HOME`, pas dans celle du
+  profil. À vérifier sur le déploiement réel (non testé ici) ;
+- sinon, configurer `auxiliary.vision` : un modèle de vision décrit alors l'image et John ne reçoit que du texte ;
+- sans l'un des deux, John reçoit seulement une légende texte.
+
+L'image part vers ce fournisseur et n'est jamais stockée ni journalisée par le relais.
+
+Règles de comportement à donner à John :
+
+1. Observer d'abord (`mobile_observe`) ; ne demander une capture que si l'arbre d'accessibilité est inutilisable.
+2. Cliquer par élément ; `mobile_tap_xy` seulement juste après une capture, avec son `screen_revision`.
+3. Ne jamais appuyer sur « Publier » ou équivalent sans ordre explicite de l'utilisateur.
+
 ---
 
 ## 3. Guide Utilisateur — Activation & Contrôle LinkedIn

@@ -193,6 +193,12 @@ the user on the phone and enforced on **both** sides.
   records `SCREENSHOT` with byte count and dimensions, and logs `screenshot_forwarded` / `screenshot_rejected` /
   `screenshot_dropped` without content.
 
+- **WebUI side.** The worker turns MCP `image` blocks into Hermes's multimodal envelope. The dispatcher then applies
+  Hermes's vision rule for the profile: a model that reads images gets the image; otherwise the auxiliary vision
+  model describes it and the agent gets **text only**. The auxiliary path writes the image to a private temporary
+  directory (0600 files) on the WebUI host, deleted right after the call. The image therefore leaves toward the
+  profile's model provider, or its auxiliary vision provider: this is what the phone's consent dialog says.
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |

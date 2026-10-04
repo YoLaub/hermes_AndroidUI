@@ -582,7 +582,8 @@ private fun StartSessionDialog(
                         Text(
                             "Pendant cette session seulement, l'agent peut demander une image de la fenêtre de " +
                                 "l'application cible (Android 14 ou plus récent). Elle est envoyée au modèle de John " +
-                                "(le fournisseur que ce profil utilise) et peut montrer messages, noms ou photos. " +
+                                "ou, s'il n'en lit pas les images, à son modèle de vision auxiliaire (le fournisseur " +
+                                "configuré pour ce profil) et peut montrer messages, noms ou photos. " +
                                 "Les champs de mot de passe cachés sont masqués ; un mot de passe affiché en clair ne " +
                                 "peut pas l'être. Les fenêtres protégées ne sont jamais capturées.",
                             style = MaterialTheme.typography.bodySmall,
