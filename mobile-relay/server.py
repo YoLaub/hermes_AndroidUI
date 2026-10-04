@@ -76,9 +76,16 @@ async def lifespan(app: FastAPI):
     if any(result.values()):
         log_event("records_purged", **result)
     proxy_headers = os.environ.get("FORWARDED_ALLOW_IPS")
+    trust_all = (proxy_headers or "").strip() == "*"
     log_event("relay_started", instance=INSTANCE_ID,
-              proxy_headers="configured" if proxy_headers else "default")
-    if not proxy_headers:
+              proxy_headers="trust_all" if trust_all else ("configured" if proxy_headers else "default"))
+    if trust_all:
+        logger.warning(
+            "FORWARDED_ALLOW_IPS=* trusts X-Forwarded-For from every peer: the source address used for "
+            "throttling can be forged, letting an attacker evade the limit or lock another client out. "
+            "List the proxy network instead (for example 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16)."
+        )
+    elif not proxy_headers:
         # Throttling is per source address. Behind a reverse proxy without this setting every client
         # looks like the proxy, so a few failed logins from anyone would lock everybody out.
         logger.warning(

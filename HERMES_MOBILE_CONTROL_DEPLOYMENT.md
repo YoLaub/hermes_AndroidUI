@@ -47,7 +47,7 @@ volumes:
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `FORWARDED_ALLOW_IPS` | non défini | **À définir derrière un proxy (Coolify/Traefik)**, par exemple `*` si le relais n'est joignable que par le proxy. Sans elle, tous les clients ont l'adresse du proxy : quelques échecs d'authentification de n'importe qui bloqueraient tout le monde. Le relais le signale au démarrage. |
+| `FORWARDED_ALLOW_IPS` | non défini | **À définir derrière un proxy (Coolify/Traefik), avec le réseau du proxy et non `*`** : `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. Non défini, tous les clients ont l'adresse du proxy et quelques échecs de n'importe qui bloquent tout le monde. Avec `*`, l'en-tête `X-Forwarded-For` est cru de n'importe quel pair : un attaquant peut le falsifier pour contourner la limite ou bloquer une victime (vérifié sur un vrai processus). Le relais avertit au démarrage dans les deux cas. Si un CDN (Cloudflare…) est placé devant, ses plages doivent aussi être listées. |
 | `MOBILE_RELAY_AUTH_MAX_FAILURES` | `10` | Échecs d'authentification (token présenté mais invalide) par adresse avant blocage en 429, y compris pour un bon token. `0` désactive le blocage. |
 | `MOBILE_RELAY_AUTH_WINDOW_SECONDS` | `300` | Fenêtre de comptage et durée du blocage. |
 | `MOBILE_RELAY_AUDIT_RETENTION_DAYS` | `90` | Âge maximal des lignes d'audit. `0` les garde indéfiniment. |

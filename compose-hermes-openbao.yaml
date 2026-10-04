@@ -308,9 +308,12 @@ services:
     environment:
       - SERVICE_URL_MOBILERELAY_8765
       - MOBILE_RELAY_DB_PATH=/data/mobile_relay.db
-      # Required behind Coolify's proxy: use the real client address from X-Forwarded-For. Without it
-      # every client looks like the proxy and failed logins from anyone would lock everybody out.
-      - FORWARDED_ALLOW_IPS=*
+      # Required behind Coolify's proxy, and it must list the proxy's NETWORK, not "*":
+      # - unset: every client looks like the proxy, so failed logins from anyone lock everybody out;
+      # - "*": X-Forwarded-For is trusted from every peer, so an attacker can forge it to evade the
+      #   throttle or to lock a victim out. With the private ranges only a peer on the internal
+      #   network (the proxy) is believed, and the address is taken from the right of the header.
+      - FORWARDED_ALLOW_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       # Failed-authentication throttling (per source address) and audit-log retention.
       - MOBILE_RELAY_AUTH_MAX_FAILURES=10
       - MOBILE_RELAY_AUTH_WINDOW_SECONDS=300

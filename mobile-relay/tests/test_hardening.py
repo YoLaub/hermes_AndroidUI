@@ -252,9 +252,9 @@ def test_startup_warns_when_the_proxy_is_not_trusted_because_everybody_would_sha
         r.levelname for r in caplog.records if "FORWARDED_ALLOW_IPS" in r.getMessage())
 
 
-def test_startup_does_not_warn_when_the_proxy_headers_are_configured(monkeypatch, caplog):
+def test_startup_does_not_warn_when_only_the_proxy_network_is_trusted(monkeypatch, caplog):
     import logging
-    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "*")
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
     with caplog.at_level(logging.INFO, logger="mobile-relay"):
         with TestClient(app):
             pass
@@ -262,3 +262,14 @@ def test_startup_does_not_warn_when_the_proxy_headers_are_configured(monkeypatch
                 and "FORWARDED_ALLOW_IPS" in r.getMessage()]
     assert any("event=relay_started" in r.getMessage() and "proxy_headers=configured" in r.getMessage()
                for r in caplog.records if r.name == "mobile-relay")
+
+
+def test_startup_warns_when_every_peer_is_trusted_because_the_source_address_can_be_forged(monkeypatch, caplog):
+    import logging
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "*")
+    with caplog.at_level(logging.INFO, logger="mobile-relay"):
+        with TestClient(app):
+            pass
+    warnings = [r.getMessage() for r in caplog.records
+                if r.name == "mobile-relay" and r.levelno >= logging.WARNING and "FORWARDED_ALLOW_IPS" in r.getMessage()]
+    assert warnings and "forged" in warnings[0].lower()
