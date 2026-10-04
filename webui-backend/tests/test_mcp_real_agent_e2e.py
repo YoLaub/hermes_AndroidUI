@@ -37,12 +37,15 @@ def _wait_port(port: int, timeout: float = 30.0) -> None:
     raise RuntimeError(f"port {port} never opened")
 
 
-def _write_profile(root: Path, name: str, llm_port: int, mcp_url: str, token_var: str, token: str) -> None:
+def _write_profile(root: Path, name: str, llm_port: int, mcp_url: str, token_var: str, token: str,
+                   vision: bool = False) -> None:
     prof = root / "profiles" / name
     prof.mkdir(parents=True)
     (prof / "config.yaml").write_text(
         f"model:\n  default: fake-model\n  provider: custom\n"
         f"  base_url: http://127.0.0.1:{llm_port}/v1\n  api_key: sk-fake\n"
+        + ("  supports_vision: true\n" if vision else "")
+        + ""
         f"mcp_servers:\n  relay:\n    url: {mcp_url}\n    headers:\n"
         f"      Authorization: Bearer ${{{token_var}}}\n",
         encoding="utf-8",
@@ -77,8 +80,7 @@ def _chat(base: str, profile: str, workspace: Path, message: str) -> list:
     return events
 
 
-@pytest.fixture
-def stack(tmp_path):
+def _run_stack(tmp_path, tool="mcp_relay_echo", vision=False):
     procs = []
     home, state, ws = tmp_path / "home", tmp_path / "state", tmp_path / "ws"
     for d in (home, state, ws):
@@ -89,13 +91,14 @@ def stack(tmp_path):
     llm_log = tmp_path / "llm.log"
     llm_log.write_text("")
     procs.append(subprocess.Popen(
-        [sys.executable, str(FIXTURES / "fake_llm.py"), str(llm_port), str(llm_log), "mcp_relay_echo"],
+        [sys.executable, str(FIXTURES / "fake_llm.py"), str(llm_port), str(llm_log), tool],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     _wait_port(llm_port)
     (home / "config.yaml").write_text(
         f"model:\n  default: fake-model\n  provider: custom\n"
-        f"  base_url: http://127.0.0.1:{llm_port}/v1\n  api_key: sk-fake\n", encoding="utf-8")
-    _write_profile(home, "john", llm_port, john.url, "J_TOKEN", "tok_john")
+        f"  base_url: http://127.0.0.1:{llm_port}/v1\n  api_key: sk-fake\n"
+        + ("  supports_vision: true\n" if vision else ""), encoding="utf-8")
+    _write_profile(home, "john", llm_port, john.url, "J_TOKEN", "tok_john", vision=vision)
     _write_profile(home, "alice", llm_port, alice.url, "A_TOKEN", "tok_alice")
 
     env = {k: v for k, v in os.environ.items() if k not in ("J_TOKEN", "A_TOKEN")}
@@ -107,13 +110,23 @@ def stack(tmp_path):
                                   stdout=server_log, stderr=subprocess.STDOUT))
     try:
         _wait_port(web_port)
-        yield {"base": f"http://127.0.0.1:{web_port}", "ws": ws}
+        yield {"base": f"http://127.0.0.1:{web_port}", "ws": ws, "llm_log": llm_log}
     finally:
         for p in procs:
             p.terminate()
         john.stop()
         alice.stop()
         server_log.close()
+
+
+@pytest.fixture
+def stack(tmp_path):
+    yield from _run_stack(tmp_path)
+
+
+@pytest.fixture
+def stack_snap_vision(tmp_path):
+    yield from _run_stack(tmp_path, tool="mcp_relay_snap", vision=True)
 
 
 def test_real_agent_calls_mcp_tool_of_its_own_profile(stack):
@@ -131,3 +144,14 @@ def test_real_agent_calls_mcp_tool_of_its_own_profile(stack):
     # Same server name and tool name in both profiles, each answered by its own server.
     assert "RESULT=[JOHN-MCP] from-agent" in results["john"]
     assert "RESULT=[ALICE-MCP] from-agent" in results["alice"]
+
+
+def test_real_agent_hands_a_screenshot_to_a_vision_model_as_an_image(stack_snap_vision):
+    s = stack_snap_vision
+    events = _chat(s["base"], "john", s["ws"], "take a screenshot")
+    kinds = [e for e, _ in events]
+    assert "apperror" not in kinds and "error" not in kinds, events
+    answer = "".join(d.get("text", "") for e, d in events if e == "token")
+    # The fake model reports what the tool message it received contained.
+    assert "IMAGE_PARTS=1" in answer, answer
+    assert "[JOHN-MCP] caption" in answer, answer
