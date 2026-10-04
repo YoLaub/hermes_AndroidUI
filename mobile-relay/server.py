@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import json
 import logging
 import os
@@ -87,12 +88,13 @@ async def lifespan(app: FastAPI):
         )
     elif not proxy_headers:
         # Throttling is per source address. Behind a reverse proxy without this setting every client
-        # looks like the proxy, so a few failed logins from anyone would lock everybody out.
+        # looks like the proxy's internal address, which is never throttled: nobody is locked out,
+        # but internet clients are not protected either.
         logger.warning(
-            "FORWARDED_ALLOW_IPS is not set: client addresses are those of the direct peer. "
-            "Behind a reverse proxy (Coolify/Traefik) set FORWARDED_ALLOW_IPS so the real client "
-            "address from X-Forwarded-For is used, or failed authentication from one source "
-            "will block every client."
+            "FORWARDED_ALLOW_IPS is not set: client addresses are those of the direct peer. Behind a "
+            "reverse proxy (Coolify/Traefik) every internet client then looks like the proxy's internal "
+            "address, which is never throttled, so failed-authentication throttling is inactive for "
+            "them. Set FORWARDED_ALLOW_IPS to the proxy network to enable it."
         )
     interval = max(0.05, float(os.environ.get("MOBILE_RELAY_PURGE_INTERVAL_SECONDS", 3600)))
     purge_task = asyncio.create_task(_purge_loop(interval))
@@ -258,9 +260,42 @@ def client_ip(conn) -> str:
     return conn.client.host if getattr(conn, "client", None) else "unknown"
 
 
+_INTERNAL_NETWORKS = tuple(ipaddress.ip_network(n) for n in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16",
+    "::1/128", "fc00::/7", "fe80::/10",
+))
+
+
+def is_internal_source(address: str) -> bool:
+    """True for loopback, private and link-local addresses (the compose network, the proxy)."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return any(ip in net for net in _INTERNAL_NETWORKS if net.version == ip.version)
+
+
+def _is_throttled(source: str) -> bool:
+    """Internal sources are never throttled unless MOBILE_RELAY_AUTH_THROTTLE_INTERNAL=1.
+
+    Several profiles' workers share one container address, so one profile's stale token would
+    otherwise lock the others out. If the proxy is not configured, every internet client also looks
+    internal: that fails safe (no lockout, no protection) instead of locking everybody out.
+    """
+    if not is_internal_source(source):
+        return True
+    return os.environ.get("MOBILE_RELAY_AUTH_THROTTLE_INTERNAL", "0").lower() in ("1", "true", "yes")
+
+
+def source_is_blocked(source: str) -> bool:
+    return _is_throttled(source) and is_auth_blocked(source)
+
+
 def enforce_not_blocked(source: str, scope: str) -> None:
     """429 for a source that sent too many rejected credentials recently (even if this one is right)."""
-    if is_auth_blocked(source):
+    if source_is_blocked(source):
         log_event("auth_blocked", logging.WARNING, source=source, scope=scope)
         raise HTTPException(
             status_code=429,
@@ -270,8 +305,10 @@ def enforce_not_blocked(source: str, scope: str) -> None:
 
 
 def note_auth_failure(source: str, scope: str) -> None:
-    record_auth_failure(source)
-    log_event("auth_failed", logging.WARNING, source=source, scope=scope)
+    throttled = _is_throttled(source)
+    if throttled:
+        record_auth_failure(source)
+    log_event("auth_failed", logging.WARNING, source=source, scope=scope, throttled=str(throttled).lower())
 
 
 def authenticate_admin_request(request: Request):
@@ -472,7 +509,7 @@ async def websocket_device_endpoint(
 
     try:
         # Initial authentication via headers if present (skipped for a blocked source)
-        if x_device_id and x_device_token and not is_auth_blocked(source):
+        if x_device_id and x_device_token and not source_is_blocked(source):
             if verify_device_token(x_device_id, x_device_token):
                 authenticated_device_id = x_device_id
                 manager.register_connection(authenticated_device_id, websocket)
@@ -493,7 +530,7 @@ async def websocket_device_endpoint(
             if msg_type == "auth":
                 dev_id = data.get("device_id")
                 token = data.get("device_token")
-                if is_auth_blocked(source):
+                if source_is_blocked(source):
                     log_event("auth_blocked", logging.WARNING, source=source, scope="ws", device_id=dev_id)
                     await websocket.send_text(json.dumps({
                         "protocol": "mobile-control/1", "type": "auth_error",

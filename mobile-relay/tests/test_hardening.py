@@ -273,3 +273,55 @@ def test_startup_warns_when_every_peer_is_trusted_because_the_source_address_can
     warnings = [r.getMessage() for r in caplog.records
                 if r.name == "mobile-relay" and r.levelno >= logging.WARNING and "FORWARDED_ALLOW_IPS" in r.getMessage()]
     assert warnings and "forged" in warnings[0].lower()
+
+
+# ── Internal sources are never locked out (several profiles share the WebUI container's address) ──
+
+@pytest.mark.parametrize("address, internal", [
+    ("10.1.2.3", True), ("172.16.0.1", True), ("172.31.255.255", True), ("192.168.1.1", True),
+    ("127.0.0.1", True), ("169.254.1.1", True), ("::1", True), ("fd00::1", True), ("fe80::1", True),
+    ("172.32.0.1", False), ("172.15.255.255", False), ("8.8.8.8", False),
+    ("203.0.113.5", False), ("198.51.100.7", False), ("2001:db8::1", False), ("unknown", False),
+])
+def test_internal_address_classification(address, internal):
+    from server import is_internal_source
+    assert is_internal_source(address) is internal
+
+
+def test_an_internal_source_is_never_blocked_even_after_many_bad_tokens(monkeypatch):
+    monkeypatch.setenv("MOBILE_RELAY_AUTH_MAX_FAILURES", "3")
+    internal = client_from("172.18.0.5")  # e.g. the WebUI container on the compose network
+    for _ in range(20):
+        assert internal.post("/mcp", json=MCP_BODY, headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert internal.post("/mcp", json=MCP_BODY, headers=JOHN_OK).status_code == 200
+
+
+def test_a_profile_with_a_stale_token_cannot_lock_john_out_from_the_same_container(monkeypatch):
+    # Mario's or Gaston's worker sends a wrong/missing-token call from the same container address
+    # as John's worker: John must keep working.
+    monkeypatch.setenv("MOBILE_RELAY_AUTH_MAX_FAILURES", "3")
+    webui = client_from("172.18.0.5")
+    for _ in range(10):
+        webui.post("/mcp", json=MCP_BODY, headers={"Authorization": "Bearer gaston-stale-token"})
+    assert webui.post("/mcp", json=MCP_BODY, headers=JOHN_OK).status_code == 200
+
+
+def test_internal_failures_are_not_stored_and_not_blocked_on_the_websocket_either(monkeypatch):
+    monkeypatch.setenv("MOBILE_RELAY_AUTH_MAX_FAILURES", "2")
+    c = client_from("10.0.0.7")
+    for _ in range(5):
+        with c.websocket_connect("/ws/device") as ws:
+            assert _bad_auth(ws)["error_code"] == "DEVICE_AUTH_FAILED"
+    conn = get_db()
+    rows = conn.execute("SELECT COUNT(*) FROM auth_failures WHERE identifier = ?", ("10.0.0.7",)).fetchone()[0]
+    conn.close()
+    assert rows == 0
+
+
+def test_internal_sources_can_be_throttled_when_asked_to(monkeypatch):
+    monkeypatch.setenv("MOBILE_RELAY_AUTH_MAX_FAILURES", "3")
+    monkeypatch.setenv("MOBILE_RELAY_AUTH_THROTTLE_INTERNAL", "1")
+    c = client_from("172.18.0.9")
+    for _ in range(3):
+        assert c.post("/mcp", json=MCP_BODY, headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert c.post("/mcp", json=MCP_BODY, headers={"Authorization": "Bearer wrong"}).status_code == 429

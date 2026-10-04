@@ -65,6 +65,14 @@ def test_trusting_only_the_proxy_network_resists_a_forged_forwarded_for():
     assert victim == 200, "a forged victim address must not lock the victim out"
 
 
+def test_an_unconfigured_proxy_fails_safe_nobody_is_locked_out():
+    # The peer (127.0.0.1) is not trusted, so every client looks like that internal address. Internal
+    # addresses are never throttled: no protection for the internet, but also no collateral lockout.
+    rotating, victim = _run("10.255.255.1")
+    assert 429 not in rotating
+    assert victim == 200
+
+
 def test_trusting_every_peer_lets_the_attacker_evade_and_lock_a_victim_out():
     # Documents why '*' is not used in the deployment.
     rotating, victim = _run("*")
