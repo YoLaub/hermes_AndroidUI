@@ -57,6 +57,14 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS auth_failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identifier TEXT NOT NULL,
+                ts REAL NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_failures_identifier_ts ON auth_failures (identifier, ts)")
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS pairing_attempts (
                 identifier TEXT PRIMARY KEY,
                 attempts INTEGER NOT NULL,
@@ -64,6 +72,72 @@ def init_db():
             )
         """)
     conn.close()
+
+def _env_number(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return float(default)
+
+def auth_limits() -> Tuple[int, int]:
+    """(max failures, window seconds) before a source is blocked. 0 failures disables blocking."""
+    return (
+        int(_env_number("MOBILE_RELAY_AUTH_MAX_FAILURES", 10)),
+        int(_env_number("MOBILE_RELAY_AUTH_WINDOW_SECONDS", 300)),
+    )
+
+def record_auth_failure(identifier: str, now: Optional[float] = None) -> None:
+    """Counts one rejected credential (a presented but invalid token) against a source."""
+    conn = get_db()
+    with conn:
+        conn.execute("INSERT INTO auth_failures (identifier, ts) VALUES (?, ?)", (identifier, now or time.time()))
+    conn.close()
+
+def is_auth_blocked(identifier: str, max_failures: Optional[int] = None,
+                    window_seconds: Optional[int] = None, now: Optional[float] = None) -> bool:
+    default_max, default_window = auth_limits()
+    max_failures = default_max if max_failures is None else max_failures
+    window_seconds = default_window if window_seconds is None else window_seconds
+    if max_failures <= 0:
+        return False
+    now = now or time.time()
+    conn = get_db()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM auth_failures WHERE identifier = ? AND ts > ?",
+        (identifier, now - window_seconds),
+    ).fetchone()[0]
+    conn.close()
+    return count >= max_failures
+
+def retry_after_seconds(identifier: str, window_seconds: Optional[int] = None, now: Optional[float] = None) -> int:
+    """Seconds until the oldest counted failure leaves the window (at least 1)."""
+    window_seconds = auth_limits()[1] if window_seconds is None else window_seconds
+    now = now or time.time()
+    conn = get_db()
+    row = conn.execute(
+        "SELECT MIN(ts) FROM auth_failures WHERE identifier = ? AND ts > ?", (identifier, now - window_seconds)
+    ).fetchone()
+    conn.close()
+    oldest = row[0] if row and row[0] is not None else now
+    return max(1, int(oldest + window_seconds - now) + 1)
+
+def purge_old_records(now: Optional[float] = None, audit_retention_days: Optional[float] = None) -> dict:
+    """Bounds the tables that only grow. Retention 0 keeps the audit log forever."""
+    now = now or time.time()
+    days = _env_number("MOBILE_RELAY_AUDIT_RETENTION_DAYS", 90) if audit_retention_days is None else audit_retention_days
+    window = auth_limits()[1]
+    conn = get_db()
+    deleted = {"audit_logs": 0, "auth_failures": 0}
+    try:
+        with conn:
+            if days > 0:
+                deleted["audit_logs"] = conn.execute(
+                    "DELETE FROM audit_logs WHERE timestamp < ?", (now - days * 86400,)).rowcount
+            deleted["auth_failures"] = conn.execute(
+                "DELETE FROM auth_failures WHERE ts < ?", (now - window,)).rowcount
+    finally:
+        conn.close()
+    return deleted
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode('utf-8')).hexdigest()

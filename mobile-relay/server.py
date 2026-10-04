@@ -14,15 +14,18 @@ from database import (
     consume_pairing_code,
     count_active_pairing_codes,
     init_db,
+    is_auth_blocked,
     log_audit,
+    purge_old_records,
+    record_auth_failure,
     reset_pairing_attempts,
+    retry_after_seconds,
     save_pairing_code,
     verify_admin_token,
     verify_device_token,
     verify_profile_token_in_db,
 )
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from models import (
     MobileCommand,
@@ -55,21 +58,47 @@ def log_event(event: str, level: int = logging.INFO, **fields: Any) -> None:
         parts.append(f"{key}={text[:96]}")
     logger.log(level, " ".join(parts))
 
+async def _purge_loop(interval: float) -> None:
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            result = await asyncio.to_thread(purge_old_records)
+            if any(result.values()):
+                log_event("records_purged", **result)
+        except Exception as exc:  # keep purging on the next tick
+            log_event("purge_failed", logging.WARNING, error=type(exc).__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    result = purge_old_records()
+    if any(result.values()):
+        log_event("records_purged", **result)
+    proxy_headers = os.environ.get("FORWARDED_ALLOW_IPS")
+    log_event("relay_started", instance=INSTANCE_ID,
+              proxy_headers="configured" if proxy_headers else "default")
+    if not proxy_headers:
+        # Throttling is per source address. Behind a reverse proxy without this setting every client
+        # looks like the proxy, so a few failed logins from anyone would lock everybody out.
+        logger.warning(
+            "FORWARDED_ALLOW_IPS is not set: client addresses are those of the direct peer. "
+            "Behind a reverse proxy (Coolify/Traefik) set FORWARDED_ALLOW_IPS so the real client "
+            "address from X-Forwarded-For is used, or failed authentication from one source "
+            "will block every client."
+        )
+    interval = max(0.05, float(os.environ.get("MOBILE_RELAY_PURGE_INTERVAL_SECONDS", 3600)))
+    purge_task = asyncio.create_task(_purge_loop(interval))
     logger.info("Mobile Relay service initialized successfully.")
-    yield
+    try:
+        yield
+    finally:
+        purge_task.cancel()
 
 app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# No CORS middleware on purpose: the only clients are the Android app and MCP clients, never a
+# browser, and a wildcard origin with credentials would let any web page talk to the relay.
 
 # ── Active State & Connection Management (In-Memory) ─────────────────────────
 
@@ -216,6 +245,28 @@ manager = DeviceConnectionManager()
 
 # ── Authentication Helpers ───────────────────────────────────────────────────
 
+def client_ip(conn) -> str:
+    """Source address for throttling. Behind a reverse proxy this is the real client only if uvicorn
+    trusts the proxy's X-Forwarded-For (FORWARDED_ALLOW_IPS); otherwise it is the proxy's address."""
+    return conn.client.host if getattr(conn, "client", None) else "unknown"
+
+
+def enforce_not_blocked(source: str, scope: str) -> None:
+    """429 for a source that sent too many rejected credentials recently (even if this one is right)."""
+    if is_auth_blocked(source):
+        log_event("auth_blocked", logging.WARNING, source=source, scope=scope)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed authentication attempts. Try again later.",
+            headers={"Retry-After": str(retry_after_seconds(source))},
+        )
+
+
+def note_auth_failure(source: str, scope: str) -> None:
+    record_auth_failure(source)
+    log_event("auth_failed", logging.WARNING, source=source, scope=scope)
+
+
 def authenticate_admin_request(request: Request):
     auth_header = request.headers.get("Authorization", "")
     token = None
@@ -224,7 +275,12 @@ def authenticate_admin_request(request: Request):
     elif "X-Admin-Token" in request.headers:
         token = request.headers["X-Admin-Token"].strip()
 
-    if not token or not verify_admin_token(token):
+    source = client_ip(request)
+    enforce_not_blocked(source, "admin")
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing admin token.")
+    if not verify_admin_token(token):
+        note_auth_failure(source, "admin")
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing admin token.")
 
 def authenticate_hermes_profile(request: Request) -> str:
@@ -239,6 +295,9 @@ def authenticate_hermes_profile(request: Request) -> str:
         token = auth_header[7:].strip()
     elif "X-Hermes-Token" in request.headers:
         token = request.headers["X-Hermes-Token"].strip()
+
+    source = client_ip(request)
+    enforce_not_blocked(source, "mcp")
 
     if not token:
         raise HTTPException(
@@ -280,6 +339,7 @@ def authenticate_hermes_profile(request: Request) -> str:
     if test_token and secrets.compare_digest(test_token.strip(), token):
         return "john"
 
+    note_auth_failure(source, "mcp")
     raise HTTPException(status_code=401, detail="Unauthorized: Invalid Hermes profile token.")
 
 # ── Health & Pairing Routes ──────────────────────────────────────────────────
@@ -400,13 +460,19 @@ async def websocket_device_endpoint(
     authenticated_device_id = None
     close_code: Any = None
     close_reason = "unknown"
+    source = client_ip(websocket)
+    failure_counted = False  # a bad header plus a bad auth message is one failed attempt, not two
 
     try:
-        # Initial authentication via headers if present
-        if x_device_id and x_device_token and verify_device_token(x_device_id, x_device_token):
-            authenticated_device_id = x_device_id
-            manager.register_connection(authenticated_device_id, websocket)
-            log_event("device_authenticated", device_id=authenticated_device_id, via="header")
+        # Initial authentication via headers if present (skipped for a blocked source)
+        if x_device_id and x_device_token and not is_auth_blocked(source):
+            if verify_device_token(x_device_id, x_device_token):
+                authenticated_device_id = x_device_id
+                manager.register_connection(authenticated_device_id, websocket)
+                log_event("device_authenticated", device_id=authenticated_device_id, via="header")
+            else:
+                note_auth_failure(source, "ws")
+                failure_counted = True
 
         while True:
             text = await websocket.receive_text()
@@ -420,6 +486,16 @@ async def websocket_device_endpoint(
             if msg_type == "auth":
                 dev_id = data.get("device_id")
                 token = data.get("device_token")
+                if is_auth_blocked(source):
+                    log_event("auth_blocked", logging.WARNING, source=source, scope="ws", device_id=dev_id)
+                    await websocket.send_text(json.dumps({
+                        "protocol": "mobile-control/1", "type": "auth_error",
+                        "error_code": "AUTH_RATE_LIMITED",
+                        "message": "Trop d'échecs d'authentification depuis cette adresse. Réessayez plus tard.",
+                    }))
+                    close_reason = "auth_rate_limited"
+                    await websocket.close()
+                    break
                 if dev_id and token and verify_device_token(dev_id, token):
                     authenticated_device_id = dev_id
                     manager.register_connection(dev_id, websocket)
@@ -428,6 +504,9 @@ async def websocket_device_endpoint(
                     # Reconnection sync: tell the phone what the relay actually holds.
                     await websocket.send_text(json.dumps(session_state_message(dev_id)))
                 else:
+                    if not failure_counted:
+                        note_auth_failure(source, "ws")
+                        failure_counted = True
                     log_event("device_auth_failed", logging.WARNING, device_id=dev_id,
                               reason="UNKNOWN_DEVICE_OR_BAD_CREDENTIALS")
                     await websocket.send_text(json.dumps({
