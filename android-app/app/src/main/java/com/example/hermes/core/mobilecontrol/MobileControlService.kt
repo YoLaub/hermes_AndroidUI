@@ -40,36 +40,27 @@ class MobileControlService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = (application as HermesApp).container.mobileControlManager
         val view = SessionView(pending = manager.pendingSession.value, active = manager.activeSession.value)
-        if (!ForegroundPolicy.shouldRunForeground(view)) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
 
-        val helper = MobileControlNotificationHelper(this)
-        val active = view.active
-        val notification = if (active != null) {
-            helper.buildNotification(
-                title = "Contrôle Hermes actif : ${active.targetAppName}",
-                text = "Profil autorisé : ${active.allowedProfile} • Mode : ${active.mode.name.lowercase()}"
-            )
-        } else {
-            helper.buildNotification(
-                title = "Contrôle Hermes : démarrage",
-                text = "En attente de la confirmation du relais"
-            )
-        }
-
+        // startForegroundService() obliges this call within seconds, even if the session already ended:
+        // stopping first would crash the process (ForegroundServiceDidNotStartInTimeException).
+        val content = ForegroundPolicy.notificationFor(view)
+        val notification = MobileControlNotificationHelper(this).buildNotification(content.title, content.text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(MobileControlNotificationHelper.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(MobileControlNotificationHelper.NOTIFICATION_ID, notification)
         }
-        Log.i(TAG, "event=fgs_started active=${active != null}")
+        Log.i(TAG, "event=fgs_started active=${view.active != null} pending=${view.pending != null}")
+
+        if (!ForegroundPolicy.shouldRunForeground(view)) {
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         Log.i(TAG, "event=fgs_stopped")
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 }

@@ -24,4 +24,24 @@ class ForegroundPolicyTest {
     fun aPendingStartAlsoKeepsItAliveSoTheRelayConfirmationCanArrive() {
         assertTrue(ForegroundPolicy.shouldRunForeground(SessionView(pending = session(), active = null)))
     }
+
+    @Test
+    fun activeSessionNotificationNamesTheAppProfileAndMode() {
+        val c = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session()))
+        assertTrue(c.title.contains("LinkedIn"))
+        assertTrue(c.text.contains("john") && c.text.contains("interaction"))
+    }
+
+    @Test
+    fun pendingSessionNotificationSaysItIsWaitingForTheRelay() {
+        val c = ForegroundPolicy.notificationFor(SessionView(pending = session(), active = null))
+        assertTrue(c.text.contains("relais", ignoreCase = true))
+    }
+
+    @Test
+    fun thereIsAlwaysSomethingToShowEvenWhenNoSessionRemains() {
+        // startForegroundService() obliges startForeground() even if the session ended meanwhile.
+        val c = ForegroundPolicy.notificationFor(SessionView(pending = null, active = null))
+        assertTrue(c.title.isNotBlank() && c.text.isNotBlank())
+    }
 }

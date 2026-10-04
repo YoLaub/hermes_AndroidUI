@@ -16,8 +16,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
@@ -66,11 +64,6 @@ class MobileControlManager(
     private val processedCommandIds = mutableSetOf<String>()
 
     init {
-        // Wire notification stop receiver callback
-        MobileControlStopReceiver.onStopRequested = {
-            stopSession("user_stopped_via_notification")
-        }
-
         // Wire incoming WebSocket commands
         wsClient.onCommandReceived = { cmd, sendResult ->
             scope.launch {
@@ -98,12 +91,11 @@ class MobileControlManager(
 
         // Keep the process alive and visible while a session is pending or active.
         scope.launch {
-            combine(_pendingSession, _activeSession) { pending, active -> SessionView(pending, active) }
-                .map { ForegroundPolicy.shouldRunForeground(it) }
-                .distinctUntilChanged()
-                .collect { run ->
-                    if (run) MobileControlService.start(context) else MobileControlService.stop(context)
-                }
+            ForegroundSync(
+                views = combine(_pendingSession, _activeSession) { pending, active -> SessionView(pending, active) },
+                start = { MobileControlService.start(context) },
+                stop = { MobileControlService.stop(context) }
+            ).run()
         }
 
         // The relay drops a device's session when its socket closes: do not keep showing it.
