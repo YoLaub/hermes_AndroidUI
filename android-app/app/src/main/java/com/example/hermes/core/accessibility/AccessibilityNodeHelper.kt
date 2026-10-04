@@ -102,6 +102,20 @@ class AccessibilityNodeHelper {
         return revision == currentRevision
     }
 
+    /**
+     * "[left,top][right,bottom]" of an element from the last observation, re-read just now, or null if the
+     * reference is unknown, the node is gone, or the element is disabled or not visible to the user.
+     */
+    fun visibleBoundsOf(elementRef: String): String? {
+        val node = elementMap[elementRef] ?: return null
+        // The node is cached from the last observation: re-read it, and refuse one that no longer exists.
+        if (!node.refresh()) return null
+        if (!TapGuard.elementTappable(node.isEnabled, node.isVisibleToUser)) return null
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        return "[${bounds.left},${bounds.top}][${bounds.right},${bounds.bottom}]"
+    }
+
     fun clickElement(elementRef: String): Boolean {
         val node = elementMap[elementRef] ?: return false
         // Try clicking node itself, or parent if parent is clickable

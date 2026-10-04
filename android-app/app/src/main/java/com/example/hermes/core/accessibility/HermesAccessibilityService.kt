@@ -1,13 +1,17 @@
 package com.example.hermes.core.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
 import android.content.Intent
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.example.hermes.core.mobilecontrol.MobileScreenData
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 
 class HermesAccessibilityService : AccessibilityService() {
 
@@ -98,6 +102,43 @@ class HermesAccessibilityService : AccessibilityService() {
             return false
         }
         return nodeHelper.setText(elementRef, text)
+    }
+
+    /**
+     * Fallback when an element cannot be clicked through its accessibility action: tap the centre of its
+     * visible bounds with a gesture. Same revision check as a normal click, plus: the target app must still be
+     * in the foreground, the element must be enabled and visible and is re-read first, and at least half of it
+     * must be on screen.
+     */
+    suspend fun tapElementCenter(elementRef: String, expectedRevision: String?, targetPackage: String): TapOutcome {
+        if (!nodeHelper.isRevisionValid(expectedRevision)) return TapOutcome.REFUSED
+        // A coordinate tap lands on whatever is on top: re-check the target app right before dispatching.
+        if (!TapGuard.targetStillInForeground(rootInActiveWindow?.packageName?.toString(), targetPackage)) {
+            Log.w(TAG, "event=tap_refused reason=target_not_in_foreground")
+            return TapOutcome.REFUSED
+        }
+        val bounds = nodeHelper.visibleBoundsOf(elementRef) ?: return TapOutcome.REFUSED
+        val metrics = resources.displayMetrics
+        val point = BoundsTap.centerOfBounds(bounds, metrics.widthPixels, metrics.heightPixels)
+            ?: return TapOutcome.REFUSED
+
+        val path = Path().apply { moveTo(point.x.toFloat(), point.y.toFloat()) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
+            .build()
+        val done = CompletableDeferred<TapOutcome>()
+        val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                done.complete(TapOutcome.TAPPED)
+            }
+
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                done.complete(TapOutcome.CANCELLED)
+            }
+        }, null)
+        if (!dispatched) return TapOutcome.REFUSED
+        // No answer in time: the gesture is queued and may still run, so the outcome is unknown.
+        return withTimeoutOrNull(2_000) { done.await() } ?: TapOutcome.UNKNOWN
     }
 
     fun scroll(direction: String): Boolean {

@@ -177,6 +177,10 @@ the spec and not changed unless asked.
   1. **WP14a, tap by bounds (no privacy impact).** When `performAction(CLICK)` fails, tap the centre of the element's
      bounds with `dispatchGesture` (already permitted), under the same revision, package and mode checks.
      Pure function for the centre and bounds validation, plus guard tests.
+     *Status (2026-10-05): coded, 110 Android tests green, NOT yet verified on the phone.* Review hardened it:
+     the target app must still be in the foreground right before the tap, a disabled or hidden element is never
+     tapped, the node is re-read first, the tap goes to the centre of the visible part and an element less than
+     half visible is refused, and a timed-out gesture answers `RESULT_UNKNOWN` (never replay) instead of a failure.
   2. **WP14b, screenshot on the phone and relay.** `allow_screenshots` in `session_start` (UI toggle, default off,
      notification text); `mobile_screenshot` and `mobile_tap_xy(x, y, screen_revision)` MCP tools; new codes
      `SCREENSHOTS_NOT_ALLOWED`, `SCREENSHOT_UNSUPPORTED`, `SCREENSHOT_BLOCKED_SECURE_WINDOW`,

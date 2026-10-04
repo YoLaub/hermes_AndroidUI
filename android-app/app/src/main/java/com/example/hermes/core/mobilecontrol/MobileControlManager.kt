@@ -367,16 +367,28 @@ class MobileControlManager(
                     if (!service.isScreenRevisionValid(cmd.screenRevision)) {
                         return reject(cmd, "STALE_SCREEN", "Interface modifiée : nouvelle observation requise.")
                     }
-                    val clicked = service.clickElement(ref, cmd.screenRevision)
+                    var clicked = service.clickElement(ref, cmd.screenRevision)
+                    var viaBounds = false
+                    if (!clicked) {
+                        // The accessibility action failed (custom view, non-clickable node): tap its centre.
+                        val outcome = service.tapElementCenter(ref, cmd.screenRevision, session.targetPackage)
+                        Log.i(TAG, "event=click_fallback_bounds command_id=${cmd.commandId} outcome=${outcome.name}")
+                        outcome.toCommandError(ref)?.let { return reject(cmd, it.code, it.message) }
+                        viaBounds = true
+                        clicked = true
+                    }
                     if (clicked) {
                         delay(300) // Brief delay for UI to settle
                         val nextScreen = service.observeScreen()
-                        logAudit("CLICK", session.targetPackage, "SUCCESS", "Element: $ref", session.allowedProfile)
+                        logAudit(
+                            "CLICK", session.targetPackage, "SUCCESS",
+                            "Element: $ref" + if (viaBounds) " (par coordonnées, effet non vérifié)" else "", session.allowedProfile
+                        )
                         MobileCommandResult(
                             commandId = cmd.commandId,
                             status = MobileCommandStatus.SUCCESS,
                             executedAt = System.currentTimeMillis(),
-                            message = "Clic effectué sur $ref.",
+                            message = if (viaBounds) "Geste de clic envoyé sur $ref (par coordonnées, effet non vérifié)." else "Clic effectué sur $ref.",
                             data = nextScreen
                         )
                     } else {
