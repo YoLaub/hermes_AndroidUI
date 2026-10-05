@@ -1,6 +1,7 @@
 package com.example.hermes.core.accessibility
 
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.hermes.core.mobilecontrol.MobileElementInfo
@@ -100,6 +101,42 @@ class AccessibilityNodeHelper {
     fun isRevisionValid(revision: String?): Boolean {
         if (revision.isNullOrBlank()) return true // Lenient if not specified
         return revision == currentRevision
+    }
+
+    /**
+     * "[left,top][right,bottom]" of an element from the last observation, re-read just now, or null if the
+     * reference is unknown, the node is gone, or the element is disabled or not visible to the user.
+     */
+    fun visibleBoundsOf(elementRef: String): String? {
+        val node = elementMap[elementRef] ?: return null
+        // The node is cached from the last observation: re-read it, and refuse one that no longer exists.
+        if (!node.refresh()) return null
+        if (!TapGuard.elementTappable(node.isEnabled, node.isVisibleToUser)) return null
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        return "[${bounds.left},${bounds.top}][${bounds.right},${bounds.bottom}]"
+    }
+
+    /** Bounds (screen pixels) of the password fields of the window, so they can be blacked out of a capture. */
+    fun passwordRects(rootNode: AccessibilityNodeInfo?): List<ScreenRect> {
+        val rects = mutableListOf<ScreenRect>()
+        fun walk(node: AccessibilityNodeInfo?, depth: Int) {
+            // Deeper than observe's 40: a password field must not escape masking because the tree is deep.
+            if (node == null || depth > 100) return
+            if (node.isPassword) {
+                val b = Rect()
+                node.getBoundsInScreen(b)
+                rects.add(ScreenRect(b.left, b.top, b.right, b.bottom))
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child, depth + 1)
+                @Suppress("DEPRECATION")
+                if (Build.VERSION.SDK_INT < 33) child.recycle()
+            }
+        }
+        walk(rootNode, 0)
+        return rects
     }
 
     fun clickElement(elementRef: String): Boolean {

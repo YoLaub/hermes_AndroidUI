@@ -166,6 +166,39 @@ and the agent are talking to different relay instances.
 
 ---
 
+### 2.8 Screenshots and tap by coordinates (visual fallback)
+
+For interfaces whose accessibility tree is unusable. Consent is **per session, off by default**, given by
+the user on the phone and enforced on **both** sides.
+
+- `session_start` carries `allow_screenshots` (boolean, default `false`; only a literal JSON `true` enables it).
+  `session_started_ack` and `session_state` echo it. `mobile_control_status` reports it.
+- MCP tools: `mobile_screenshot` (no arguments) and `mobile_tap_xy` (`x`, `y` integers in pixels of the last
+  screenshot, `screen_revision` returned with it). Both need the consent (`SCREENSHOTS_NOT_ALLOWED` otherwise,
+  refused by the relay before anything reaches the phone). `mobile_tap_xy` is also interaction-only
+  (`MODE_DENIED` in observation mode); `mobile_screenshot` is allowed in observation mode once consented.
+- Phone command `screenshot` answers with the usual observation plus `data.screenshot`:
+  `{"mime_type": "image/jpeg", "width", "height", "data": "<base64>"}`. The relay accepts JPEG only, valid base64,
+  at most 1,000,000 decoded bytes, and forwards it to the agent as an MCP `image` block next to a text block.
+  An image sent for any other operation is dropped.
+- Phone command `tap_xy` carries `arguments.x`, `arguments.y` and `screen_revision`. The coordinates are pixels of
+  the last screenshot; the tap is refused unless it is for that capture's revision, no older than 15 s, and the
+  screen did not change since (a new window or a scroll drops the capture's context); every attempt spends it.
+- **What is captured.** Only the **window of the target app** (never the whole display), and only while that
+  app is still in the foreground before and after the frame. Password fields that are hidden are blacked out
+  before encoding; a password shown in clear cannot be detected. Protected (`FLAG_SECURE`) windows are refused
+  by Android. The consent is the **intersection** of the user's choice on the phone and the relay's echo: the
+  relay can remove it but never grant it, and a session adopted from the relay never has screenshots.
+- **Never stored, never logged.** The relay keeps the image in memory for the response only. The audit log
+  records `SCREENSHOT` with byte count and dimensions, and logs `screenshot_forwarded` / `screenshot_rejected` /
+  `screenshot_dropped` without content.
+
+- **WebUI side.** The worker turns MCP `image` blocks into Hermes's multimodal envelope. The dispatcher then applies
+  Hermes's vision rule for the profile: a model that reads images gets the image; otherwise the auxiliary vision
+  model describes it and the agent gets **text only**. The auxiliary path writes the image to a private temporary
+  directory (0600 files) on the WebUI host, deleted right after the call. The image therefore leaves toward the
+  profile's model provider, or its auxiliary vision provider: this is what the phone's consent dialog says.
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |
@@ -175,6 +208,13 @@ and the agent are talking to different relay instances.
 | `SESSION_NOT_ON_PHONE` | Le relais a une session, **le téléphone n'en a aucune** (le relais ferme alors la sienne) |
 | `SESSION_ID_MISMATCH` | Le téléphone a une **autre** session que celle du relais (le relais ferme la sienne) |
 | `SESSION_PENDING_ON_PHONE` | Le téléphone attend encore la confirmation du relais pour cette session : réessayer (le relais ne ferme rien) |
+| `SCREENSHOTS_NOT_ALLOWED` | L'utilisateur n'a pas autorisé les captures pour cette session (refusé côté relais et côté téléphone) |
+| `SCREENSHOT_UNSUPPORTED` | Android < 14 (API 34) : seule la capture d'une fenêtre unique y est possible ; sur les versions antérieures la seule option serait tout l'écran, ce qui inclurait notifications et surimpressions d'autres applications |
+| `SCREENSHOT_BLOCKED_SECURE_WINDOW` | La fenêtre est protégée (`FLAG_SECURE`) : Android refuse la capture |
+| `SCREENSHOT_TOO_FAST` | Capture demandée trop tôt après la précédente : réessayer |
+| `SCREENSHOT_TOO_LARGE` | Image au-delà de 1 000 000 octets décodés |
+| `SCREENSHOT_INVALID` | Image absente, vide, non JPEG ou base64 invalide |
+| `INVALID_ARGUMENTS` | Arguments d'outil mal formés (par exemple coordonnées non entières) |
 | `SESSION_EXPIRED` | La durée maximale de la session (5/15/30 min) a expiré |
 | `PROFILE_DENIED` | Le profil demandeur (ex: Gaston) n'est pas celui autorisé (ex: Mario) |
 | `APP_NOT_ALLOWED` | Le package demandé n'a pas été autorisé sur le téléphone |

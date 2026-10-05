@@ -25,11 +25,27 @@ class H(http.server.BaseHTTPRequestHandler):
         with open(LOG,"a") as f: f.write(json.dumps({"path":self.path,"tools":[t["function"]["name"] for t in body.get("tools",[])],"roles":[m["role"] for m in body["messages"]],"last":body["messages"][-1]}) + "\n")
         msgs = body["messages"]
         tool_result = next((m for m in reversed(msgs) if m["role"]=="tool"), None)
-        if tool_result is None:
-            msg = {"role":"assistant","content":None,"tool_calls":[{"id":"call_1","type":"function","function":{"name":TOOL,"arguments":json.dumps({"message":"from-agent"})}}]}
+
+        def has_image(m):
+            c = m.get("content")
+            return isinstance(c, list) and any(isinstance(p, dict) and p.get("type") == "image_url" for p in c)
+
+        # An auxiliary vision call: no tools offered, an image in the last user message.
+        if not body.get("tools") and msgs and has_image(msgs[-1]):
+            msg = {"role": "assistant", "content": "FAKE-VISION: a login screen with a Sign in button"}
+            fin = "stop"
+        elif tool_result is None:
+            msg = {"role":"assistant","content":None,"tool_calls":[{"id":"call_1","type":"function","function":{"name":TOOL,"arguments":json.dumps({} if TOOL.endswith("snap") else {"message":"from-agent"})}}]}
             fin = "tool_calls"
         else:
-            msg = {"role":"assistant","content":"RESULT=" + str(tool_result["content"])}
+            content = tool_result["content"]
+            if isinstance(content, list):
+                kinds = [p.get("type") for p in content if isinstance(p, dict)]
+                texts = " ".join(p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text")
+                answer = f"IMAGE_PARTS={kinds.count('image_url')} KINDS={','.join(kinds)} TEXT={texts}"
+            else:
+                answer = str(content)
+            msg = {"role":"assistant","content":"RESULT=" + answer}
             fin = "stop"
         if body.get("stream"):
             self.send_response(200); self.send_header("Content-Type","text/event-stream"); self.end_headers()

@@ -44,4 +44,12 @@ class ForegroundPolicyTest {
         val c = ForegroundPolicy.notificationFor(SessionView(pending = null, active = null))
         assertTrue(c.title.isNotBlank() && c.text.isNotBlank())
     }
+
+    @Test
+    fun theNotificationSaysWhenScreenshotsAreAllowed() {
+        val on = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session().copy(allowScreenshots = true)))
+        assertTrue(on.text.contains("captures", ignoreCase = true))
+        val off = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session()))
+        assertFalse(off.text.contains("captures", ignoreCase = true))
+    }
 }

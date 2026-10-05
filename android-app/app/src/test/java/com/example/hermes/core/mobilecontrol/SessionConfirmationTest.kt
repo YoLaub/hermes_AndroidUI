@@ -1,5 +1,6 @@
 package com.example.hermes.core.mobilecontrol
 
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.*
 import org.junit.Test
@@ -166,5 +167,91 @@ class SessionConfirmationTest {
         )
         assertEquals("ses_old", a.sessionId)
         assertNull(a.expiresInSeconds)
+    }
+
+    // ── Screenshot consent: BOTH the user (on this phone) and the relay must say yes ──
+
+    private fun sessionWithConsent(consent: Boolean) = session().copy(allowScreenshots = consent)
+
+    @Test
+    fun theRelayCanRemoveTheConsentButNeverGrantIt() {
+        for (local in listOf(true, false)) for (relay in listOf(true, false, null)) {
+            val view = SessionView(pending = sessionWithConsent(local), active = null)
+            val t = SessionConfirmation.onAck(view, ack().copy(allowScreenshots = relay), now)
+            assertEquals("local=$local relay=$relay", local && relay == true, t.view.active!!.allowScreenshots)
+        }
+    }
+
+    @Test
+    fun aRelayAnsweringYesToASessionTheUserStartedWithoutConsentChangesNothing() {
+        val view = SessionView(pending = sessionWithConsent(false), active = null)
+        assertFalse(SessionConfirmation.onAck(view, ack().copy(allowScreenshots = true), now).view.active!!.allowScreenshots)
+    }
+
+    @Test
+    fun anOlderRelayThatSaysNothingDoesNotGrantConsentTheUserGaveItCannotEnforce() {
+        val on = SessionView(pending = sessionWithConsent(true), active = null)
+        assertFalse(SessionConfirmation.onAck(on, ack(), now).view.active!!.allowScreenshots)
+    }
+
+    @Test
+    fun aSessionAdoptedFromTheRelayNeverHasScreenshotsWhateverTheRelaySays() {
+        val none = SessionView(pending = null, active = null)
+        for (relay in listOf(true, false, null)) {
+            val t = SessionConfirmation.onServerState(
+                none, MobileSessionState(active = true, sessionId = "ses_x", profile = "john",
+                    targetPackage = "com.linkedin.android", mode = "interaction", allowScreenshots = relay, expiresInSeconds = 100), now
+            )
+            assertFalse("relay=$relay", t.view.active!!.allowScreenshots)
+        }
+    }
+
+    @Test
+    fun theRelaysStateAlsoCannotGrantConsentToAKnownSession() {
+        for (local in listOf(true, false)) for (relay in listOf(true, false, null)) {
+            val view = SessionView(pending = null, active = sessionWithConsent(local))
+            val t = SessionConfirmation.onServerState(
+                view, MobileSessionState(active = true, sessionId = "ses_1", profile = "john", allowScreenshots = relay, expiresInSeconds = 60), now
+            )
+            assertEquals("local=$local relay=$relay", local && relay == true, t.view.active!!.allowScreenshots)
+        }
+    }
+
+    @Test
+    fun aPendingSessionConfirmedByTheRelaysStateFollowsTheSameRule() {
+        for (local in listOf(true, false)) for (relay in listOf(true, false)) {
+            val view = SessionView(pending = sessionWithConsent(local), active = null)
+            val t = SessionConfirmation.onServerState(
+                view, MobileSessionState(active = true, sessionId = "ses_1", profile = "john", allowScreenshots = relay, expiresInSeconds = 60), now
+            )
+            assertEquals("local=$local relay=$relay", local && relay, t.view.active!!.allowScreenshots)
+        }
+    }
+
+    @Test
+    fun theConsentTravelsInTheSessionStartMessage() {
+        val msg = MobileSessionStartMsg(
+            sessionId = "ses_1", targetPackage = "com.linkedin.android", allowedProfile = "john",
+            mode = "interaction", durationSeconds = 900
+        )
+        assertFalse(msg.allowScreenshots)   // default: off
+        val encoded = json.encodeToString(msg.copy(allowScreenshots = true))
+        assertTrue(encoded.contains("\"allow_screenshots\":true"))
+        assertTrue(json.encodeToString(msg).contains("\"allow_screenshots\":false"))
+    }
+
+    @Test
+    fun theScreenshotResultAndTheCoordinateArgumentsDecode() {
+        val r = json.decodeFromString<MobileCommandResult>(
+            """{"command_id":"c1","status":"success","data":{"screen_revision":"rev_9","package_name":"p","elements":[],
+               "screenshot":{"mime_type":"image/jpeg","width":576,"height":1280,"data":"QUJD"}}}"""
+        )
+        assertEquals(576, r.data!!.screenshot!!.width)
+        assertEquals("image/jpeg", r.data!!.screenshot!!.mimeType)
+        val c = json.decodeFromString<MobileCommand>(
+            """{"command_id":"c2","session_id":"s","operation":"tap_xy","target_package":"p","screen_revision":"rev_9",
+               "arguments":{"x":120,"y":340}}"""
+        )
+        assertEquals(120, c.arguments!!.x); assertEquals(340, c.arguments!!.y)
     }
 }

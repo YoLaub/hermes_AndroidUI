@@ -36,19 +36,32 @@ data class MobileElementInfo(
     val bounds: String? = null
 )
 
+/** A downscaled JPEG of the target app, base64. In memory only: never written to disk or logged. */
+@Serializable
+data class MobileScreenshot(
+    @SerialName("mime_type") val mimeType: String,
+    val width: Int,
+    val height: Int,
+    val data: String
+)
+
 @Serializable
 data class MobileScreenData(
     @SerialName("screen_revision") val screenRevision: String,
     @SerialName("package_name") val packageName: String,
     val title: String? = null,
-    val elements: List<MobileElementInfo> = emptyList()
+    val elements: List<MobileElementInfo> = emptyList(),
+    val screenshot: MobileScreenshot? = null
 )
 
 @Serializable
 data class MobileCommandArguments(
     @SerialName("element_ref") val elementRef: String? = null,
     val text: String? = null,
-    val direction: String? = null // "up", "down", "left", "right"
+    val direction: String? = null, // "up", "down", "left", "right"
+    /** Pixels of the last screenshot, for the tap_xy operation. */
+    val x: Int? = null,
+    val y: Int? = null
 )
 
 @Serializable
@@ -85,7 +98,9 @@ data class MobileSessionStartMsg(
     @SerialName("target_package") val targetPackage: String,
     @SerialName("allowed_profile") val allowedProfile: String,
     val mode: String, // "observation", "interaction"
-    @SerialName("duration_seconds") val durationSeconds: Int
+    @SerialName("duration_seconds") val durationSeconds: Int,
+    /** The user's explicit consent for this session. Off unless the user switched it on. */
+    @SerialName("allow_screenshots") val allowScreenshots: Boolean = false
 )
 
 @Serializable
@@ -112,7 +127,8 @@ data class MobileSessionStartedAck(
     @SerialName("session_id") val sessionId: String,
     val profile: String? = null,
     @SerialName("device_id") val deviceId: String? = null,
-    @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null
+    @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null,
+    @SerialName("allow_screenshots") val allowScreenshots: Boolean? = null
 )
 
 /** Relay → phone: the session was refused (never becomes active). */
@@ -136,6 +152,7 @@ data class MobileSessionState(
     @SerialName("device_id") val deviceId: String? = null,
     @SerialName("target_package") val targetPackage: String? = null,
     val mode: String? = null,
+    @SerialName("allow_screenshots") val allowScreenshots: Boolean? = null,
     @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null
 )
 
@@ -167,7 +184,9 @@ data class MobileControlSession(
     val mode: MobileControlMode,
     val startedAt: Long,
     val durationSeconds: Int,
-    val expiresAt: Long
+    val expiresAt: Long,
+    /** The user's consent for screenshots in THIS session (never remembered across sessions). */
+    val allowScreenshots: Boolean = false
 ) {
     val isExpired: Boolean
         get() = System.currentTimeMillis() >= expiresAt

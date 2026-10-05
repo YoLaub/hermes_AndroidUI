@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
+import com.example.hermes.core.accessibility.CaptureOutcome
 import com.example.hermes.core.accessibility.HermesAccessibilityService
 import com.example.hermes.core.data.HermesPreferences
 import kotlinx.coroutines.*
@@ -130,6 +131,10 @@ class MobileControlManager(
         }
 
         val newlyActive = t.view.active
+        if (newlyActive?.id != before.active?.id) {
+            // A different session (or none): no tap may rely on the previous session's screenshot.
+            HermesAccessibilityService.getInstance()?.clearScreenshotContext()
+        }
         if (newlyActive != null && newlyActive.id != before.active?.id) {
             Log.i(TAG, "event=session_confirmed session_id=${newlyActive.id} profile=${newlyActive.allowedProfile}")
             processedCommandIds.clear()
@@ -178,7 +183,8 @@ class MobileControlManager(
         targetAppName: String,
         allowedProfile: String,
         mode: MobileControlMode,
-        durationSeconds: Int
+        durationSeconds: Int,
+        allowScreenshots: Boolean = false
     ): Result<MobileControlSession> {
         val normalizedProfile = allowedProfile.trim().lowercase()
         if (normalizedProfile != "john") {
@@ -209,7 +215,8 @@ class MobileControlManager(
             mode = mode,
             startedAt = now,
             durationSeconds = duration,
-            expiresAt = expiresAt
+            expiresAt = expiresAt,
+            allowScreenshots = allowScreenshots
         )
 
         // Not active yet: the relay must confirm. Ask it, and never claim more than that.
@@ -253,6 +260,7 @@ class MobileControlManager(
         }
         val current = _activeSession.value
         if (current != null) {
+            HermesAccessibilityService.getInstance()?.clearScreenshotContext()
             _activeSession.value = null
             sessionTimerJob?.cancel()
             sessionTimerJob = null
@@ -338,6 +346,51 @@ class MobileControlManager(
                     )
                 }
 
+                "screenshot" -> {
+                    // The frame first, then the observation (inside captureScreenshot): a failed capture does not
+                    // bump the revision, and the agent gets text and picture of the same moment.
+                    when (val capture = service.captureScreenshot(session.targetPackage) { service.observeScreen() }) {
+                        is CaptureOutcome.Failure -> {
+                            Log.w(TAG, "event=screenshot_failed command_id=${cmd.commandId} code=${capture.code}")
+                            reject(cmd, capture.code, capture.message)
+                        }
+                        is CaptureOutcome.Success -> {
+                            // Sizes only: the image itself is never logged nor kept.
+                            Log.i(TAG, "event=screenshot_taken command_id=${cmd.commandId} width=${capture.shot.width} height=${capture.shot.height}")
+                            logAudit("SCREENSHOT", session.targetPackage, "SUCCESS",
+                                "${capture.shot.width}x${capture.shot.height}, ${capture.screenData.elements.size} éléments", session.allowedProfile)
+                            MobileCommandResult(
+                                commandId = cmd.commandId,
+                                status = MobileCommandStatus.SUCCESS,
+                                executedAt = System.currentTimeMillis(),
+                                message = "Capture réalisée (${capture.shot.width}x${capture.shot.height}).",
+                                data = capture.screenData.copy(screenshot = capture.shot)
+                            )
+                        }
+                    }
+                }
+
+                "tap_xy" -> {
+                    val x = cmd.arguments?.x
+                    val y = cmd.arguments?.y
+                    if (x == null || y == null || cmd.screenRevision.isNullOrBlank()) {
+                        return reject(cmd, "UNSUPPORTED_UI", "x, y et screen_revision (de la dernière capture) sont requis.")
+                    }
+                    val outcome = service.tapAtScreenshotPoint(cmd.screenRevision, x, y, session.targetPackage)
+                    Log.i(TAG, "event=tap_xy command_id=${cmd.commandId} outcome=${outcome.name}")
+                    outcome.toCommandError("($x,$y)")?.let { return reject(cmd, it.code, it.message) }
+                    delay(300) // Brief delay for UI to settle
+                    val nextScreen = service.observeScreen()
+                    logAudit("TAP_XY", session.targetPackage, "SUCCESS", "Coordonnées ($x,$y) de la capture (effet non vérifié)", session.allowedProfile)
+                    MobileCommandResult(
+                        commandId = cmd.commandId,
+                        status = MobileCommandStatus.SUCCESS,
+                        executedAt = System.currentTimeMillis(),
+                        message = "Geste envoyé aux coordonnées ($x,$y) de la capture (effet non vérifié).",
+                        data = nextScreen
+                    )
+                }
+
                 "launch_app" -> {
                     val pm = context.packageManager
                     val launchIntent = pm.getLaunchIntentForPackage(session.targetPackage)
@@ -367,16 +420,28 @@ class MobileControlManager(
                     if (!service.isScreenRevisionValid(cmd.screenRevision)) {
                         return reject(cmd, "STALE_SCREEN", "Interface modifiée : nouvelle observation requise.")
                     }
-                    val clicked = service.clickElement(ref, cmd.screenRevision)
+                    var clicked = service.clickElement(ref, cmd.screenRevision)
+                    var viaBounds = false
+                    if (!clicked) {
+                        // The accessibility action failed (custom view, non-clickable node): tap its centre.
+                        val outcome = service.tapElementCenter(ref, cmd.screenRevision, session.targetPackage)
+                        Log.i(TAG, "event=click_fallback_bounds command_id=${cmd.commandId} outcome=${outcome.name}")
+                        outcome.toCommandError(ref)?.let { return reject(cmd, it.code, it.message) }
+                        viaBounds = true
+                        clicked = true
+                    }
                     if (clicked) {
                         delay(300) // Brief delay for UI to settle
                         val nextScreen = service.observeScreen()
-                        logAudit("CLICK", session.targetPackage, "SUCCESS", "Element: $ref", session.allowedProfile)
+                        logAudit(
+                            "CLICK", session.targetPackage, "SUCCESS",
+                            "Element: $ref" + if (viaBounds) " (par coordonnées, effet non vérifié)" else "", session.allowedProfile
+                        )
                         MobileCommandResult(
                             commandId = cmd.commandId,
                             status = MobileCommandStatus.SUCCESS,
                             executedAt = System.currentTimeMillis(),
-                            message = "Clic effectué sur $ref.",
+                            message = if (viaBounds) "Geste de clic envoyé sur $ref (par coordonnées, effet non vérifié)." else "Clic effectué sur $ref.",
                             data = nextScreen
                         )
                     } else {

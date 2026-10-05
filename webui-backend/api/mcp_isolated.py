@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from api.mcp_errors import ResultUnknownError
+from api.mcp_vision import route_screenshot_result
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +383,12 @@ class ProfileMCPManager:
                             f"MCP tool '{full_name}' from server '{s_name}' is not configured or available for active profile '{active_p}'"
                         )
 
-                    return mgr.call_tool(active_p, s_name, o_name, params)
+                    result = mgr.call_tool(active_p, s_name, o_name, params)
+                    # A screenshot goes to the main model only if it can read images; otherwise Hermes's own
+                    # rule hands it to the auxiliary vision model and the main model gets text. Decided with
+                    # the ACTIVE profile's config, not the process's.
+                    from api.config import get_config
+                    return route_screenshot_result(result, get_config(profile=active_p))
 
                 dynamic_profile_tool_caller.__name__ = full_name
                 dynamic_profile_tool_caller.__doc__ = f"Profile-isolated dynamic MCP tool dispatcher for {full_name}"

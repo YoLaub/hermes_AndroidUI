@@ -4,7 +4,14 @@ mcp 1.x exposes ``mcp.server.fastmcp.FastMCP``; mcp 2.x exposes
 ``mcp.server.mcpserver.MCPServer``. Both register tools with ``@server.tool()``.
 """
 import asyncio
+import base64
 import os
+
+# A minimal JPEG (1x1): enough for transport tests, never decoded.
+TINY_JPEG = base64.b64decode(
+    "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////"
+    "wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
+)
 
 
 def build_server(name: str):
@@ -14,6 +21,11 @@ def build_server(name: str):
     except ImportError:
         from mcp.server.mcpserver import MCPServer
         server = MCPServer(name)
+
+    try:
+        from mcp.server.fastmcp import Image
+    except ImportError:
+        from mcp.server.mcpserver import Image
 
     prefix = os.environ.get("FIXTURE_PREFIX", "")
 
@@ -40,5 +52,15 @@ def build_server(name: str):
                 fh.write("slow:start\n")
         await asyncio.sleep(seconds)
         return f"{prefix}slept"
+
+    @server.tool()
+    def snap() -> list:
+        """Return a caption and a tiny JPEG, like a screenshot tool."""
+        return [f"{prefix}caption", Image(data=TINY_JPEG, format="jpeg")]
+
+    @server.tool()
+    def broken() -> str:
+        """Always fails, so tool-level errors can be tested."""
+        raise ValueError("tool exploded on purpose")
 
     return server
