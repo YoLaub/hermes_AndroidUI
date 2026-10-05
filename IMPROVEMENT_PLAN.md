@@ -205,17 +205,28 @@ the spec and not changed unless asked.
   mode when the user consented for the session; `mobile_tap_xy` stays interaction-only.
 - **Out of scope.** Continuous video, OCR, an autonomous planner like Artemis's.
 
-### WP15: native Android bridge (idea from the infographic; direction validated by the user, plan to validate before any code)
-- **Why.** Acting through the screen is the least reliable level. The infographic's action hierarchy is native API,
-  then bridge, then UI automation, then vision + click. WP14 built the last two levels; the native level is missing.
-- **Scope, first slice.** Read-only: calendar events and notification listing, each behind its own Android
-  permission and its own per-session consent, off by default. New MCP tools on the relay, new phone commands.
-- **Out of scope, on purpose.** Calls, SMS sending and real-time voice (other model, audio stream, irreversible
-  actions: the project rule requires human validation). Running Hermes on the phone (contradicts the bounded,
-  revocable phone model).
-- **Open decisions.** Which permissions and where consent lives; what data may leave the phone (event titles,
-  notification text are personal data); whether writes (create an event) come later and with what confirmation.
-- **Next step.** Write the detailed steps and privacy boundary like WP14, get them validated, then TDD.
+### WP15: native Android bridge, first slice = calendar, read-only (decisions validated 2026-10-06)
+- **Why.** Acting through the screen is the least reliable level. The action hierarchy is native API, then
+  click by element, then vision + tap. WP14 built the last two levels; this adds the first, starting with the calendar.
+- **Decisions.** Calendar first (notifications later, own plan: they need a notification-listener service and
+  expose message text). Short window and reduced fields. No writes for now.
+- **Privacy boundary.** Off by default, consent **per session** on the phone AND the relay (same intersection rule
+  as screenshots: the relay can remove it, never grant it; a session adopted from the relay never has it). Android
+  runtime permission `READ_CALENDAR`, asked only when the user turns the consent on. Data returned: title, start, end,
+  location, all-day flag; **never** attendees, notes, or organiser. Only calendars the user shows (`VISIBLE`),
+  from today to at most 7 days ahead, at most 50 events. The text goes to the profile's model provider, and the
+  consent dialog says so. Never stored, never logged: the audit records the operation and the event count only.
+- **Steps.**
+  1. **15a, phone.** Manifest permission, consent toggle and dialog text, command `calendar_read` (optional `days`,
+     1..7, default 7), `CalendarContract.Instances` query, pure tested pieces (window clamp, field filter, cap,
+     consent guard). The query itself needs a device check.
+  2. **15b, relay.** `allow_calendar` in `session_start`/ack/state/status, MCP tool `mobile_calendar_events`, code
+     `CALENDAR_NOT_ALLOWED`, allowed in observation mode once consented (read-only), payload size cap, spec updated.
+  3. **15c, WebUI.** Text only, so nothing to route: a real-agent test that the tool result reaches the model.
+  4. **15d, docs and rules for John.** Deployment guide and behaviour rules (ask the calendar only when the task
+     needs it; never repeat event details beyond the task).
+- **Gates.** `code-review` on each step, `security-review` on 15a and 15b (personal data leaves the phone).
+- **Not done yet.** Notifications, event creation (would need an explicit human confirmation on the phone).
 
 ## 4. Decisions still open
 WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicationId` and docs language.
