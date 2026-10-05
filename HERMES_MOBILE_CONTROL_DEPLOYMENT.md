@@ -97,7 +97,9 @@ L'image part vers ce fournisseur et n'est jamais stockée ni journalisée par le
 Règles de comportement à donner à John :
 
 1. Observer d'abord (`mobile_observe`) ; ne demander une capture que si l'arbre d'accessibilité est inutilisable.
-2. Cliquer par élément ; `mobile_tap_xy` seulement juste après une capture, avec son `screen_revision`.
+2. Hiérarchie d'action, du plus fiable au moins fiable : API native (quand elle existera) puis clic par élément
+   (`mobile_click_element`) puis capture + `mobile_tap_xy`. Ne descendre d'un niveau que si le précédent échoue ;
+   `mobile_tap_xy` seulement juste après une capture, avec son `screen_revision`.
 3. Ne jamais appuyer sur « Publier » ou équivalent sans ordre explicite de l'utilisateur.
 
 ---

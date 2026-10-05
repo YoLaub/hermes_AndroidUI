@@ -205,6 +205,18 @@ the spec and not changed unless asked.
   mode when the user consented for the session; `mobile_tap_xy` stays interaction-only.
 - **Out of scope.** Continuous video, OCR, an autonomous planner like Artemis's.
 
+### WP15: native Android bridge (idea from the infographic; direction validated by the user, plan to validate before any code)
+- **Why.** Acting through the screen is the least reliable level. The infographic's action hierarchy is native API,
+  then bridge, then UI automation, then vision + click. WP14 built the last two levels; the native level is missing.
+- **Scope, first slice.** Read-only: calendar events and notification listing, each behind its own Android
+  permission and its own per-session consent, off by default. New MCP tools on the relay, new phone commands.
+- **Out of scope, on purpose.** Calls, SMS sending and real-time voice (other model, audio stream, irreversible
+  actions: the project rule requires human validation). Running Hermes on the phone (contradicts the bounded,
+  revocable phone model).
+- **Open decisions.** Which permissions and where consent lives; what data may leave the phone (event titles,
+  notification text are personal data); whether writes (create an event) come later and with what confirmation.
+- **Next step.** Write the detailed steps and privacy boundary like WP14, get them validated, then TDD.
+
 ## 4. Decisions still open
 WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicationId` and docs language.
 They are asked when their WP starts, not now.
