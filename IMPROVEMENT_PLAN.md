@@ -254,7 +254,7 @@ the spec and not changed unless asked.
      (screen, screenshot, calendar, SMS, call log) and the confirmation screen shows a banner "proposed after reading:
      ..." so the user knows the proposal may come from that text. Read and act consents may be on together. The
      confirmation lasts 60 seconds (expiry means refusal). Sending is refused for numbers outside the contacts.
-  2. **16b, read.** `READ_SMS`, `READ_CALL_LOG`, `READ_CONTACTS` (for names), pure tested pieces (window, caps, code
+  2. **16b, read.** *Status (2026-10-06): coded and documented, 189 Android and 126 relay tests green, not verified on the phone (content-resolver queries and permission prompts need a device check). READ_CONTACTS is optional: names only.* `READ_SMS`, `READ_CALL_LOG`, `READ_CONTACTS` (for names), pure tested pieces (window, caps, code
      masking, field filter), commands `sms_read` and `call_log_read`, relay tools, spec, tests like WP15.
   3. **16c, confirmation channel.** Phone-side confirmation screen with timeout and a pure, tested state machine
      (pending, confirmed, refused, expired; one use only), relay command that waits for it.
