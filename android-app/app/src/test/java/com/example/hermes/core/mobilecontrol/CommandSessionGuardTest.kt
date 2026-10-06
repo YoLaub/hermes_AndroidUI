@@ -191,4 +191,28 @@ class CommandSessionGuardTest {
         assertNull(check(obs, cmd("sms_read")))
         assertNull(check(obs, cmd("call_log_read")))
     }
+
+    // ── Irreversible actions: own consent, interaction mode only ──
+
+    @Test
+    fun withoutTheirConsentSendAndCallAreRefusedOnThePhone() {
+        val reads = session(allowScreenshots = true, allowCalendar = true,
+            extra = setOf(Consent.SMS_READ, Consent.CALL_LOG_READ))
+        assertEquals("SMS_SEND_NOT_ALLOWED", check(reads, cmd("sms_send"))!!.code)
+        assertEquals("CALL_NOT_ALLOWED", check(reads, cmd("call_place"))!!.code)
+    }
+
+    @Test
+    fun eachActionConsentOpensOnlyItsOwnAction() {
+        val send = session(extra = setOf(Consent.SMS_SEND))
+        assertNull(check(send, cmd("sms_send")))
+        assertEquals("CALL_NOT_ALLOWED", check(send, cmd("call_place"))!!.code)
+    }
+
+    @Test
+    fun actionsAreRefusedInObservationModeEvenWithConsent() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, extra = setOf(Consent.SMS_SEND, Consent.CALL_PLACE))
+        assertEquals("MODE_DENIED", check(obs, cmd("sms_send"))!!.code)
+        assertEquals("MODE_DENIED", check(obs, cmd("call_place"))!!.code)
+    }
 }

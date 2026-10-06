@@ -129,4 +129,27 @@ class ConsentTest {
         assertEquals(listOf("android.permission.READ_SMS"), Consent.PERMISSIONS[Consent.SMS_READ])
         assertEquals(listOf("android.permission.READ_CALL_LOG"), Consent.PERMISSIONS[Consent.CALL_LOG_READ])
     }
+
+    // ── Irreversible actions: their own consents, permissions and codes ──
+
+    @Test
+    fun sendAndCallMapToTheirOwnConsentAndNothingElseOpensThem() {
+        assertEquals(Consent.SMS_SEND, Consent.requiredFor("sms_send"))
+        assertEquals(Consent.CALL_PLACE, Consent.requiredFor("call_place"))
+        assertEquals("SMS_SEND_NOT_ALLOWED", Consent.refusalCode(Consent.SMS_SEND))
+        assertEquals("CALL_NOT_ALLOWED", Consent.refusalCode(Consent.CALL_PLACE))
+        assertTrue(Consent.SMS_SEND in Consent.KNOWN && Consent.CALL_PLACE in Consent.KNOWN)
+    }
+
+    @Test
+    fun actionsNeedTheirPermissionAndTheContactsOnes() {
+        assertEquals(
+            listOf("android.permission.SEND_SMS", "android.permission.READ_CONTACTS"),
+            Consent.PERMISSIONS[Consent.SMS_SEND]
+        )
+        assertEquals(
+            listOf("android.permission.CALL_PHONE", "android.permission.READ_CONTACTS"),
+            Consent.PERMISSIONS[Consent.CALL_PLACE]
+        )
+    }
 }
