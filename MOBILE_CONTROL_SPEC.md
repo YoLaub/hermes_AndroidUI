@@ -166,6 +166,16 @@ and the agent are talking to different relay instances.
 
 ---
 
+### 2.7b Consents (screenshots, calendar, later others)
+
+Every optional capability has a **named per-session consent**, off by default. `session_start` carries them as
+`allow`, a list of names (`"screenshots"`, `"calendar"`); `session_started_ack` and `session_state` echo the
+list the relay holds. Unknown names, non-string items and a non-list value are ignored. The legacy booleans
+`allow_screenshots` and `allow_calendar` are still read (only a literal `true`) and echoed, for phones and
+relays that predate the list; the list wins when both are present. The effective consent is the **intersection**
+of the phone's choice and the relay's echo, and a session adopted from the relay never has any. Adding a consent
+means one name here and one entry in the phone's `Consent` and the relay's `OPERATION_CONSENT` tables.
+
 ### 2.8 Screenshots and tap by coordinates (visual fallback)
 
 For interfaces whose accessibility tree is unusable. Consent is **per session, off by default**, given by

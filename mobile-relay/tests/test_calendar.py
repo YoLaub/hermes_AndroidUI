@@ -249,3 +249,52 @@ def test_titles_never_reach_the_logs_or_the_database(caplog):
     conn.close()
     assert "SECRET-TITLE-77" not in "\n".join(dump) and "Salle 4" not in "\n".join(dump)
     assert audit and any("count=2" in (a["message"] or "") for a in audit)
+
+
+# ── The consents travel as one named list; the old booleans still work ───────
+
+def start_with(ws, **fields):
+    ws.send_text(json.dumps(AUTH))
+    assert ws.receive_json()["type"] == "auth_ok"
+    ws.receive_json()
+    msg = start_msg()
+    msg.update(fields)
+    ws.send_text(json.dumps(msg))
+    ack = ws.receive_json()
+    assert ack["type"] == "session_started_ack"
+    return ack
+
+
+def test_the_allow_list_enables_exactly_the_named_consents():
+    with client.websocket_connect("/ws/device") as ws:
+        ack = start_with(ws, allow=["calendar"])
+    assert ack["allow"] == ["calendar"]
+    assert ack["allow_calendar"] is True and ack["allow_screenshots"] is False
+
+
+def test_unknown_names_and_non_strings_in_the_list_are_ignored():
+    with client.websocket_connect("/ws/device") as ws:
+        ack = start_with(ws, allow=["screenshots", "launch_missiles", 5, None, ["calendar"], "Calendar"])
+    assert ack["allow"] == ["screenshots"]
+
+
+def test_an_allow_value_that_is_not_a_list_enables_nothing():
+    for sloppy in ("calendar", {"calendar": True}, 1, True):
+        manager.active_sessions.clear()
+        with client.websocket_connect("/ws/device") as ws:
+            assert start_with(ws, allow=sloppy)["allow"] == [], sloppy
+
+
+def test_the_legacy_booleans_still_enable_their_consent_and_merge_with_the_list():
+    with client.websocket_connect("/ws/device") as ws:
+        ack = start_with(ws, allow_screenshots=True, allow=["calendar"])
+    assert ack["allow"] == ["calendar", "screenshots"]
+
+
+def test_the_relays_view_and_the_calendar_gate_use_the_same_set():
+    with client.websocket_connect("/ws/device") as ws:
+        start_with(ws, allow=["calendar"])
+        with client.websocket_connect("/ws/device") as ws2:
+            ws2.send_text(json.dumps(AUTH))
+            ws2.receive_json()
+            assert ws2.receive_json()["allow"] == ["calendar"]

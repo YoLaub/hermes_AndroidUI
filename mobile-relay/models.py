@@ -76,6 +76,7 @@ class MobileSessionStartMsg(BaseModel):
     duration_seconds: int
     allow_screenshots: bool = False
     allow_calendar: bool = False
+    allow: List[str] = Field(default_factory=list)
 
 class MobileSessionEndMsg(BaseModel):
     protocol: str = "mobile-control/1"

@@ -113,9 +113,50 @@ app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
 
 # ── Active State & Connection Management (In-Memory) ─────────────────────────
 
+# The consents a session can carry. One list on the wire (`allow`); the two legacy booleans are still read and
+# echoed for phones and relays that predate it. Anything else the phone sends is ignored.
+KNOWN_CONSENTS = frozenset({"screenshots", "calendar"})
+LEGACY_CONSENT_FIELDS = {"allow_screenshots": "screenshots", "allow_calendar": "calendar"}
+# Operation -> (consent it needs, error code, message for the agent). Refused here before anything reaches the phone.
+OPERATION_CONSENT = {
+    "screenshot": "screenshots",
+    "tap_xy": "screenshots",
+    "calendar_read": "calendar",
+}
+CONSENT_REFUSALS = {
+    "screenshots": ("SCREENSHOTS_NOT_ALLOWED",
+                    "L'utilisateur n'a pas autorisé les captures d'écran pour cette session. "
+                    "Utilisez mobile_observe, ou demandez-lui de démarrer une session avec les captures autorisées."),
+    "calendar": ("CALENDAR_NOT_ALLOWED",
+                 "L'utilisateur n'a pas autorisé la lecture du calendrier pour cette session. "
+                 "Demandez-lui de démarrer une session avec le calendrier autorisé."),
+}
+
+
+def parse_consents(data: dict) -> frozenset:
+    """Consents named in a session_start. Only real strings of the allowlist; legacy booleans only if literally true."""
+    found = set()
+    names = data.get("allow")
+    if isinstance(names, list):
+        found.update(n for n in names if isinstance(n, str) and n in KNOWN_CONSENTS)
+    for field, name in LEGACY_CONSENT_FIELDS.items():
+        if data.get(field) is True:
+            found.add(name)
+    return frozenset(found)
+
+
+def consent_fields(session) -> dict:
+    """What the relay echoes to the phone: the list, and the legacy booleans for older phones."""
+    return {
+        "allow": sorted(session.consents),
+        "allow_screenshots": session.allow_screenshots,
+        "allow_calendar": session.allow_calendar,
+    }
+
+
 class ActiveSession:
     def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str,
-                 expires_at: float, allow_screenshots: bool = False, allow_calendar: bool = False):
+                 expires_at: float, consents=frozenset()):
         prof = allowed_profile.strip().lower()
         if prof != "john":
             raise ValueError(f"Profil non autorisé '{allowed_profile}'. Seul le profil 'john' est autorisé.")
@@ -125,10 +166,16 @@ class ActiveSession:
         self.allowed_profile = "john"
         self.mode = mode.lower()
         self.expires_at = expires_at
-        # Explicit, per-session consent given by the user on the phone. Off unless literally true.
-        self.allow_screenshots = allow_screenshots is True
-        # Its own consent: the screenshot consent never opens the calendar.
-        self.allow_calendar = allow_calendar is True
+        # Explicit, per-session consents given by the user on the phone: names from KNOWN_CONSENTS, each its own.
+        self.consents = frozenset(c for c in consents if c in KNOWN_CONSENTS)
+
+    @property
+    def allow_screenshots(self) -> bool:
+        return "screenshots" in self.consents
+
+    @property
+    def allow_calendar(self) -> bool:
+        return "calendar" in self.consents
 
     @property
     def is_expired(self) -> bool:
@@ -485,8 +532,7 @@ def session_state_message(device_id: str) -> dict:
             "device_id": session.device_id,
             "target_package": session.target_package,
             "mode": session.mode,
-            "allow_screenshots": session.allow_screenshots,
-            "allow_calendar": session.allow_calendar,
+            **consent_fields(session),
             "expires_in_seconds": max(0, int(session.expires_at - time.time())),
         })
     return msg
@@ -604,8 +650,7 @@ async def websocket_device_endpoint(
                         allowed_profile="john",
                         mode=data.get("mode", "interaction"),
                         expires_at=time.time() + bounded_duration,
-                        allow_screenshots=data.get("allow_screenshots") is True,
-                        allow_calendar=data.get("allow_calendar") is True,
+                        consents=parse_consents(data),
                     )
                 except ValueError as ve:
                     await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED", str(ve))
@@ -628,8 +673,7 @@ async def websocket_device_endpoint(
                     "session_id": session.session_id,
                     "profile": session.allowed_profile,
                     "device_id": session.device_id,
-                    "allow_screenshots": session.allow_screenshots,
-                    "allow_calendar": session.allow_calendar,
+                    **consent_fields(session),
                     "expires_in_seconds": bounded_duration,
                 }))
                 log_event("session_ack_sent", device_id=session.device_id, session_id=session.session_id)
@@ -780,10 +824,8 @@ INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "
 
 # Screenshots: what the phone may send. 1 MB of JPEG is far more than a 1280 px capture needs.
 MAX_SCREENSHOT_BYTES = 1_000_000
-SCREENSHOT_OPERATIONS = {"screenshot", "tap_xy"}  # both need the user's consent for the session
 
-# Calendar: its own per-session consent, read-only, bounded on this side too (the phone is not trusted blindly).
-CALENDAR_OPERATIONS = {"calendar_read"}
+# Calendar: read-only, bounded on this side too (the phone is not trusted blindly).
 MAX_CALENDAR_EVENTS = 50
 MAX_CALENDAR_TEXT_CHARS = 200
 
@@ -941,27 +983,14 @@ async def mcp_stream_endpoint(request: Request):
                 protocol_version=negotiated_version
             )
 
-        # Screenshots and coordinate taps only with the user's consent for THIS session. Refused here,
-        # before anything is sent to the phone (the phone enforces the same rule on its side).
-        if op in SCREENSHOT_OPERATIONS and not session.allow_screenshots:
+        # Each consent is the user's, for THIS session. Refused here, before anything is sent to the phone
+        # (the phone enforces the same rule on its side).
+        needed = OPERATION_CONSENT.get(op)
+        if needed is not None and needed not in session.consents:
+            code, why = CONSENT_REFUSALS[needed]
             log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
-                      reason="SCREENSHOTS_NOT_ALLOWED", session_id=session.session_id)
-            return format_mcp_error(
-                req_id,
-                "SCREENSHOTS_NOT_ALLOWED: L'utilisateur n'a pas autorisé les captures d'écran pour cette session. "
-                "Utilisez mobile_observe, ou demandez-lui de démarrer une session avec les captures autorisées.",
-                protocol_version=negotiated_version,
-            )
-
-        if op in CALENDAR_OPERATIONS and not session.allow_calendar:
-            log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
-                      reason="CALENDAR_NOT_ALLOWED", session_id=session.session_id)
-            return format_mcp_error(
-                req_id,
-                "CALENDAR_NOT_ALLOWED: L'utilisateur n'a pas autorisé la lecture du calendrier pour cette session. "
-                "Demandez-lui de démarrer une session avec le calendrier autorisé.",
-                protocol_version=negotiated_version,
-            )
+                      reason=code, session_id=session.session_id)
+            return format_mcp_error(req_id, f"{code}: {why}", protocol_version=negotiated_version)
 
         days = None
         if op == "calendar_read":
