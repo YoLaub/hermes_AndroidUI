@@ -52,7 +52,9 @@ data class MobileCalendarEvent(
     @SerialName("start_ms") val startMs: Long,
     @SerialName("end_ms") val endMs: Long,
     val location: String? = null,
-    @SerialName("all_day") val allDay: Boolean = false
+    @SerialName("all_day") val allDay: Boolean = false,
+    /** Opaque id of the event (calendar provider), to name the event to modify or delete. */
+    @SerialName("event_id") val eventId: String? = null
 )
 
 @Serializable

@@ -6,7 +6,9 @@ data class RawCalendarRow(
     val beginMs: Long,
     val endMs: Long,
     val location: String?,
-    val allDay: Boolean
+    val allDay: Boolean,
+    /** The calendar provider's id of the event, so the agent can name the one to change. */
+    val eventId: Long? = null
 )
 
 /**
@@ -34,7 +36,8 @@ object CalendarPure {
                     startMs = it.beginMs,
                     endMs = maxOf(it.endMs, it.beginMs),
                     location = clean(it.location),
-                    allDay = it.allDay
+                    allDay = it.allDay,
+                    eventId = it.eventId?.toString()
                 )
             }
 

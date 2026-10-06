@@ -60,4 +60,11 @@ class CalendarPureTest {
         val e = CalendarPure.toEvents(listOf(raw(begin = now + 5000, end = now + 1000))).single()
         assertEquals(e.startMs, e.endMs)
     }
+
+    @Test
+    fun theEventIdIsKeptSoTheAgentCanNameTheEventToChange() {
+        val e = CalendarPure.toEvents(listOf(RawCalendarRow("Standup", now + 1000, now + 2000, null, false, eventId = 4242L))).single()
+        assertEquals("4242", e.eventId)
+        assertNull(CalendarPure.toEvents(listOf(RawCalendarRow("x", now + 1, now + 2, null, false))).single().eventId)
+    }
 }
