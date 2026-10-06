@@ -27,12 +27,21 @@ class MobileScreenData(BaseModel):
     elements: List[MobileElementInfo] = Field(default_factory=list)
     screenshot: Optional[MobileScreenshot] = None
 
+class MobileCalendarEvent(BaseModel):
+    """The only calendar fields the relay accepts: anything else the phone sends is dropped on parsing."""
+    title: Optional[str] = None
+    start_ms: int
+    end_ms: int
+    location: Optional[str] = None
+    all_day: bool = False
+
 class MobileCommandArguments(BaseModel):
     element_ref: Optional[str] = None
     text: Optional[str] = None
     direction: Optional[str] = None
     x: Optional[int] = None
     y: Optional[int] = None
+    days: Optional[int] = None
 
 class MobileCommand(BaseModel):
     protocol: str = "mobile-control/1"
@@ -55,6 +64,7 @@ class MobileCommandResult(BaseModel):
     executed_at: Optional[int] = None
     message: Optional[str] = None
     data: Optional[MobileScreenData] = None
+    calendar_events: Optional[List[MobileCalendarEvent]] = None
 
 class MobileSessionStartMsg(BaseModel):
     protocol: str = "mobile-control/1"
@@ -65,6 +75,7 @@ class MobileSessionStartMsg(BaseModel):
     mode: str
     duration_seconds: int
     allow_screenshots: bool = False
+    allow_calendar: bool = False
 
 class MobileSessionEndMsg(BaseModel):
     protocol: str = "mobile-control/1"

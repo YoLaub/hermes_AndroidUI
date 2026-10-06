@@ -115,7 +115,7 @@ app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
 
 class ActiveSession:
     def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str,
-                 expires_at: float, allow_screenshots: bool = False):
+                 expires_at: float, allow_screenshots: bool = False, allow_calendar: bool = False):
         prof = allowed_profile.strip().lower()
         if prof != "john":
             raise ValueError(f"Profil non autorisé '{allowed_profile}'. Seul le profil 'john' est autorisé.")
@@ -127,6 +127,8 @@ class ActiveSession:
         self.expires_at = expires_at
         # Explicit, per-session consent given by the user on the phone. Off unless literally true.
         self.allow_screenshots = allow_screenshots is True
+        # Its own consent: the screenshot consent never opens the calendar.
+        self.allow_calendar = allow_calendar is True
 
     @property
     def is_expired(self) -> bool:
@@ -484,6 +486,7 @@ def session_state_message(device_id: str) -> dict:
             "target_package": session.target_package,
             "mode": session.mode,
             "allow_screenshots": session.allow_screenshots,
+            "allow_calendar": session.allow_calendar,
             "expires_in_seconds": max(0, int(session.expires_at - time.time())),
         })
     return msg
@@ -602,6 +605,7 @@ async def websocket_device_endpoint(
                         mode=data.get("mode", "interaction"),
                         expires_at=time.time() + bounded_duration,
                         allow_screenshots=data.get("allow_screenshots") is True,
+                        allow_calendar=data.get("allow_calendar") is True,
                     )
                 except ValueError as ve:
                     await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED", str(ve))
@@ -615,8 +619,9 @@ async def websocket_device_endpoint(
                 log_event("session_registered", device_id=session.device_id, session_id=session.session_id,
                           profile=session.allowed_profile, target=session.target_package,
                           mode=session.mode, expires_in=bounded_duration,
-                          screenshots="on" if session.allow_screenshots else "off")
-                log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s, screenshots: {'on' if session.allow_screenshots else 'off'}")
+                          screenshots="on" if session.allow_screenshots else "off",
+                          calendar="on" if session.allow_calendar else "off")
+                log_audit(str(uuid.uuid4()), authenticated_device_id, session.allowed_profile, "SESSION_START", "STARTED", f"Package: {session.target_package}, mode: {session.mode}, duration: {bounded_duration}s, screenshots: {'on' if session.allow_screenshots else 'off'}, calendar: {'on' if session.allow_calendar else 'off'}")
                 await websocket.send_text(json.dumps({
                     "protocol": "mobile-control/1",
                     "type": "session_started_ack",
@@ -624,6 +629,7 @@ async def websocket_device_endpoint(
                     "profile": session.allowed_profile,
                     "device_id": session.device_id,
                     "allow_screenshots": session.allow_screenshots,
+                    "allow_calendar": session.allow_calendar,
                     "expires_in_seconds": bounded_duration,
                 }))
                 log_event("session_ack_sent", device_id=session.device_id, session_id=session.session_id)
@@ -751,6 +757,16 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "mobile_calendar_events",
+        "description": "Liste les événements à venir du calendrier de l'utilisateur (titre, début, fin, lieu ; jamais les participants ni les notes), 50 au plus. À n'utiliser que si la tâche en a besoin. Nécessite que l'utilisateur ait autorisé la lecture du calendrier pour la session.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "minimum": 1, "maximum": 7, "description": "Nombre de jours à venir (1 à 7, 7 par défaut)"}
+            }
+        }
+    },
+    {
         "name": "mobile_end_session",
         "description": "Termine la session de contrôle mobile.",
         "inputSchema": {
@@ -765,6 +781,11 @@ INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "
 # Screenshots: what the phone may send. 1 MB of JPEG is far more than a 1280 px capture needs.
 MAX_SCREENSHOT_BYTES = 1_000_000
 SCREENSHOT_OPERATIONS = {"screenshot", "tap_xy"}  # both need the user's consent for the session
+
+# Calendar: its own per-session consent, read-only, bounded on this side too (the phone is not trusted blindly).
+CALENDAR_OPERATIONS = {"calendar_read"}
+MAX_CALENDAR_EVENTS = 50
+MAX_CALENDAR_TEXT_CHARS = 200
 
 # Phone-side answers meaning "the relay thinks a session exists, the phone disagrees".
 PHONE_SESSION_DESYNC_CODES = {"SESSION_NOT_ON_PHONE", "SESSION_ID_MISMATCH"}
@@ -860,7 +881,7 @@ async def mcp_stream_endpoint(request: Request):
                 connected = "oui" if session.device_id in manager.active_connections else "non"
                 return format_mcp_response(
                     req_id,
-                    f"Session active trouvée sur le téléphone.\nSession : {session.session_id}\nAppareil : {session.device_id} (connecté au relais : {connected})\nProfil : {session.allowed_profile}\nApplication : {session.target_package}\nMode : {session.mode}\nCaptures d'écran : {'autorisées' if session.allow_screenshots else 'non autorisées'}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
+                    f"Session active trouvée sur le téléphone.\nSession : {session.session_id}\nAppareil : {session.device_id} (connecté au relais : {connected})\nProfil : {session.allowed_profile}\nApplication : {session.target_package}\nMode : {session.mode}\nCaptures d'écran : {'autorisées' if session.allow_screenshots else 'non autorisées'}\nCalendrier : {'autorisé' if session.allow_calendar else 'non autorisé'}\nTemps restant : {remaining // 60}m {remaining % 60}s\nRelais : {INSTANCE_ID}",
                     protocol_version=negotiated_version
                 )
             else:
@@ -903,6 +924,7 @@ async def mcp_stream_endpoint(request: Request):
             "mobile_end_session": "end_session",
             "mobile_screenshot": "screenshot",
             "mobile_tap_xy": "tap_xy",
+            "mobile_calendar_events": "calendar_read",
         }
 
         op = op_map.get(tool_name)
@@ -931,6 +953,26 @@ async def mcp_stream_endpoint(request: Request):
                 protocol_version=negotiated_version,
             )
 
+        if op in CALENDAR_OPERATIONS and not session.allow_calendar:
+            log_event("mcp_tool_refused", logging.WARNING, tool=tool_name, profile=authenticated_profile,
+                      reason="CALENDAR_NOT_ALLOWED", session_id=session.session_id)
+            return format_mcp_error(
+                req_id,
+                "CALENDAR_NOT_ALLOWED: L'utilisateur n'a pas autorisé la lecture du calendrier pour cette session. "
+                "Demandez-lui de démarrer une session avec le calendrier autorisé.",
+                protocol_version=negotiated_version,
+            )
+
+        days = None
+        if op == "calendar_read":
+            days = arguments.get("days")
+            if days is not None and not (isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= 7):
+                return format_mcp_error(
+                    req_id,
+                    "INVALID_ARGUMENTS: days doit être un entier de 1 à 7.",
+                    protocol_version=negotiated_version,
+                )
+
         if op == "tap_xy":
             x, y, rev = arguments.get("x"), arguments.get("y"), arguments.get("screen_revision")
             is_int = lambda v: isinstance(v, int) and not isinstance(v, bool)  # noqa: E731
@@ -956,6 +998,7 @@ async def mcp_stream_endpoint(request: Request):
                 direction=arguments.get("direction", "down"),
                 x=arguments.get("x") if op == "tap_xy" else None,
                 y=arguments.get("y") if op == "tap_xy" else None,
+                days=days,
             )
         )
 
@@ -1006,6 +1049,19 @@ async def mcp_stream_endpoint(request: Request):
                     {"type": "image", "data": shot.data, "mimeType": shot.mime_type},
                 ], protocol_version=negotiated_version)
 
+            if op == "calendar_read":
+                events = (result.calendar_events or [])[:MAX_CALENDAR_EVENTS]
+                # Counts only: titles and places are held for this response and nothing more.
+                log_audit(str(uuid.uuid4()), session.device_id, session.allowed_profile, "CALENDAR_READ", "OK",
+                          f"count={len(events)}")
+                log_event("calendar_forwarded", session_id=session.session_id, device_id=session.device_id,
+                          count=len(events))
+                return format_mcp_response(req_id, format_calendar(events), protocol_version=negotiated_version)
+
+            if result.calendar_events is not None:
+                log_event("calendar_dropped", logging.WARNING, session_id=session.session_id,
+                          device_id=session.device_id, operation=op)
+
             if shot is not None:
                 # An image nobody asked for (any other operation): never forwarded.
                 log_event("screenshot_dropped", logging.WARNING, session_id=session.session_id,
@@ -1055,6 +1111,34 @@ def summarize_screen(data) -> str:
         text_display = f"\"{el.text}\"" if el.text else (f"desc=\"{el.content_desc}\"" if el.content_desc else c_name)
         lines.append(f"- [{el.element_ref}] {c_name}: {text_display}{attr_str}")
     return f"Observation de {data.package_name} (Révision: {data.screen_revision}):\n" + "\n".join(lines)
+
+
+def format_calendar(events) -> str:
+    """Text for the agent: one line per event, UTC times. Control characters are flattened so a title cannot forge lines."""
+    from datetime import datetime, timezone
+
+    def clean(text):
+        if not text:
+            return None
+        flat = " ".join(str(text).split())[:MAX_CALENDAR_TEXT_CHARS]
+        return flat or None
+
+    def when(ms, all_day):
+        try:
+            dt = datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return "?"
+        return dt.strftime("%Y-%m-%d") if all_day else dt.strftime("%Y-%m-%d %H:%M")
+
+    if not events:
+        return "Aucun événement à venir dans la période demandée."
+    lines = []
+    for e in events:
+        place = clean(e.location)
+        lines.append(f"- {when(e.start_ms, e.all_day)} → {when(e.end_ms, e.all_day)}"
+                     f"{' (toute la journée)' if e.all_day else ''} : {clean(e.title) or '(sans titre)'}"
+                     f"{f' @ {place}' if place else ''}")
+    return f"Événements à venir ({len(events)}, heures en UTC) :\n" + "\n".join(lines)
 
 
 def check_screenshot(shot):
