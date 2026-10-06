@@ -159,7 +159,8 @@ fun MobileControlScreen(
                                     (if (session.allows(Consent.SMS_READ)) " • SMS autorisés" else "") +
                                     (if (session.allows(Consent.CALL_LOG_READ)) " • Journal d'appels autorisé" else "") +
                                     (if (session.allows(Consent.SMS_SEND)) " • Envoi de SMS autorisé" else "") +
-                                    (if (session.allows(Consent.CALL_PLACE)) " • Appels autorisés" else ""),
+                                    (if (session.allows(Consent.CALL_PLACE)) " • Appels autorisés" else "") +
+                                    (if (session.allows(Consent.CALENDAR_WRITE)) " • Écriture du calendrier autorisée" else ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -520,6 +521,13 @@ private val CONSENT_ROWS = listOf(
         "Pendant cette session seulement, l'agent peut lire vos 7 prochains jours : titre, début, fin et lieu de " +
             "chaque événement (50 au plus), jamais les participants ni les notes. Ces informations sont envoyées au " +
             "modèle de John (le fournisseur configuré pour ce profil). Android vous demandera l'accès au calendrier."
+    ),
+    ConsentRow(
+        Consent.CALENDAR_WRITE, "Autoriser l'écriture du calendrier (avec confirmation)",
+        "Pendant cette session seulement, l'agent peut PROPOSER de créer, modifier ou supprimer un événement. Rien ne " +
+            "change sans votre appui sur le bouton d'une notification qui montre l'événement exact (60 s, sinon refus). " +
+            "Les événements créés n'ont pas d'invités ; les événements récurrents ou avec invités ne sont jamais " +
+            "modifiés ni supprimés. Android vous demandera l'accès au calendrier."
     ),
     ConsentRow(
         Consent.SMS_READ, "Autoriser la lecture des SMS",

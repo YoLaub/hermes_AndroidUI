@@ -28,4 +28,11 @@ class ForegroundRuleTest {
     fun anUnknownOperationKeepsTheStrictRule() {
         assertTrue(CommandSessionGuard.needsTargetInForeground("something_new"))
     }
+
+    @Test
+    fun calendarChangesDoNotNeedTheTargetAppEither() {
+        for (op in listOf("calendar_create", "calendar_update", "calendar_delete")) {
+            assertFalse(op, CommandSessionGuard.needsTargetInForeground(op))
+        }
+    }
 }

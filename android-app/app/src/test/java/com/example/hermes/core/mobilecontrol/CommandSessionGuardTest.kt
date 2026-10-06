@@ -215,4 +215,29 @@ class CommandSessionGuardTest {
         assertEquals("MODE_DENIED", check(obs, cmd("sms_send"))!!.code)
         assertEquals("MODE_DENIED", check(obs, cmd("call_place"))!!.code)
     }
+
+    // ── Calendar write: own consent, interaction mode only ──
+
+    @Test
+    fun readingTheCalendarDoesNotOpenWritingAndWritingNeedsItsOwnConsent() {
+        val reads = session(allowCalendar = true, allowScreenshots = true)
+        for (op in listOf("calendar_create", "calendar_update", "calendar_delete")) {
+            assertEquals(op, "CALENDAR_WRITE_NOT_ALLOWED", check(reads, cmd(op))!!.code)
+        }
+    }
+
+    @Test
+    fun theWriteConsentOpensTheThreeChangesButNotReading() {
+        val w = session(extra = setOf(Consent.CALENDAR_WRITE))
+        for (op in listOf("calendar_create", "calendar_update", "calendar_delete")) assertNull(op, check(w, cmd(op)))
+        assertEquals("CALENDAR_NOT_ALLOWED", check(w, cmd("calendar_read"))!!.code)
+    }
+
+    @Test
+    fun calendarChangesAreRefusedInObservationModeEvenWithConsent() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, extra = setOf(Consent.CALENDAR_WRITE))
+        for (op in listOf("calendar_create", "calendar_update", "calendar_delete")) {
+            assertEquals(op, "MODE_DENIED", check(obs, cmd(op))!!.code)
+        }
+    }
 }

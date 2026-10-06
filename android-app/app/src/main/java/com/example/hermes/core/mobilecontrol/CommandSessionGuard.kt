@@ -18,7 +18,8 @@ object CommandSessionGuard {
     // These never touch the target app (launching it is the point, the native bridge reads or acts on the phone
     // itself), so the target being in front is not a condition for them.
     private val NO_FOREGROUND_NEEDED = setOf(
-        "launch_app", "calendar_read", "sms_read", "call_log_read", "sms_send", "call_place"
+        "launch_app", "calendar_read", "sms_read", "call_log_read", "sms_send", "call_place",
+        "calendar_create", "calendar_update", "calendar_delete"
     )
 
     /** Whether the target app must be the foreground app for this operation to run. */

@@ -40,6 +40,7 @@ class MobileControlManager(
     private val contactsReader = ContactsReader(context)
     private val smsSender = SmsSender(context)
     private val callPlacer = CallPlacer(context)
+    private val calendarWriter = CalendarWriter(context)
     private val externalReads = ExternalReads()
     private val confirmationNotifier = ConfirmationNotifier(context)
     private val confirmer = ActionConfirmer(
@@ -464,6 +465,8 @@ class MobileControlManager(
 
                 "sms_send", "call_place" -> confirmedAction(cmd, session)
 
+                "calendar_create", "calendar_update", "calendar_delete" -> confirmedCalendarChange(cmd, session)
+
                 "tap_xy" -> {
                     val x = cmd.arguments?.x
                     val y = cmd.arguments?.y
@@ -639,6 +642,112 @@ class MobileControlManager(
         )
     }
 
+    /**
+     * Shows the request and waits for the user. Null means "accepted, and the session is still the same": only then may
+     * the action run. Anything else is the rejection to return.
+     */
+    private suspend fun confirmOrReject(cmd: MobileCommand, session: MobileControlSession, request: ConfirmationRequest): MobileCommandResult? {
+        when (confirmer.confirm(request)) {
+            null -> return reject(cmd, "CONFIRMATION_BUSY", "Une autre confirmation est déjà en attente sur le téléphone.")
+            Decision.REFUSED -> return reject(cmd, "USER_REFUSED", "L'utilisateur a refusé sur son téléphone.")
+            Decision.EXPIRED -> return reject(cmd, "CONFIRMATION_TIMEOUT", "Pas de confirmation dans le délai : refusé.")
+            Decision.ACCEPTED -> Unit
+        }
+        // The session may have ended while the user was deciding.
+        val still = _activeSession.value
+        if (still == null || still.id != session.id || still.isExpired) {
+            return reject(cmd, "SESSION_EXPIRED", "La session s'est terminée pendant la confirmation : rien n'a été fait.")
+        }
+        return null
+    }
+
+    /**
+     * Creates, modifies or deletes a calendar event. The rules about what may be touched are in CalendarWritePure; here
+     * the event is read from the calendar, shown to the user exactly as it will change, and — after the user's tap — read
+     * again: if it changed in the meantime nothing is done. No answer ever carries the title, the place or the id.
+     */
+    private suspend fun confirmedCalendarChange(cmd: MobileCommand, session: MobileControlSession): MobileCommandResult {
+        if (!calendarWriter.hasPermission()) {
+            return reject(cmd, "CALENDAR_PERMISSION_MISSING", "Android n'a pas accordé l'accès en lecture et en écriture au calendrier à l'application Hermes.")
+        }
+        val args = cmd.arguments
+        val zone = java.util.TimeZone.getDefault()
+        val now = System.currentTimeMillis()
+        val op = cmd.operation
+
+        fun parse(text: String?): Long? = text?.let { CalendarWritePure.parseLocal(it, zone) }
+        val startMs = parse(args?.start)
+        val endMs = parse(args?.end)
+        if (args?.start != null && startMs == null) return reject(cmd, "INVALID_ARGUMENTS", "Le début n'est pas une date valide (format 2026-10-07T15:00).")
+        if (args?.end != null && endMs == null) return reject(cmd, "INVALID_ARGUMENTS", "La fin n'est pas une date valide (format 2026-10-07T15:00).")
+
+        var calendar: CalendarInfo? = null
+        var facts: EventFacts? = null
+        var eventId = 0L
+        val shown: ChangeText
+        if (op == "calendar_create") {
+            CalendarWritePure.validateCreate(args?.title, startMs, endMs, args?.location, now)?.let { return reject(cmd, it.code, it.message) }
+            calendar = withContext(Dispatchers.IO) { calendarWriter.primaryWritableCalendar() }
+                ?: return reject(cmd, "NO_WRITABLE_CALENDAR", "Aucun calendrier visible et modifiable pour créer l'événement.")
+            shown = CalendarWritePure.createText(args!!.title!!, startMs!!, endMs!!, args.location, calendar.name, zone)
+        } else {
+            eventId = args?.eventId?.toLongOrNull() ?: return reject(cmd, "INVALID_ARGUMENTS", "event_id est requis.")
+            facts = withContext(Dispatchers.IO) { calendarWriter.readEvent(eventId) }
+                ?: return reject(cmd, "EVENT_NOT_FOUND", "Aucun événement avec cet identifiant.")
+            CalendarWritePure.editability(facts)?.let { return reject(cmd, it.code, it.message) }
+            shown = if (op == "calendar_update") {
+                CalendarWritePure.validateUpdate(args?.title, startMs, endMs, args?.location, facts, now)?.let { return reject(cmd, it.code, it.message) }
+                CalendarWritePure.updateText(facts, args?.title, startMs, endMs, args?.location, zone)
+            } else {
+                CalendarWritePure.deleteText(facts, zone)
+            }
+        }
+
+        val request = ConfirmationRequest(
+            id = UUID.randomUUID().toString(), kind = op, recipientName = "", recipientNumber = "", text = null,
+            readKinds = externalReads.kinds, headline = shown.headline, details = shown.details
+        )
+        confirmOrReject(cmd, session, request)?.let { return it }
+
+        try {
+            withContext(Dispatchers.IO) {
+                if (op == "calendar_create") {
+                    calendarWriter.insert(calendar!!.id, args!!.title!!, startMs!!, endMs!!, args.location, zone.id)
+                        ?: throw IllegalStateException("insert refused")
+                } else {
+                    // What the user approved is what is about to change: re-read it, and do nothing if it moved.
+                    val again = calendarWriter.readEvent(eventId)
+                    if (again != facts) throw EventChangedException()
+                    val rows = if (op == "calendar_update") {
+                        calendarWriter.update(eventId, args?.title, startMs, endMs, args?.location)
+                    } else {
+                        calendarWriter.delete(eventId)
+                    }
+                    if (rows < 1) throw IllegalStateException("no row changed")
+                }
+            }
+        } catch (e: EventChangedException) {
+            return reject(cmd, "EVENT_CHANGED", "L'événement a changé pendant la confirmation : rien n'a été fait.")
+        } catch (e: Exception) {
+            Log.w(TAG, "event=calendar_change_failed command_id=${cmd.commandId} operation=$op type=${e.javaClass.simpleName}")
+            return reject(cmd, "ACTION_FAILED", "Android n'a pas pu modifier le calendrier.")
+        }
+        Log.i(TAG, "event=calendar_change_done command_id=${cmd.commandId} operation=$op")
+        logAudit(op.uppercase(), session.targetPackage, "SUCCESS", "confirmé par l'utilisateur", session.allowedProfile)
+        return MobileCommandResult(
+            commandId = cmd.commandId,
+            status = MobileCommandStatus.SUCCESS,
+            executedAt = System.currentTimeMillis(),
+            message = when (op) {
+                "calendar_create" -> "Événement créé après confirmation."
+                "calendar_update" -> "Événement modifié après confirmation."
+                else -> "Événement supprimé après confirmation."
+            }
+        )
+    }
+
+    private class EventChangedException : RuntimeException()
+
     /** The user's tap on the confirmation notification (see ConfirmationReceiver). */
     fun onConfirmationDecision(id: String, accept: Boolean) = confirmer.onUserDecision(id, accept)
 
@@ -684,18 +793,7 @@ class MobileControlManager(
             text = text,
             readKinds = externalReads.kinds
         )
-        when (confirmer.confirm(request)) {
-            null -> return reject(cmd, "CONFIRMATION_BUSY", "Une autre confirmation est déjà en attente sur le téléphone.")
-            Decision.REFUSED -> return reject(cmd, "USER_REFUSED", "L'utilisateur a refusé sur son téléphone.")
-            Decision.EXPIRED -> return reject(cmd, "CONFIRMATION_TIMEOUT", "Pas de confirmation dans le délai : refusé.")
-            Decision.ACCEPTED -> Unit
-        }
-
-        // The session may have ended while the user was deciding.
-        val still = _activeSession.value
-        if (still == null || still.id != session.id || still.isExpired) {
-            return reject(cmd, "SESSION_EXPIRED", "La session s'est terminée pendant la confirmation : rien n'a été fait.")
-        }
+        confirmOrReject(cmd, session, request)?.let { return it }
 
         try {
             withContext(Dispatchers.IO) {

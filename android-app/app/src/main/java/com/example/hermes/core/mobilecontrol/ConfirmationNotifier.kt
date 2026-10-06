@@ -38,14 +38,15 @@ class ConfirmationNotifier(private val context: Context) {
     }
 
     fun show(request: ConfirmationRequest) {
-        val who = "${request.recipientName} (${request.recipientNumber})"
-        val title = if (request.kind == "sms_send") "Envoyer ce SMS à $who ?" else "Appeler $who ?"
-        val body = buildString {
-            if (request.text != null) append("« ${request.text} »")
-            ConfirmationText.banner(request.readKinds)?.let {
-                if (isNotEmpty()) append("\n\n")
-                append(it)
-            }
+        val title = ConfirmationText.titleOf(request)
+        val body = ConfirmationText.bodyOf(request)
+        val acceptLabel = when (request.kind) {
+            "sms_send" -> "Envoyer"
+            "call_place" -> "Appeler"
+            "calendar_delete" -> "Supprimer"
+            "calendar_update" -> "Modifier"
+            "calendar_create" -> "Créer"
+            else -> "Accepter"
         }
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_send)
@@ -59,8 +60,7 @@ class ConfirmationNotifier(private val context: Context) {
             .setAutoCancel(true)
             .setTimeoutAfter(TIMEOUT_MS)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Refuser", decision(request.id, accept = false))
-            .addAction(android.R.drawable.ic_menu_send, if (request.kind == "sms_send") "Envoyer" else "Appeler",
-                decision(request.id, accept = true))
+            .addAction(android.R.drawable.ic_menu_send, acceptLabel, decision(request.id, accept = true))
         manager.notify(NOTIFICATION_ID, builder.build())
     }
 

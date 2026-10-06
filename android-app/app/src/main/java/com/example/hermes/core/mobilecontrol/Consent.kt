@@ -12,8 +12,9 @@ object Consent {
     const val CALL_LOG_READ = "call_log_read"
     const val SMS_SEND = "sms_send"
     const val CALL_PLACE = "call_place"
+    const val CALENDAR_WRITE = "calendar_write"
 
-    val KNOWN: Set<String> = setOf(SCREENSHOTS, CALENDAR, SMS_READ, CALL_LOG_READ, SMS_SEND, CALL_PLACE)
+    val KNOWN: Set<String> = setOf(SCREENSHOTS, CALENDAR, SMS_READ, CALL_LOG_READ, SMS_SEND, CALL_PLACE, CALENDAR_WRITE)
 
     /** Android runtime permissions a consent needs before it can be given (none: the accessibility service). */
     val PERMISSIONS: Map<String, List<String>> = mapOf(
@@ -22,7 +23,8 @@ object Consent {
         CALL_LOG_READ to listOf("android.permission.READ_CALL_LOG"),
         // Contacts are required here: a recipient must be one of the user's contacts.
         SMS_SEND to listOf("android.permission.SEND_SMS", "android.permission.READ_CONTACTS"),
-        CALL_PLACE to listOf("android.permission.CALL_PHONE", "android.permission.READ_CONTACTS")
+        CALL_PLACE to listOf("android.permission.CALL_PHONE", "android.permission.READ_CONTACTS"),
+        CALENDAR_WRITE to listOf("android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR")
     )
 
     /** Asked together with the required ones (for contact names), but their refusal does not block the consent. */
@@ -38,7 +40,10 @@ object Consent {
         "sms_read" to SMS_READ,
         "call_log_read" to CALL_LOG_READ,
         "sms_send" to SMS_SEND,
-        "call_place" to CALL_PLACE
+        "call_place" to CALL_PLACE,
+        "calendar_create" to CALENDAR_WRITE,
+        "calendar_update" to CALENDAR_WRITE,
+        "calendar_delete" to CALENDAR_WRITE
     )
 
     fun requiredFor(operation: String): String? = BY_OPERATION[operation]
@@ -50,6 +55,7 @@ object Consent {
         CALL_LOG_READ -> "CALL_LOG_NOT_ALLOWED"
         SMS_SEND -> "SMS_SEND_NOT_ALLOWED"
         CALL_PLACE -> "CALL_NOT_ALLOWED"
+        CALENDAR_WRITE -> "CALENDAR_WRITE_NOT_ALLOWED"
         else -> "CONSENT_NOT_GIVEN"
     }
 
@@ -60,6 +66,7 @@ object Consent {
         CALL_LOG_READ -> "L'utilisateur n'a pas autorisé la lecture du journal d'appels pour cette session sur le téléphone."
         SMS_SEND -> "L'utilisateur n'a pas autorisé l'envoi de SMS pour cette session sur le téléphone."
         CALL_PLACE -> "L'utilisateur n'a pas autorisé les appels pour cette session sur le téléphone."
+        CALENDAR_WRITE -> "L'utilisateur n'a pas autorisé l'écriture dans son calendrier pour cette session sur le téléphone."
         else -> "L'utilisateur n'a pas donné ce consentement pour cette session sur le téléphone."
     }
 
