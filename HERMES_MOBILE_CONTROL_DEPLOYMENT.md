@@ -94,13 +94,23 @@ Pour que le modèle de John lise l'image :
 
 L'image part vers ce fournisseur et n'est jamais stockée ni journalisée par le relais.
 
+### Calendrier en lecture (facultatif)
+
+Désactivé par défaut. L'utilisateur l'autorise **session par session** avec son propre interrupteur (distinct de
+celui des captures) ; Android demande alors l'accès au calendrier, et un refus laisse l'interrupteur éteint. John
+peut lire les 7 prochains jours au plus (outil `mobile_calendar_events`) : titre, début, fin, lieu, 50 événements
+au plus, jamais les participants ni les notes, seulement les calendriers affichés. Le texte part vers le
+fournisseur du modèle de John ; le relais n'en garde que le nombre d'événements. Aucun réglage côté relais ni WebUI.
+
 Règles de comportement à donner à John :
 
 1. Observer d'abord (`mobile_observe`) ; ne demander une capture que si l'arbre d'accessibilité est inutilisable.
 2. Hiérarchie d'action, du plus fiable au moins fiable : API native (quand elle existera) puis clic par élément
    (`mobile_click_element`) puis capture + `mobile_tap_xy`. Ne descendre d'un niveau que si le précédent échoue ;
    `mobile_tap_xy` seulement juste après une capture, avec son `screen_revision`.
-3. Ne jamais appuyer sur « Publier » ou équivalent sans ordre explicite de l'utilisateur.
+3. Ne lire le calendrier (`mobile_calendar_events`) que si la tâche en a besoin, avec le plus petit `days` suffisant,
+   et ne pas recopier les détails des événements au-delà de ce que la tâche demande.
+4. Ne jamais appuyer sur « Publier » ou équivalent sans ordre explicite de l'utilisateur.
 
 ---
 

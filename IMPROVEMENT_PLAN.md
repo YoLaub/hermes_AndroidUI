@@ -225,6 +225,9 @@ the spec and not changed unless asked.
   3. **15c, WebUI.** Text only, so nothing to route: a real-agent test that the tool result reaches the model.
   4. **15d, docs and rules for John.** Deployment guide and behaviour rules (ask the calendar only when the task
      needs it; never repeat event details beyond the task).
+- **Status (2026-10-06).** 15a, 15b and 15d coded and documented: 161 Android unit tests and 109 relay tests green,
+  not verified on the phone (the calendar query and the permission prompt need a device check). 15c needs no new test:
+  the result is plain text, already covered by the real-agent end-to-end test.
 - **Gates.** `code-review` on each step, `security-review` on 15a and 15b (personal data leaves the phone).
 - **Not done yet.** Notifications, event creation (would need an explicit human confirmation on the phone).
 
