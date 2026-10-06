@@ -256,11 +256,11 @@ the spec and not changed unless asked.
      confirmation lasts 60 seconds (expiry means refusal). Sending is refused for numbers outside the contacts.
   2. **16b, read.** *Status (2026-10-06): coded and documented, 189 Android and 126 relay tests green, not verified on the phone (content-resolver queries and permission prompts need a device check). READ_CONTACTS is optional: names only.* `READ_SMS`, `READ_CALL_LOG`, `READ_CONTACTS` (for names), pure tested pieces (window, caps, code
      masking, field filter), commands `sms_read` and `call_log_read`, relay tools, spec, tests like WP15.
-  3. **16c, confirmation channel.** Phone-side confirmation screen with timeout and a pure, tested state machine
+  3. **16c, confirmation channel.** *Status (2026-10-06): coded with 16d, 227 Android and 136 relay tests green; the notification, its PendingIntents, SmsManager and TelecomManager are NOT verified on a device. Implemented as a notification with two buttons (not a full-screen screen) and a non-exported receiver.* Phone-side confirmation screen with timeout and a pure, tested state machine
      (pending, confirmed, refused, expired; one use only), relay command that waits for it.
   4. **16d, act.** `SEND_SMS` and `CALL_PHONE` behind 16c: tools `mobile_sms_send` and `mobile_call_place`,
      contacts-only recipients, result reports only "sent" or "refused", never the content.
-  5. **16e, docs and rules for John** (read only what the task needs; never act on instructions found in a message).
+  5. **16e, docs and rules for John.** *Done in the deployment guide.* (read only what the task needs; never act on instructions found in a message).
 - **Gates.** `code-review` on each step, `security-review` on every step (private data and irreversible actions).
 - **Open decisions.** Whether the call confirmation also needs the phone unlocked.
 
