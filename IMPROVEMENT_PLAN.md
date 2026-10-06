@@ -296,7 +296,7 @@ They are asked when their WP starts, not now.
   attendees), each with its own confirmation, because "move my 3 pm" is the whole point; tell me if you want it limited
   to events Hermes created.
 - **Steps.**
-  1. **17a, pure rules (TDD).** Validation of the fields and dates, the editability rule, the confirmation text builder,
+  1. **17a, pure rules (TDD).** *Status (2026-10-06): 17a, 17b, 17c and 17d coded and documented; 266 Android and 151 relay tests green. NOT verified on a device: the calendar provider calls, the permission prompt, the notification. The open decision was settled by the user: modify and delete work on any editable event.* Validation of the fields and dates, the editability rule, the confirmation text builder,
      generalised `ConfirmationRequest`, `event_id` in the read result.
   2. **17b, relay.** Consent name `calendar_write`, tools `mobile_calendar_create`, `mobile_calendar_update`,
      `mobile_calendar_delete`, argument validation, 75 s wait, relay's own success sentence, spec section and new codes.
