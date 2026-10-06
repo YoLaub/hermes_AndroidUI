@@ -105,4 +105,28 @@ class ConsentTest {
         )
         assertTrue(t.view.active!!.consents.isEmpty())
     }
+
+    // ── Messages and call log: one consent each, never implied by another ──
+
+    @Test
+    fun messageAndCallLogOperationsMapToTheirOwnConsent() {
+        assertEquals(Consent.SMS_READ, Consent.requiredFor("sms_read"))
+        assertEquals(Consent.CALL_LOG_READ, Consent.requiredFor("call_log_read"))
+        assertEquals("SMS_NOT_ALLOWED", Consent.refusalCode(Consent.SMS_READ))
+        assertEquals("CALL_LOG_NOT_ALLOWED", Consent.refusalCode(Consent.CALL_LOG_READ))
+    }
+
+    @Test
+    fun theNewNamesAreKnownAndTravelInTheList() {
+        assertEquals(
+            setOf(Consent.SMS_READ, Consent.CALL_LOG_READ),
+            Consent.echoed(listOf("sms_read", "call_log_read", "nope"), null, null)
+        )
+    }
+
+    @Test
+    fun eachNewConsentNeedsItsOwnAndroidPermissionAndContactsAreOptional() {
+        assertEquals(listOf("android.permission.READ_SMS"), Consent.PERMISSIONS[Consent.SMS_READ])
+        assertEquals(listOf("android.permission.READ_CALL_LOG"), Consent.PERMISSIONS[Consent.CALL_LOG_READ])
+    }
 }

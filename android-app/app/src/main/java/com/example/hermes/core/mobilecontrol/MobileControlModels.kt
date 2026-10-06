@@ -101,7 +101,11 @@ data class MobileCommandResult(
     val message: String? = null,
     val data: MobileScreenData? = null,
     /** Answer of calendar_read only. */
-    @SerialName("calendar_events") val calendarEvents: List<MobileCalendarEvent>? = null
+    @SerialName("calendar_events") val calendarEvents: List<MobileCalendarEvent>? = null,
+    /** Answer of sms_read only (one-time codes already masked). */
+    val sms: List<MobileSms>? = null,
+    /** Answer of call_log_read only. */
+    val calls: List<MobileCallEntry>? = null
 )
 
 @Serializable

@@ -13,7 +13,7 @@ data class CommandRejection(val code: String, val message: String)
 object CommandSessionGuard {
 
     // A consented screenshot is allowed in observation mode: it taps and types nothing.
-    private val OBSERVATION_ALLOWED = setOf("observe", "end_session", "screenshot", "calendar_read")
+    private val OBSERVATION_ALLOWED = setOf("observe", "end_session", "screenshot", "calendar_read", "sms_read", "call_log_read")
 
     fun validate(
         active: MobileControlSession?,

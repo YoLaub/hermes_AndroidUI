@@ -35,6 +35,8 @@ class MobileControlManager(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val commandMutex = Mutex()
     private val calendarReader = CalendarReader(context)
+    private val smsReader = SmsReader(context)
+    private val callLogReader = CallLogReader(context)
     private var sessionTimerJob: Job? = null
     private var confirmationTimeoutJob: Job? = null
 
@@ -397,6 +399,51 @@ class MobileControlManager(
                         executedAt = System.currentTimeMillis(),
                         message = "${events.size} événement(s) à venir.",
                         calendarEvents = events
+                    )
+                }
+
+                "sms_read" -> {
+                    if (!smsReader.hasPermission()) {
+                        return reject(cmd, "SMS_PERMISSION_MISSING", "Android n'a pas accordé l'accès aux SMS à l'application Hermes.")
+                    }
+                    val now = System.currentTimeMillis()
+                    val rows = try {
+                        withContext(Dispatchers.IO) { smsReader.read(now) }
+                    } catch (e: SecurityException) {
+                        return reject(cmd, "SMS_PERMISSION_MISSING", "Android a refusé l'accès aux SMS.")
+                    }
+                    val messages = MessagePure.toMessages(rows, now)
+                    // Counts only: senders and texts are never logged nor kept.
+                    Log.i(TAG, "event=sms_read command_id=${cmd.commandId} count=${messages.size}")
+                    logAudit("SMS_READ", session.targetPackage, "SUCCESS", "${messages.size} messages", session.allowedProfile)
+                    MobileCommandResult(
+                        commandId = cmd.commandId,
+                        status = MobileCommandStatus.SUCCESS,
+                        executedAt = System.currentTimeMillis(),
+                        message = "${messages.size} message(s) des dernières 24 h.",
+                        sms = messages
+                    )
+                }
+
+                "call_log_read" -> {
+                    if (!callLogReader.hasPermission()) {
+                        return reject(cmd, "CALL_LOG_PERMISSION_MISSING", "Android n'a pas accordé l'accès au journal d'appels à l'application Hermes.")
+                    }
+                    val now = System.currentTimeMillis()
+                    val rows = try {
+                        withContext(Dispatchers.IO) { callLogReader.read(now) }
+                    } catch (e: SecurityException) {
+                        return reject(cmd, "CALL_LOG_PERMISSION_MISSING", "Android a refusé l'accès au journal d'appels.")
+                    }
+                    val calls = MessagePure.toCalls(rows, now)
+                    Log.i(TAG, "event=call_log_read command_id=${cmd.commandId} count=${calls.size}")
+                    logAudit("CALL_LOG_READ", session.targetPackage, "SUCCESS", "${calls.size} appels", session.allowedProfile)
+                    MobileCommandResult(
+                        commandId = cmd.commandId,
+                        status = MobileCommandStatus.SUCCESS,
+                        executedAt = System.currentTimeMillis(),
+                        message = "${calls.size} appel(s) des dernières 24 h.",
+                        calls = calls
                     )
                 }
 

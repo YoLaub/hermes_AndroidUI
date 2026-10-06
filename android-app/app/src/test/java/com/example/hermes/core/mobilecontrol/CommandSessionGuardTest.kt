@@ -12,13 +12,15 @@ class CommandSessionGuardTest {
         mode: MobileControlMode = MobileControlMode.INTERACTION,
         expiresAt: Long = now + 600_000L,
         allowScreenshots: Boolean = false,
-        allowCalendar: Boolean = false
+        allowCalendar: Boolean = false,
+        extra: Set<String> = emptySet()
     ) = MobileControlSession(
         id = id, targetPackage = "com.linkedin.android", targetAppName = "LinkedIn",
         allowedProfile = "john", mode = mode, startedAt = now, durationSeconds = 900, expiresAt = expiresAt,
         consents = buildSet {
             if (allowScreenshots) add(Consent.SCREENSHOTS)
             if (allowCalendar) add(Consent.CALENDAR)
+            addAll(extra)
         }
     )
 
@@ -161,5 +163,32 @@ class CommandSessionGuardTest {
     fun aConsentedCalendarReadIsAllowedInObservationMode() {
         val obs = session(mode = MobileControlMode.OBSERVATION, allowCalendar = true)
         assertNull(check(obs, cmd("calendar_read")))
+    }
+
+    // ── Messages and call log: each its own consent, read-only so allowed in observation mode ──
+
+    @Test
+    fun withoutTheirConsentSmsAndCallLogReadsAreRefusedOnThePhone() {
+        val all = session(allowScreenshots = true, allowCalendar = true)
+        assertEquals("SMS_NOT_ALLOWED", check(all, cmd("sms_read"))!!.code)
+        assertEquals("CALL_LOG_NOT_ALLOWED", check(all, cmd("call_log_read"))!!.code)
+        assertTrue(check(all, cmd("sms_read"))!!.message.contains("téléphone", ignoreCase = true))
+    }
+
+    @Test
+    fun eachConsentOpensOnlyItsOwnRead() {
+        val sms = session(extra = setOf(Consent.SMS_READ))
+        assertNull(check(sms, cmd("sms_read")))
+        assertEquals("CALL_LOG_NOT_ALLOWED", check(sms, cmd("call_log_read"))!!.code)
+        val calls = session(extra = setOf(Consent.CALL_LOG_READ))
+        assertNull(check(calls, cmd("call_log_read")))
+        assertEquals("SMS_NOT_ALLOWED", check(calls, cmd("sms_read"))!!.code)
+    }
+
+    @Test
+    fun consentedReadsAreAllowedInObservationMode() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, extra = setOf(Consent.SMS_READ, Consent.CALL_LOG_READ))
+        assertNull(check(obs, cmd("sms_read")))
+        assertNull(check(obs, cmd("call_log_read")))
     }
 }
