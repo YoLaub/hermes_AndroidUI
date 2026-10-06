@@ -174,20 +174,13 @@ class MobileControlWebSocketClient(
 
     /** Returns false (nothing sent) unless the relay has authenticated this device. */
     fun sendSessionStart(session: MobileControlSession): Boolean {
-        val startMsg = MobileSessionStartMsg(
-            sessionId = session.id,
-            targetPackage = session.targetPackage,
-            allowedProfile = session.allowedProfile,
-            mode = session.mode.name.lowercase(),
-            durationSeconds = session.durationSeconds,
-            allowScreenshots = session.allowScreenshots
-        )
+        val startMsg = MobileSessionStartMsg.of(session)
         if (!_isAuthenticated.value) {
             Log.w(TAG, "event=session_start_not_sent session_id=${session.id} reason=not_authenticated")
             return false
         }
         val sent = sendJson(json.encodeToString(startMsg))
-        Log.i(TAG, "event=session_start_sent session_id=${session.id} profile=${session.allowedProfile} screenshots=${if (session.allowScreenshots) "on" else "off"} queued=$sent")
+        Log.i(TAG, "event=session_start_sent session_id=${session.id} profile=${session.allowedProfile} consents=${session.consents.sorted().joinToString(",").ifEmpty { "none" }} queued=$sent")
         return sent
     }
 

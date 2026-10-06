@@ -11,11 +11,17 @@ class CommandSessionGuardTest {
         id: String = "ses_1",
         mode: MobileControlMode = MobileControlMode.INTERACTION,
         expiresAt: Long = now + 600_000L,
-        allowScreenshots: Boolean = false
+        allowScreenshots: Boolean = false,
+        allowCalendar: Boolean = false,
+        extra: Set<String> = emptySet()
     ) = MobileControlSession(
         id = id, targetPackage = "com.linkedin.android", targetAppName = "LinkedIn",
         allowedProfile = "john", mode = mode, startedAt = now, durationSeconds = 900, expiresAt = expiresAt,
-        allowScreenshots = allowScreenshots
+        consents = buildSet {
+            if (allowScreenshots) add(Consent.SCREENSHOTS)
+            if (allowCalendar) add(Consent.CALENDAR)
+            addAll(extra)
+        }
     )
 
     private fun cmd(op: String = "observe", sessionId: String = "ses_1", pkg: String = "com.linkedin.android") =
@@ -135,5 +141,78 @@ class CommandSessionGuardTest {
     fun theSessionAndPackageAreStillCheckedBeforeConsent() {
         assertEquals("SESSION_NOT_ON_PHONE", check(null, cmd("screenshot"))!!.code)
         assertEquals("APP_NOT_ALLOWED", check(session(allowScreenshots = true), cmd("screenshot", pkg = "com.other"))!!.code)
+    }
+
+    // ── Calendar: its own consent, never implied by the screenshot consent ──
+
+    @Test
+    fun withoutCalendarConsentTheReadIsRefusedOnThePhoneEvenWithScreenshotConsent() {
+        val r = check(session(allowScreenshots = true), cmd("calendar_read"))!!
+        assertEquals("CALENDAR_NOT_ALLOWED", r.code)
+        assertTrue(r.message.contains("téléphone", ignoreCase = true))
+    }
+
+    @Test
+    fun calendarConsentAllowsTheReadAndNothingElse() {
+        val s = session(allowCalendar = true)
+        assertNull(check(s, cmd("calendar_read")))
+        assertEquals("SCREENSHOTS_NOT_ALLOWED", check(s, cmd("screenshot"))!!.code)
+    }
+
+    @Test
+    fun aConsentedCalendarReadIsAllowedInObservationMode() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, allowCalendar = true)
+        assertNull(check(obs, cmd("calendar_read")))
+    }
+
+    // ── Messages and call log: each its own consent, read-only so allowed in observation mode ──
+
+    @Test
+    fun withoutTheirConsentSmsAndCallLogReadsAreRefusedOnThePhone() {
+        val all = session(allowScreenshots = true, allowCalendar = true)
+        assertEquals("SMS_NOT_ALLOWED", check(all, cmd("sms_read"))!!.code)
+        assertEquals("CALL_LOG_NOT_ALLOWED", check(all, cmd("call_log_read"))!!.code)
+        assertTrue(check(all, cmd("sms_read"))!!.message.contains("téléphone", ignoreCase = true))
+    }
+
+    @Test
+    fun eachConsentOpensOnlyItsOwnRead() {
+        val sms = session(extra = setOf(Consent.SMS_READ))
+        assertNull(check(sms, cmd("sms_read")))
+        assertEquals("CALL_LOG_NOT_ALLOWED", check(sms, cmd("call_log_read"))!!.code)
+        val calls = session(extra = setOf(Consent.CALL_LOG_READ))
+        assertNull(check(calls, cmd("call_log_read")))
+        assertEquals("SMS_NOT_ALLOWED", check(calls, cmd("sms_read"))!!.code)
+    }
+
+    @Test
+    fun consentedReadsAreAllowedInObservationMode() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, extra = setOf(Consent.SMS_READ, Consent.CALL_LOG_READ))
+        assertNull(check(obs, cmd("sms_read")))
+        assertNull(check(obs, cmd("call_log_read")))
+    }
+
+    // ── Irreversible actions: own consent, interaction mode only ──
+
+    @Test
+    fun withoutTheirConsentSendAndCallAreRefusedOnThePhone() {
+        val reads = session(allowScreenshots = true, allowCalendar = true,
+            extra = setOf(Consent.SMS_READ, Consent.CALL_LOG_READ))
+        assertEquals("SMS_SEND_NOT_ALLOWED", check(reads, cmd("sms_send"))!!.code)
+        assertEquals("CALL_NOT_ALLOWED", check(reads, cmd("call_place"))!!.code)
+    }
+
+    @Test
+    fun eachActionConsentOpensOnlyItsOwnAction() {
+        val send = session(extra = setOf(Consent.SMS_SEND))
+        assertNull(check(send, cmd("sms_send")))
+        assertEquals("CALL_NOT_ALLOWED", check(send, cmd("call_place"))!!.code)
+    }
+
+    @Test
+    fun actionsAreRefusedInObservationModeEvenWithConsent() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, extra = setOf(Consent.SMS_SEND, Consent.CALL_PLACE))
+        assertEquals("MODE_DENIED", check(obs, cmd("sms_send"))!!.code)
+        assertEquals("MODE_DENIED", check(obs, cmd("call_place"))!!.code)
     }
 }

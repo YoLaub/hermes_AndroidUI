@@ -47,7 +47,7 @@ class ForegroundPolicyTest {
 
     @Test
     fun theNotificationSaysWhenScreenshotsAreAllowed() {
-        val on = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session().copy(allowScreenshots = true)))
+        val on = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session().copy(consents = setOf(Consent.SCREENSHOTS))))
         assertTrue(on.text.contains("captures", ignoreCase = true))
         val off = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session()))
         assertFalse(off.text.contains("captures", ignoreCase = true))

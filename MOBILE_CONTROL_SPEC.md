@@ -166,6 +166,16 @@ and the agent are talking to different relay instances.
 
 ---
 
+### 2.7b Consents (screenshots, calendar, later others)
+
+Every optional capability has a **named per-session consent**, off by default. `session_start` carries them as
+`allow`, a list of names (`"screenshots"`, `"calendar"`, `"sms_read"`, `"call_log_read"`, `"sms_send"`, `"call_place"`); `session_started_ack` and `session_state` echo the
+list the relay holds. Unknown names, non-string items and a non-list value are ignored. The legacy booleans
+`allow_screenshots` and `allow_calendar` are still read (only a literal `true`) and echoed, for phones and
+relays that predate the list; the list wins when both are present. The effective consent is the **intersection**
+of the phone's choice and the relay's echo, and a session adopted from the relay never has any. Adding a consent
+means one name here and one entry in the phone's `Consent` and the relay's `OPERATION_CONSENT` tables.
+
 ### 2.8 Screenshots and tap by coordinates (visual fallback)
 
 For interfaces whose accessibility tree is unusable. Consent is **per session, off by default**, given by
@@ -199,6 +209,65 @@ the user on the phone and enforced on **both** sides.
   directory (0600 files) on the WebUI host, deleted right after the call. The image therefore leaves toward the
   profile's model provider, or its auxiliary vision provider: this is what the phone's consent dialog says.
 
+### 2.9 Calendar read (native bridge, first slice)
+
+Read-only, **per-session consent, off by default**, separate from the screenshot consent (one never opens the other).
+
+- `session_start` carries `allow_calendar` (boolean, default `false`; only a literal JSON `true` enables it).
+  `session_started_ack` and `session_state` echo it; `mobile_control_status` reports it. The effective consent is
+  the **intersection** of the phone's choice and the relay's echo; a session adopted from the relay never has it.
+- MCP tool `mobile_calendar_events` (optional `days`, integer 1..7, default 7). Refused by the relay before anything
+  reaches the phone without consent (`CALENDAR_NOT_ALLOWED`). Allowed in observation mode: it taps and types nothing.
+- Phone command `calendar_read` (`arguments.days`). The phone answers a `result` with a top-level `calendar_events`
+  list, each `{title, start_ms, end_ms, location, all_day}`: nothing else is read (no attendees, notes or organiser),
+  only calendars the user shows, from now to at most 7 days ahead, at most 50 events. If Android refused the
+  permission the phone answers `CALENDAR_PERMISSION_MISSING`.
+- The relay does not trust the list: unknown fields are dropped on parsing, at most 50 events and 200 characters per
+  text are forwarded, newlines are flattened, and events sent for any other operation are dropped. The agent gets
+  one text block, times in UTC.
+- **Never stored, never logged.** The audit records `CALENDAR_READ` with the count; logs carry `calendar_forwarded`
+  with the count only. Titles and places are held in memory for the response.
+
+### 2.10 SMS and call-log reads (native bridge, second slice)
+
+Read-only, each with **its own per-session consent** (`sms_read`, `call_log_read`; one never opens the other, nor
+the calendar or screenshots). Allowed in observation mode. Refused by the relay before anything reaches the phone
+without consent (`SMS_NOT_ALLOWED`, `CALL_LOG_NOT_ALLOWED`).
+
+- MCP tools `mobile_sms_read` and `mobile_call_log`, no arguments. Phone commands `sms_read` and `call_log_read`.
+- The phone answers a `result` with a top-level `sms` list (`{sender, date_ms, text, incoming}`) or `calls` list
+  (`{who, direction, date_ms, duration_sec}`): the last 24 hours, at most 20 entries, newest first, contact name when
+  known, text cut to 300 characters. Runs of 4 to 8 digits (also split by single spaces or dashes) are replaced by
+  `[code]` **on the phone**, because one-time codes must not reach a model. If Android refused the permission the phone
+  answers `SMS_PERMISSION_MISSING` or `CALL_LOG_PERMISSION_MISSING`.
+- The relay does not trust the list: unknown fields are dropped on parsing, at most 20 entries and 300 characters per
+  text are forwarded, whitespace and newlines are flattened, codes are **masked a second time**, and lists attached
+  to any other operation are dropped. The agent gets one text block, times in UTC.
+- **Never stored, never logged.** The audit records `SMS_READ` / `CALL_LOG_READ` with the count; logs carry
+  `sms_forwarded` / `call_log_forwarded` with the count only.
+- Message text is written by third parties: it may contain instructions aimed at the agent. The agent must treat it
+  as data; see the plan's item on prompt-injection protection.
+
+### 2.11 Sending an SMS and placing a call (irreversible actions)
+
+Each has **its own per-session consent** (`sms_send`, `call_place`) and works in interaction mode only. Even with the
+consent, **every send and every call waits for the user's tap on the phone**.
+
+- MCP tools `mobile_sms_send` (`to`, `text`) and `mobile_call_place` (`to`). `to` is the exact name of one of the
+  user's contacts, or a number that matches one: nothing else can be targeted (`RECIPIENT_NOT_IN_CONTACTS`,
+  `RECIPIENT_AMBIGUOUS`). What is sent or dialled is the contact's own stored number, not what the agent typed.
+  `text` is 1 to 300 characters so it fits the confirmation in full. Invalid arguments are refused by the relay
+  (`INVALID_ARGUMENTS`) before anything reaches the phone. Phone commands `sms_send` and `call_place`.
+- The phone shows a notification with the exact recipient and the exact text and two buttons (send / refuse), plus
+  a banner listing the external content read since the session started. One confirmation at a time
+  (`CONFIRMATION_BUSY`), 60 seconds, after which the answer is "no" (`CONFIRMATION_TIMEOUT`). A refusal answers
+  `USER_REFUSED`. The relay therefore waits up to 75 seconds and the command's `expires_at` is 80 seconds ahead.
+- On success the relay answers with **its own sentence** ("SMS transmis à l'opérateur après confirmation…"), never the
+  phone's message, so the recipient and the text cannot come back through it. "Sent" means handed to the phone's
+  messaging service, not delivered.
+- **Never stored, never logged.** Neither the recipient nor the text is logged or stored anywhere on the relay; the
+  audit records `SMS_SEND` / `CALL_PLACE` with the outcome only (`confirmed`, or the refusal code).
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |
@@ -211,6 +280,19 @@ the user on the phone and enforced on **both** sides.
 | `SCREENSHOTS_NOT_ALLOWED` | L'utilisateur n'a pas autorisé les captures pour cette session (refusé côté relais et côté téléphone) |
 | `SCREENSHOT_UNSUPPORTED` | Android < 14 (API 34) : seule la capture d'une fenêtre unique y est possible ; sur les versions antérieures la seule option serait tout l'écran, ce qui inclurait notifications et surimpressions d'autres applications |
 | `SCREENSHOT_BLOCKED_SECURE_WINDOW` | La fenêtre est protégée (`FLAG_SECURE`) : Android refuse la capture |
+| `CALENDAR_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du calendrier pour cette session (refusé côté relais et côté téléphone) |
+| `SMS_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture des SMS pour cette session (côté relais et côté téléphone) |
+| `CALL_LOG_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du journal d'appels pour cette session |
+| `SMS_SEND_NOT_ALLOWED` | L'utilisateur n'a pas autorisé l'envoi de SMS pour cette session |
+| `CALL_NOT_ALLOWED` | L'utilisateur n'a pas autorisé les appels pour cette session |
+| `USER_REFUSED` | L'utilisateur a refusé l'envoi ou l'appel sur son téléphone |
+| `CONFIRMATION_TIMEOUT` | Pas de confirmation dans les 60 secondes : refus |
+| `CONFIRMATION_BUSY` | Une autre confirmation est déjà en attente sur le téléphone |
+| `RECIPIENT_NOT_IN_CONTACTS` | Le destinataire n'est pas un contact de l'utilisateur |
+| `RECIPIENT_AMBIGUOUS` | Plusieurs contacts correspondent : refus, jamais de devinette |
+| `SMS_PERMISSION_MISSING` | Android n'a pas accordé l'accès aux SMS à l'application |
+| `CALL_LOG_PERMISSION_MISSING` | Android n'a pas accordé l'accès au journal d'appels à l'application |
+| `CALENDAR_PERMISSION_MISSING` | Android n'a pas accordé l'accès au calendrier à l'application |
 | `SCREENSHOT_TOO_FAST` | Capture demandée trop tôt après la précédente : réessayer |
 | `SCREENSHOT_TOO_LARGE` | Image au-delà de 1 000 000 octets décodés |
 | `SCREENSHOT_INVALID` | Image absente, vide, non JPEG ou base64 invalide |
