@@ -237,4 +237,10 @@ They are asked when their WP starts, not now.
 
 ## 5. Ledger
 - [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [x] WP5  - [ ] WP6  - [ ] WP7
-- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [ ] WP14
+- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [ ] WP14 (not verified on the phone)  - [ ] WP15 (same)
+
+### Later: protection against prompt injection (raised 2026-10-06, not started)
+Text the agent reads can carry instructions: calendar titles and places (WP15), screen text and screenshots (WP14),
+notification text later. Today the only guard is the deployment guide's rules for John. To think through together
+before WP16+: what the model must never do because of read content (publish, send, tap outside the target app),
+whether actions should require a fresh human confirmation after untrusted content, and how to mark such content as data.
