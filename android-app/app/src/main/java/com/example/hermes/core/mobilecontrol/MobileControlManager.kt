@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.util.Log
 import com.example.hermes.core.accessibility.CaptureOutcome
 import com.example.hermes.core.accessibility.HermesAccessibilityService
@@ -185,8 +186,7 @@ class MobileControlManager(
         allowedProfile: String,
         mode: MobileControlMode,
         durationSeconds: Int,
-        allowScreenshots: Boolean = false,
-        allowCalendar: Boolean = false
+        consents: Set<String> = emptySet()
     ): Result<MobileControlSession> {
         val normalizedProfile = allowedProfile.trim().lowercase()
         if (normalizedProfile != "john") {
@@ -218,8 +218,12 @@ class MobileControlManager(
             startedAt = now,
             durationSeconds = duration,
             expiresAt = expiresAt,
-            allowScreenshots = allowScreenshots,
-            allowCalendar = allowCalendar && calendarReader.hasPermission()
+            // Only known consents whose Android permissions are really granted: refused permission means off.
+            consents = consents.filter { c ->
+                c in Consent.KNOWN && Consent.PERMISSIONS[c].orEmpty().all {
+                    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                }
+            }.toSet()
         )
 
         // Not active yet: the relay must confirm. Ask it, and never claim more than that.

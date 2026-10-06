@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.mobilecontrol.AllowedApp
 import com.example.hermes.core.mobilecontrol.AuditLogEntry
+import com.example.hermes.core.mobilecontrol.Consent
 import com.example.hermes.core.mobilecontrol.MobileControlMode
 import com.example.hermes.theme.*
 import java.text.SimpleDateFormat
@@ -411,8 +412,10 @@ fun MobileControlScreen(
                     profile = profile,
                     mode = mode,
                     durationMinutes = duration,
-                    allowScreenshots = allowScreenshots,
-                    allowCalendar = allowCalendar
+                    consents = buildSet {
+                        if (allowScreenshots) add(Consent.SCREENSHOTS)
+                        if (allowCalendar) add(Consent.CALENDAR)
+                    }
                 )
             }
         )

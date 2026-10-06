@@ -16,7 +16,10 @@ class CommandSessionGuardTest {
     ) = MobileControlSession(
         id = id, targetPackage = "com.linkedin.android", targetAppName = "LinkedIn",
         allowedProfile = "john", mode = mode, startedAt = now, durationSeconds = 900, expiresAt = expiresAt,
-        allowScreenshots = allowScreenshots, allowCalendar = allowCalendar
+        consents = buildSet {
+            if (allowScreenshots) add(Consent.SCREENSHOTS)
+            if (allowCalendar) add(Consent.CALENDAR)
+        }
     )
 
     private fun cmd(op: String = "observe", sessionId: String = "ses_1", pkg: String = "com.linkedin.android") =

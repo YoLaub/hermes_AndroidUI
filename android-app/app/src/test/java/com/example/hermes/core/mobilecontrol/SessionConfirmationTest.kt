@@ -171,7 +171,7 @@ class SessionConfirmationTest {
 
     // ── Screenshot consent: BOTH the user (on this phone) and the relay must say yes ──
 
-    private fun sessionWithConsent(consent: Boolean) = session().copy(allowScreenshots = consent)
+    private fun sessionWithConsent(consent: Boolean) = session().copy(consents = if (consent) setOf(Consent.SCREENSHOTS) else emptySet())
 
     @Test
     fun theRelayCanRemoveTheConsentButNeverGrantIt() {
@@ -260,7 +260,7 @@ class SessionConfirmationTest {
     @Test
     fun calendarConsentIsThePhoneChoiceAndTheRelayEcho() {
         for (local in listOf(true, false)) for (relay in listOf(true, false, null)) {
-            val view = SessionView(pending = session().copy(allowCalendar = local), active = null)
+            val view = SessionView(pending = session().copy(consents = if (local) setOf(Consent.CALENDAR) else emptySet()), active = null)
             val t = SessionConfirmation.onAck(view, ack().copy(allowCalendar = relay), now)
             assertEquals("local=$local relay=$relay", local && relay == true, t.view.active!!.allowCalendar)
         }
@@ -268,7 +268,7 @@ class SessionConfirmationTest {
 
     @Test
     fun calendarConsentIsIndependentFromScreenshotConsent() {
-        val view = SessionView(pending = session().copy(allowCalendar = true), active = null)
+        val view = SessionView(pending = session().copy(consents = setOf(Consent.CALENDAR)), active = null)
         val t = SessionConfirmation.onAck(view, ack().copy(allowScreenshots = true, allowCalendar = true), now)
         assertTrue(t.view.active!!.allowCalendar)
         assertFalse(t.view.active!!.allowScreenshots)
@@ -286,7 +286,7 @@ class SessionConfirmationTest {
 
     @Test
     fun serverStateCannotGrantTheCalendarEither() {
-        val view = SessionView(null, session().copy(allowCalendar = false))
+        val view = SessionView(null, session().copy(consents = emptySet()))
         val t = SessionConfirmation.onServerState(
             view, MobileSessionState(active = true, sessionId = "ses_1", profile = "john", allowCalendar = true, expiresInSeconds = 60), now)
         assertFalse(t.view.active!!.allowCalendar)

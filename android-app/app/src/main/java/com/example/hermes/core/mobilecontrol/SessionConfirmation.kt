@@ -25,7 +25,7 @@ object SessionConfirmation {
     fun onAck(view: SessionView, ack: MobileSessionStartedAck, nowMs: Long): SessionTransition {
         val pending = view.pending
         if (pending == null || pending.id != ack.sessionId) return SessionTransition(view)
-        val confirmed = withServerFields(pending, ack.expiresInSeconds, ack.allowScreenshots, ack.allowCalendar, nowMs)
+        val confirmed = withServerFields(pending, ack.expiresInSeconds, ack.echoedConsents(), nowMs)
         return SessionTransition(SessionView(pending = null, active = confirmed))
     }
 
@@ -61,12 +61,12 @@ object SessionConfirmation {
         val serverId = state.sessionId ?: return SessionTransition(view)
 
         if (pending != null && pending.id == serverId) {
-            val confirmed = withServerFields(pending, state.expiresInSeconds, state.allowScreenshots, state.allowCalendar, nowMs)
+            val confirmed = withServerFields(pending, state.expiresInSeconds, state.echoedConsents(), nowMs)
             return SessionTransition(SessionView(pending = null, active = confirmed))
         }
         if (active != null && active.id == serverId) {
             return SessionTransition(
-                view.copy(active = withServerFields(active, state.expiresInSeconds, state.allowScreenshots, state.allowCalendar, nowMs))
+                view.copy(active = withServerFields(active, state.expiresInSeconds, state.echoedConsents(), nowMs))
             )
         }
 
@@ -82,8 +82,7 @@ object SessionConfirmation {
             durationSeconds = state.expiresInSeconds ?: 0,
             expiresAt = nowMs + (state.expiresInSeconds ?: 0) * 1000L,
             // The user never consented to this session on this phone: no screenshots, whatever the relay says.
-            allowScreenshots = false,
-            allowCalendar = false
+            consents = emptySet()
         )
         return SessionTransition(
             SessionView(pending = pending, active = adopted),
@@ -93,21 +92,17 @@ object SessionConfirmation {
 
     /**
      * The relay is the authority on the remaining time. For the screenshot consent BOTH sides must say yes:
-     * the user's choice on this phone AND an explicit `true` echoed by the relay (same rule for the calendar). The relay can therefore
+     * Every consent needs the user's choice on this phone AND the relay's echo of it. The relay can therefore
      * remove the consent (or an older relay that cannot enforce it can fail to confirm it) but can never
      * grant what the user did not give.
      */
     private fun withServerFields(
         session: MobileControlSession,
         expiresInSeconds: Int?,
-        relayAllowsScreenshots: Boolean?,
-        relayAllowsCalendar: Boolean?,
+        relayConsents: Set<String>,
         nowMs: Long
     ): MobileControlSession {
-        val withConsent = session.copy(
-            allowScreenshots = session.allowScreenshots && relayAllowsScreenshots == true,
-            allowCalendar = session.allowCalendar && relayAllowsCalendar == true
-        )
+        val withConsent = session.copy(consents = session.consents intersect relayConsents)
         if (expiresInSeconds == null) return withConsent
         return withConsent.copy(expiresAt = nowMs + expiresInSeconds * 1000L)
     }

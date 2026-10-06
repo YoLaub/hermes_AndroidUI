@@ -116,8 +116,23 @@ data class MobileSessionStartMsg(
     /** The user's explicit consent for this session. Off unless the user switched it on. */
     @SerialName("allow_screenshots") val allowScreenshots: Boolean = false,
     /** The user's explicit consent to let the agent read upcoming calendar events. Off unless switched on. */
-    @SerialName("allow_calendar") val allowCalendar: Boolean = false
-)
+    @SerialName("allow_calendar") val allowCalendar: Boolean = false,
+    /** The consents by name (see [Consent]); the two booleans above stay for relays that predate this list. */
+    val allow: List<String> = emptyList()
+) {
+    companion object {
+        fun of(session: MobileControlSession) = MobileSessionStartMsg(
+            sessionId = session.id,
+            targetPackage = session.targetPackage,
+            allowedProfile = session.allowedProfile,
+            mode = session.mode.name.lowercase(),
+            durationSeconds = session.durationSeconds,
+            allowScreenshots = session.allowScreenshots,
+            allowCalendar = session.allowCalendar,
+            allow = session.consents.sorted()
+        )
+    }
+}
 
 @Serializable
 data class MobileSessionEndMsg(
@@ -145,8 +160,11 @@ data class MobileSessionStartedAck(
     @SerialName("device_id") val deviceId: String? = null,
     @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null,
     @SerialName("allow_screenshots") val allowScreenshots: Boolean? = null,
-    @SerialName("allow_calendar") val allowCalendar: Boolean? = null
-)
+    @SerialName("allow_calendar") val allowCalendar: Boolean? = null,
+    val allow: List<String>? = null
+) {
+    fun echoedConsents(): Set<String> = Consent.echoed(allow, allowScreenshots, allowCalendar)
+}
 
 /** Relay → phone: the session was refused (never becomes active). */
 @Serializable
@@ -171,8 +189,11 @@ data class MobileSessionState(
     val mode: String? = null,
     @SerialName("allow_screenshots") val allowScreenshots: Boolean? = null,
     @SerialName("allow_calendar") val allowCalendar: Boolean? = null,
+    val allow: List<String>? = null,
     @SerialName("expires_in_seconds") val expiresInSeconds: Int? = null
-)
+) {
+    fun echoedConsents(): Set<String> = Consent.echoed(allow, allowScreenshots, allowCalendar)
+}
 
 @Serializable
 data class MobileAuthError(
@@ -203,11 +224,17 @@ data class MobileControlSession(
     val startedAt: Long,
     val durationSeconds: Int,
     val expiresAt: Long,
-    /** The user's consent for screenshots in THIS session (never remembered across sessions). */
-    val allowScreenshots: Boolean = false,
-    /** The user's consent for calendar reads in THIS session (never remembered across sessions). */
-    val allowCalendar: Boolean = false
+    /** The consents the user gave for THIS session (never remembered across sessions). See [Consent]. */
+    val consents: Set<String> = emptySet()
 ) {
+    fun allows(consent: String): Boolean = consent in consents
+
+    val allowScreenshots: Boolean
+        get() = allows(Consent.SCREENSHOTS)
+
+    val allowCalendar: Boolean
+        get() = allows(Consent.CALENDAR)
+
     val isExpired: Boolean
         get() = System.currentTimeMillis() >= expiresAt
 
