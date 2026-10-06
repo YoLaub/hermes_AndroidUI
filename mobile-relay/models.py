@@ -34,6 +34,7 @@ class MobileCalendarEvent(BaseModel):
     end_ms: int
     location: Optional[str] = None
     all_day: bool = False
+    event_id: Optional[str] = None
 
 class MobileSmsItem(BaseModel):
     """The only SMS fields the relay accepts. Anything else the phone sends is dropped on parsing."""

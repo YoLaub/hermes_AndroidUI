@@ -819,7 +819,7 @@ MCP_TOOLS = [
     },
     {
         "name": "mobile_calendar_events",
-        "description": "Liste les événements à venir du calendrier de l'utilisateur (titre, début, fin, lieu ; jamais les participants ni les notes), 50 au plus. À n'utiliser que si la tâche en a besoin. Nécessite que l'utilisateur ait autorisé la lecture du calendrier pour la session.",
+        "description": "Liste les événements à venir du calendrier de l'utilisateur (titre, début, fin, lieu, identifiant [id:N] ; jamais les participants ni les notes), 50 au plus. À n'utiliser que si la tâche en a besoin. Nécessite que l'utilisateur ait autorisé la lecture du calendrier pour la session.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -894,6 +894,8 @@ ACTION_SUCCESS_TEXT = {
 MAX_LIST_ENTRIES = 20
 MAX_LIST_TEXT_CHARS = 300
 _DIGIT_RUN = re.compile(r"\d(?:[ -]?\d)*")
+# An event id is shown to the agent only if it is a plain number: nothing else can ride along in it.
+_EVENT_ID = re.compile(r"\d{1,20}")
 
 # Phone-side answers meaning "the relay thinks a session exists, the phone disagrees".
 PHONE_SESSION_DESYNC_CODES = {"SESSION_NOT_ON_PHONE", "SESSION_ID_MISMATCH"}
@@ -1313,7 +1315,8 @@ def format_calendar(events) -> str:
         place = clean(e.location)
         lines.append(f"- {when(e.start_ms, e.all_day)} → {when(e.end_ms, e.all_day)}"
                      f"{' (toute la journée)' if e.all_day else ''} : {clean(e.title) or '(sans titre)'}"
-                     f"{f' @ {place}' if place else ''}")
+                     f"{f' @ {place}' if place else ''}"
+                     f"{f' [id:{e.event_id}]' if e.event_id and _EVENT_ID.fullmatch(e.event_id) else ''}")
     return f"Événements à venir ({len(events)}, heures en UTC) :\n" + "\n".join(lines)
 
 

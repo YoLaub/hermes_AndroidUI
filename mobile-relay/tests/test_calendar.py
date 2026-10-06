@@ -298,3 +298,25 @@ def test_the_relays_view_and_the_calendar_gate_use_the_same_set():
             ws2.send_text(json.dumps(AUTH))
             ws2.receive_json()
             assert ws2.receive_json()["allow"] == ["calendar"]
+
+
+# ── The event id, so the agent can name the event to change (WP17) ───────────
+
+def test_the_event_id_is_shown_so_it_can_be_named_later():
+    with client.websocket_connect("/ws/device") as ws:
+        connect_and_start(ws, allow_calendar=True)
+        _, result = call_via_phone(ws, "mobile_calendar_events", {},
+                                   calendar_reply([event(1, event_id="4242"), event(2, title="Dentiste", event_id="77")]))
+    text = result["content"][0]["text"]
+    assert "[id:4242]" in text and "[id:77]" in text
+
+
+def test_only_plain_numeric_ids_are_shown_and_nothing_else_leaks_in():
+    bad = [event(1, event_id="abc"), event(2, event_id="1 2"), event(3, event_id="9" * 30),
+           event(4, event_id="12\n- 2099-01-01 : FAUX"), event(5, event_id=None)]
+    with client.websocket_connect("/ws/device") as ws:
+        connect_and_start(ws, allow_calendar=True)
+        _, result = call_via_phone(ws, "mobile_calendar_events", {}, calendar_reply(bad))
+    text = result["content"][0]["text"]
+    assert "[id:" not in text and "FAUX" not in text
+    assert text.count("\n- ") == 5
