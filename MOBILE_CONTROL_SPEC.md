@@ -279,7 +279,8 @@ the user's tap on the phone** (same confirmation as 2.11: one at a time, 60 seco
   phone, `2026-10-07T15:00` (seconds optional); the relay checks the shape, the phone parses them in its own time zone.
   `event_id` is the number shown as `[id:N]` by `mobile_calendar_events` (1 to 20 digits).
 - The relay refuses invalid arguments before anything reaches the phone (`INVALID_ARGUMENTS`): title 1 to 200 characters,
-  location up to 200, ids and dates in their shapes, at least one field to change. Only the fields each operation uses are
+  location up to 200 (both one line of plain text: no line break or control character, which could forge lines on the
+  confirmation), ids and dates in their shapes, at least one field to change. Only the fields each operation uses are
   forwarded.
 - On the phone: events are created **without attendees**, in the user's primary writable calendar (named in the
   confirmation; `NO_WRITABLE_CALENDAR` if none). An event lasts at most 24 hours and starts within one year back or two

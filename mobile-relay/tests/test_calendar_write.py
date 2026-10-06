@@ -250,3 +250,27 @@ def test_the_status_reports_the_write_consent():
         connect_and_start(ws, allow=[])
         off = mcp_raw("mobile_control_status")["content"][0]["text"]
     assert "Écriture du calendrier : autorisée" in on and "Écriture du calendrier : non autorisée" in off
+
+
+def test_titles_and_places_with_line_breaks_or_control_characters_are_refused():
+    bad = ["a\nb", "a\rb", "a\tb", "a\x00b", "a\x7fb", "a\u2028b", "a\u2029b"]
+    with client.websocket_connect("/ws/device") as ws:
+        connect_and_start(ws, allow=["calendar_write"])
+        with patch.object(type(manager), "send_command_to_device") as sent:
+            for text in bad:
+                for tool, args in (("mobile_calendar_create", {**CREATE, "title": text}),
+                                   ("mobile_calendar_create", {**CREATE, "location": text}),
+                                   ("mobile_calendar_update", {"event_id": "4242", "title": text}),
+                                   ("mobile_calendar_update", {"event_id": "4242", "location": text})):
+                    r = mcp_raw(tool, args)
+                    assert r["isError"] and r["content"][0]["text"].startswith("INVALID_ARGUMENTS"), (tool, text)
+        assert not sent.called
+
+
+def test_accents_and_ordinary_punctuation_are_still_accepted():
+    with client.websocket_connect("/ws/device") as ws:
+        connect_and_start(ws, allow=["calendar_write"])
+        cmd, result = call_via_phone(ws, "mobile_calendar_create",
+                                     {**CREATE, "title": "Rendez-vous chez Zoë — 15 h (bureau) #2",
+                                      "location": "12, rue de l'Église"}, ok())
+    assert cmd["operation"] == "calendar_create" and not result.get("isError")

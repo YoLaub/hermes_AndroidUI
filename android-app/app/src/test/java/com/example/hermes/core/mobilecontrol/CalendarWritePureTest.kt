@@ -165,4 +165,26 @@ class CalendarWritePureTest {
         assertEquals("Supprimer cet événement ?", t.headline)
         assertTrue(t.details.contains("Réunion") && t.details.contains("2026-10-07 15:00") && t.details.contains("Salle 1"))
     }
+
+    // ── No line breaks or control characters in what the user reads on the confirmation ──
+
+    @Test
+    fun aTitleOrPlaceWithAControlCharacterIsRefusedOnCreate() {
+        for (bad in listOf("a\nb", "a\rb", "a\tb", "a\u0000b", "a\u007fb", "a\u2028b", "a\u2029b")) {
+            assertEquals(bad, "INVALID_ARGUMENTS", create(title = bad)!!.code)
+            assertEquals(bad, "INVALID_ARGUMENTS", create(location = bad)!!.code)
+        }
+    }
+
+    @Test
+    fun theSameHoldsOnUpdateButAnEmptyLocationStillClearsIt() {
+        assertEquals("INVALID_ARGUMENTS", update(title = "x\ny")!!.code)
+        assertEquals("INVALID_ARGUMENTS", update(location = "x\ny")!!.code)
+        assertNull(update(location = ""))
+    }
+
+    @Test
+    fun ordinaryAccentsPunctuationAndSpacesAreStillFine() {
+        assertNull(create(title = "Rendez-vous chez Zoë — 15 h (bureau) #2", location = "12, rue de l'Église"))
+    }
 }

@@ -950,6 +950,9 @@ _DIGIT_RUN = re.compile(r"\d(?:[ -]?\d)*")
 _EVENT_ID = re.compile(r"\d{1,20}")
 _LOCAL_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?")
 MAX_CALENDAR_WRITE_TEXT_CHARS = 200
+# A title or a place is one line of plain text: no line break or control character that could forge lines on the
+# confirmation the user reads before tapping.
+_CONTROL_CHARS = re.compile("[\x00-\x1f\x7f\u2028\u2029]")
 
 # Phone-side answers meaning "the relay thinks a session exists, the phone disagrees".
 PHONE_SESSION_DESYNC_CODES = {"SESSION_NOT_ON_PHONE", "SESSION_ID_MISMATCH"}
@@ -1343,7 +1346,7 @@ def validate_calendar_write(op: str, arguments: dict) -> Optional[str]:
             return False
         if required and not value.strip():
             return False
-        return len(value) <= MAX_CALENDAR_WRITE_TEXT_CHARS
+        return len(value) <= MAX_CALENDAR_WRITE_TEXT_CHARS and _CONTROL_CHARS.search(value) is None
 
     def when_ok(value, required: bool) -> bool:
         if value is None:

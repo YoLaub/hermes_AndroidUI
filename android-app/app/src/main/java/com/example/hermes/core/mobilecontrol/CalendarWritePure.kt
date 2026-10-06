@@ -53,6 +53,7 @@ object CalendarWritePure {
         if (title.isNullOrBlank()) return invalid("Le titre est requis.")
         if (title.length > MAX_TEXT_CHARS) return invalid("Le titre dépasse $MAX_TEXT_CHARS caractères.")
         if (location != null && location.length > MAX_TEXT_CHARS) return invalid("Le lieu dépasse $MAX_TEXT_CHARS caractères.")
+        controlProblem(title, location)?.let { return it }
         if (startMs == null || endMs == null) return invalid("Le début et la fin sont requis (format 2026-10-07T15:00).")
         return checkTimes(startMs, endMs, nowMs)
     }
@@ -67,6 +68,7 @@ object CalendarWritePure {
         if (newTitle != null && newTitle.isBlank()) return invalid("Le nouveau titre ne peut pas être vide.")
         if (newTitle != null && newTitle.length > MAX_TEXT_CHARS) return invalid("Le titre dépasse $MAX_TEXT_CHARS caractères.")
         if (newLocation != null && newLocation.length > MAX_TEXT_CHARS) return invalid("Le lieu dépasse $MAX_TEXT_CHARS caractères.")
+        controlProblem(newTitle, newLocation)?.let { return it }
         return checkTimes(newStartMs ?: current.startMs, newEndMs ?: current.endMs, nowMs)
     }
 
@@ -124,6 +126,17 @@ object CalendarWritePure {
 
     private fun stamp(ms: Long, zone: TimeZone): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).apply { timeZone = zone }.format(java.util.Date(ms))
+
+    /**
+     * A title or a place is one line of plain text: a line break or another control character could forge extra lines
+     * on the confirmation the user reads before tapping.
+     */
+    private fun controlProblem(vararg texts: String?): Problem? =
+        if (texts.any { t -> t != null && t.any { isControl(it) } }) {
+            invalid("Le titre et le lieu ne peuvent pas contenir de saut de ligne ni de caractère de contrôle.")
+        } else null
+
+    private fun isControl(c: Char) = c.code < 0x20 || c.code == 0x7f || c == '\u2028' || c == '\u2029'
 
     private fun invalid(message: String) = Problem("INVALID_ARGUMENTS", message)
     private fun notEditable(message: String) = Problem("EVENT_NOT_EDITABLE", message)
