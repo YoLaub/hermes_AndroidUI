@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 
 /**
  * The confirmation the user taps: exact recipient, exact text, a banner about what was read, and two buttons that
@@ -35,6 +36,16 @@ class ConfirmationNotifier(private val context: Context) {
                 }
             )
         }
+    }
+
+    /** False when the user turned the app's notifications (or this channel) off: a confirmation would never be seen. */
+    fun canShow(): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = manager.getNotificationChannel(CHANNEL_ID)
+            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return false
+        }
+        return true
     }
 
     fun show(request: ConfirmationRequest) {

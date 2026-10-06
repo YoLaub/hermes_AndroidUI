@@ -573,7 +573,7 @@ private fun StartSessionDialog(
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         val consent = askingFor
         askingFor = null
-        if (consent != null && Consent.PERMISSIONS[consent].orEmpty().all { granted[it] == true }) {
+        if (consent != null && Consent.requiredPermissions(consent, android.os.Build.VERSION.SDK_INT).all { granted[it] == true }) {
             consents = consents + consent
         }
     }
@@ -582,7 +582,7 @@ private fun StartSessionDialog(
             consents = consents - consent
             return
         }
-        val required = Consent.PERMISSIONS[consent].orEmpty()
+        val required = Consent.requiredPermissions(consent, android.os.Build.VERSION.SDK_INT)
         if (required.isEmpty()) {
             consents = consents + consent
         } else {

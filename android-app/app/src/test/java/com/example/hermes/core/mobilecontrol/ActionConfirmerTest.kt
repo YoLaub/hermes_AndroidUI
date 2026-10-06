@@ -117,4 +117,26 @@ class ActionConfirmerTest {
         c.onUserDecision("c2", true)
         assertEquals(Decision.ACCEPTED, second.await())
     }
+
+    @Test
+    fun whenTheNotificationCannotBeShownNothingIsOpenedAndTheAnswerIsImmediate() = runTest {
+        val spy = Spy()
+        val c = ActionConfirmer(show = { spy.shown += it.id }, dismiss = { spy.dismissed += it },
+            now = { currentTime }, canShow = { false })
+        assertEquals(Decision.UNAVAILABLE, c.confirm(request()))
+        assertTrue(spy.shown.isEmpty())
+        assertEquals(0L, currentTime)                       // no 60-second wait
+    }
+
+    @Test
+    fun anUnavailableAnswerLeavesNothingPendingForTheNextRequest() = runTest {
+        var available = false
+        val c = ActionConfirmer(show = {}, dismiss = {}, now = { currentTime }, canShow = { available })
+        assertEquals(Decision.UNAVAILABLE, c.confirm(request("c1")))
+        available = true
+        val second = async { c.confirm(request("c2")) }
+        runCurrent()
+        c.onUserDecision("c2", true)
+        assertEquals(Decision.ACCEPTED, second.await())
+    }
 }

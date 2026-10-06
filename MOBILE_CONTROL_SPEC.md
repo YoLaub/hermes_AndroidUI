@@ -315,6 +315,7 @@ the user's tap on the phone** (same confirmation as 2.11: one at a time, 60 seco
 | `NO_WRITABLE_CALENDAR` | Aucun calendrier visible et modifiable pour créer l'événement |
 | `USER_REFUSED` | L'utilisateur a refusé l'envoi ou l'appel sur son téléphone |
 | `CONFIRMATION_TIMEOUT` | Pas de confirmation dans les 60 secondes : refus |
+| `CONFIRMATION_UNAVAILABLE` | Les notifications de l'application sont désactivées : la confirmation n'a pas pu s'afficher, rien n'est fait (réponse immédiate) |
 | `CONFIRMATION_BUSY` | Une autre confirmation est déjà en attente sur le téléphone |
 | `RECIPIENT_NOT_IN_CONTACTS` | Le destinataire n'est pas un contact de l'utilisateur |
 | `RECIPIENT_AMBIGUOUS` | Plusieurs contacts correspondent : refus, jamais de devinette |

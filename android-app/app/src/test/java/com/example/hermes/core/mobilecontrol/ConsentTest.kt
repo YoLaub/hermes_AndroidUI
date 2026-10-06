@@ -180,4 +180,31 @@ class ConsentTest {
             Consent.PERMISSIONS[Consent.CALENDAR_WRITE]
         )
     }
+
+    // ── The confirmation must be able to reach the user: notifications are required on Android 13+ ──
+
+    private val notif = "android.permission.POST_NOTIFICATIONS"
+
+    @Test
+    fun consentsThatAskForAConfirmationNeedNotificationsOnAndroid13AndAbove() {
+        for (c in listOf(Consent.SMS_SEND, Consent.CALL_PLACE, Consent.CALENDAR_WRITE)) {
+            assertTrue(c, notif in Consent.requiredPermissions(c, 33))
+            assertTrue(c, notif in Consent.requiredPermissions(c, 36))
+            assertFalse(c, notif in Consent.requiredPermissions(c, 32))
+        }
+    }
+
+    @Test
+    fun readsNeverNeedNotificationsAndKeepTheirOwnPermissions() {
+        for (c in listOf(Consent.SMS_READ, Consent.CALL_LOG_READ, Consent.CALENDAR, Consent.SCREENSHOTS)) {
+            assertFalse(c, notif in Consent.requiredPermissions(c, 36))
+        }
+        assertEquals(listOf("android.permission.READ_SMS"), Consent.requiredPermissions(Consent.SMS_READ, 36))
+    }
+
+    @Test
+    fun theOwnPermissionsAreStillRequiredAlongsideNotifications() {
+        val p = Consent.requiredPermissions(Consent.SMS_SEND, 34)
+        assertTrue("android.permission.SEND_SMS" in p && "android.permission.READ_CONTACTS" in p)
+    }
 }

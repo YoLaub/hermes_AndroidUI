@@ -46,7 +46,8 @@ class MobileControlManager(
     private val confirmer = ActionConfirmer(
         show = { confirmationNotifier.show(it) },
         dismiss = { confirmationNotifier.dismiss() },
-        now = { System.currentTimeMillis() }
+        now = { System.currentTimeMillis() },
+        canShow = { confirmationNotifier.canShow() }
     )
     private var sessionTimerJob: Job? = null
     private var confirmationTimeoutJob: Job? = null
@@ -235,7 +236,7 @@ class MobileControlManager(
             expiresAt = expiresAt,
             // Only known consents whose Android permissions are really granted: refused permission means off.
             consents = consents.filter { c ->
-                c in Consent.KNOWN && Consent.PERMISSIONS[c].orEmpty().all {
+                c in Consent.KNOWN && Consent.requiredPermissions(c, android.os.Build.VERSION.SDK_INT).all {
                     ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
                 }
             }.toSet()
@@ -651,6 +652,8 @@ class MobileControlManager(
             null -> return reject(cmd, "CONFIRMATION_BUSY", "Une autre confirmation est déjà en attente sur le téléphone.")
             Decision.REFUSED -> return reject(cmd, "USER_REFUSED", "L'utilisateur a refusé sur son téléphone.")
             Decision.EXPIRED -> return reject(cmd, "CONFIRMATION_TIMEOUT", "Pas de confirmation dans le délai : refusé.")
+            Decision.UNAVAILABLE -> return reject(cmd, "CONFIRMATION_UNAVAILABLE",
+                "Les notifications de l'application Hermes sont désactivées sur le téléphone : la confirmation ne peut pas s'afficher. Rien n'a été fait.")
             Decision.ACCEPTED -> Unit
         }
         // The session may have ended while the user was deciding.

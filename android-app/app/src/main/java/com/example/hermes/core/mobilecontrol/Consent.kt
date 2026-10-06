@@ -48,6 +48,20 @@ object Consent {
 
     fun requiredFor(operation: String): String? = BY_OPERATION[operation]
 
+    private const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
+
+    /** Consents whose actions wait for the user's tap on a notification: if it cannot be shown, nothing can be confirmed. */
+    private val NEEDS_NOTIFICATIONS = setOf(SMS_SEND, CALL_PLACE, CALENDAR_WRITE)
+
+    /**
+     * The Android permissions a consent needs before it can be given on this Android version. Notifications are a
+     * runtime permission only from Android 13 (API 33); before that they are on by default.
+     */
+    fun requiredPermissions(consent: String, sdkInt: Int): List<String> {
+        val own = PERMISSIONS[consent].orEmpty()
+        return if (consent in NEEDS_NOTIFICATIONS && sdkInt >= 33) own + POST_NOTIFICATIONS else own
+    }
+
     fun refusalCode(consent: String): String = when (consent) {
         SCREENSHOTS -> "SCREENSHOTS_NOT_ALLOWED"
         CALENDAR -> "CALENDAR_NOT_ALLOWED"
