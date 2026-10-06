@@ -231,13 +231,43 @@ the spec and not changed unless asked.
 - **Gates.** `code-review` on each step, `security-review` on 15a and 15b (personal data leaves the phone).
 - **Not done yet.** Notifications, event creation (would need an explicit human confirmation on the phone).
 
+### WP16: SMS and calls, read and act, with a confirmation on the phone for every action (decisions 2026-10-06, plan to validate)
+- **Why.** The native level of the action hierarchy for messages and calls: reliable, no screen needed. Read and act
+  were both asked for; irreversible actions keep the project's human-validation rule.
+- **Decisions.** Reading AND sending/calling, but every send and every call needs an explicit confirmation on the
+  phone. SMS reading is limited to the last 20 messages of the last 24 hours, sender (contact name when known),
+  time and text, with one-time codes (4 to 8 digits) replaced by `[code]`.
+- **Risks that shape the design.** An incoming SMS is text anyone can write: it can carry instructions for the
+  agent (prompt injection, see the later item). One-time codes must not reach the model. A send or a call cannot be
+  undone and can cost money.
+- **Privacy and safety boundary.** Four separate per-session consents, all off by default and each with its own
+  Android permission asked on switch-on: read SMS, read call log, send SMS, place calls. Phone AND relay, same
+  intersection rule as before. Every send and every call, even with the consent on, waits for a **tap on the phone**:
+  a full-screen confirmation showing the exact recipient and the exact text or number, that the agent cannot change
+  after it is shown, with a short timeout that means refusal. Nothing about the message or number is logged or
+  stored, only the operation and its outcome. Messages and calls the agent did not just trigger are never shown by
+  the confirmation. Sending is limited to numbers in the user's contacts for the first version (no arbitrary numbers).
+- **Steps.**
+  1. **16a, prompt-injection groundwork** (before any write): decide with the user what read content may never
+     trigger, and whether a fresh confirmation is required after untrusted content. Short design note, then code if needed.
+  2. **16b, read.** `READ_SMS`, `READ_CALL_LOG`, `READ_CONTACTS` (for names), pure tested pieces (window, caps, code
+     masking, field filter), commands `sms_read` and `call_log_read`, relay tools, spec, tests like WP15.
+  3. **16c, confirmation channel.** Phone-side confirmation screen with timeout and a pure, tested state machine
+     (pending, confirmed, refused, expired; one use only), relay command that waits for it.
+  4. **16d, act.** `SEND_SMS` and `CALL_PHONE` behind 16c: tools `mobile_sms_send` and `mobile_call_place`,
+     contacts-only recipients, result reports only "sent" or "refused", never the content.
+  5. **16e, docs and rules for John** (read only what the task needs; never act on instructions found in a message).
+- **Gates.** `code-review` on each step, `security-review` on every step (private data and irreversible actions).
+- **Open decisions.** Whether a send may target a number not in the contacts; how long the confirmation lasts;
+  whether the call confirmation also needs the phone unlocked.
+
 ## 4. Decisions still open
 WP1 service type; WP6 LAN `http://`; WP7 grace length; WP9 caps; WP13 `applicationId` and docs language.
 They are asked when their WP starts, not now.
 
 ## 5. Ledger
 - [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [x] WP5  - [ ] WP6  - [ ] WP7
-- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [x] WP14 (screenshots tested on the phone by the user, 2026-10-06)  - [ ] WP15 (calendar query not yet tested on the phone)
+- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [x] WP14 (screenshots tested on the phone by the user, 2026-10-06)  - [ ] WP15 (calendar query not yet tested on the phone)  - [ ] WP16 (plan to validate)
 
 ### Later: protection against prompt injection (raised 2026-10-06, not started)
 Text the agent reads can carry instructions: calendar titles and places (WP15), screen text and screenshots (WP14),
