@@ -180,14 +180,15 @@ class MobileControlWebSocketClient(
             allowedProfile = session.allowedProfile,
             mode = session.mode.name.lowercase(),
             durationSeconds = session.durationSeconds,
-            allowScreenshots = session.allowScreenshots
+            allowScreenshots = session.allowScreenshots,
+            allowCalendar = session.allowCalendar
         )
         if (!_isAuthenticated.value) {
             Log.w(TAG, "event=session_start_not_sent session_id=${session.id} reason=not_authenticated")
             return false
         }
         val sent = sendJson(json.encodeToString(startMsg))
-        Log.i(TAG, "event=session_start_sent session_id=${session.id} profile=${session.allowedProfile} screenshots=${if (session.allowScreenshots) "on" else "off"} queued=$sent")
+        Log.i(TAG, "event=session_start_sent session_id=${session.id} profile=${session.allowedProfile} screenshots=${if (session.allowScreenshots) "on" else "off"} calendar=${if (session.allowCalendar) "on" else "off"} queued=$sent")
         return sent
     }
 

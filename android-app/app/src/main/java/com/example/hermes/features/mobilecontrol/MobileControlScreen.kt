@@ -1,5 +1,8 @@
 package com.example.hermes.features.mobilecontrol
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -148,7 +151,8 @@ fun MobileControlScreen(
                             )
                             Text(
                                 text = "Profil autorisé : John (${session.allowedProfile}) • Mode : ${session.mode.name.lowercase()}" +
-                                    if (session.allowScreenshots) " • Captures autorisées" else "",
+                                    (if (session.allowScreenshots) " • Captures autorisées" else "") +
+                                    (if (session.allowCalendar) " • Calendrier autorisé" else ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -399,7 +403,7 @@ fun MobileControlScreen(
             availableProfiles = state.availableProfiles,
             activeProfile = state.activeProfile,
             onDismiss = { showStartSessionDialog = false },
-            onConfirm = { app, profile, mode, duration, allowScreenshots ->
+            onConfirm = { app, profile, mode, duration, allowScreenshots, allowCalendar ->
                 showStartSessionDialog = false
                 viewModel.startSession(
                     targetPackage = app.packageName,
@@ -407,7 +411,8 @@ fun MobileControlScreen(
                     profile = profile,
                     mode = mode,
                     durationMinutes = duration,
-                    allowScreenshots = allowScreenshots
+                    allowScreenshots = allowScreenshots,
+                    allowCalendar = allowCalendar
                 )
             }
         )
@@ -498,11 +503,16 @@ private fun StartSessionDialog(
     availableProfiles: List<String>,
     activeProfile: String,
     onDismiss: () -> Unit,
-    onConfirm: (AllowedApp, String, MobileControlMode, Int, Boolean) -> Unit
+    onConfirm: (AllowedApp, String, MobileControlMode, Int, Boolean, Boolean) -> Unit
 ) {
     var selectedApp by remember { mutableStateOf(allowedApps.firstOrNull()) }
     // Always off when the dialog opens: the consent is given again, on purpose, for each session.
     var allowScreenshots by remember { mutableStateOf(false) }
+    var allowCalendar by remember { mutableStateOf(false) }
+    // The Android permission is asked only when the user turns the calendar consent on; refused means off.
+    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        allowCalendar = granted
+    }
     val isJohnAvailable = availableProfiles.contains("john")
     var selectedMode by remember { mutableStateOf(MobileControlMode.INTERACTION) }
     var selectedDuration by remember { mutableStateOf(15) } // minutes
@@ -593,6 +603,30 @@ private fun StartSessionDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(checked = allowScreenshots, onCheckedChange = { allowScreenshots = it })
                 }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Autoriser la lecture du calendrier", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            "Pendant cette session seulement, l'agent peut lire vos 7 prochains jours : titre, début, " +
+                                "fin et lieu de chaque événement (50 au plus), jamais les participants ni les notes. " +
+                                "Ces informations sont envoyées au modèle de John (le fournisseur configuré pour ce profil). " +
+                                "Android vous demandera l'accès au calendrier.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HermesTextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = allowCalendar,
+                        onCheckedChange = { on ->
+                            if (on) calendarPermission.launch(Manifest.permission.READ_CALENDAR) else allowCalendar = false
+                        }
+                    )
+                }
             }
         },
         confirmButton = {
@@ -600,7 +634,7 @@ private fun StartSessionDialog(
                 onClick = {
                     val app = selectedApp
                     if (app != null && isJohnAvailable) {
-                        onConfirm(app, "john", selectedMode, selectedDuration, allowScreenshots)
+                        onConfirm(app, "john", selectedMode, selectedDuration, allowScreenshots, allowCalendar)
                     }
                 },
                 enabled = selectedApp != null && isJohnAvailable

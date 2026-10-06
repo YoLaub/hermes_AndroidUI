@@ -33,6 +33,7 @@ class MobileControlManager(
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val commandMutex = Mutex()
+    private val calendarReader = CalendarReader(context)
     private var sessionTimerJob: Job? = null
     private var confirmationTimeoutJob: Job? = null
 
@@ -184,7 +185,8 @@ class MobileControlManager(
         allowedProfile: String,
         mode: MobileControlMode,
         durationSeconds: Int,
-        allowScreenshots: Boolean = false
+        allowScreenshots: Boolean = false,
+        allowCalendar: Boolean = false
     ): Result<MobileControlSession> {
         val normalizedProfile = allowedProfile.trim().lowercase()
         if (normalizedProfile != "john") {
@@ -216,7 +218,8 @@ class MobileControlManager(
             startedAt = now,
             durationSeconds = duration,
             expiresAt = expiresAt,
-            allowScreenshots = allowScreenshots
+            allowScreenshots = allowScreenshots,
+            allowCalendar = allowCalendar && calendarReader.hasPermission()
         )
 
         // Not active yet: the relay must confirm. Ask it, and never claim more than that.
@@ -368,6 +371,29 @@ class MobileControlManager(
                             )
                         }
                     }
+                }
+
+                "calendar_read" -> {
+                    if (!calendarReader.hasPermission()) {
+                        return reject(cmd, "CALENDAR_PERMISSION_MISSING",
+                            "Android n'a pas accordé l'accès au calendrier à l'application Hermes.")
+                    }
+                    val rows = try {
+                        withContext(Dispatchers.IO) { calendarReader.read(System.currentTimeMillis(), cmd.arguments?.days) }
+                    } catch (e: SecurityException) {
+                        return reject(cmd, "CALENDAR_PERMISSION_MISSING", "Android a refusé l'accès au calendrier.")
+                    }
+                    val events = CalendarPure.toEvents(rows)
+                    // Counts only: titles and places are never logged nor kept.
+                    Log.i(TAG, "event=calendar_read command_id=${cmd.commandId} count=${events.size}")
+                    logAudit("CALENDAR_READ", session.targetPackage, "SUCCESS", "${events.size} événements", session.allowedProfile)
+                    MobileCommandResult(
+                        commandId = cmd.commandId,
+                        status = MobileCommandStatus.SUCCESS,
+                        executedAt = System.currentTimeMillis(),
+                        message = "${events.size} événement(s) à venir.",
+                        calendarEvents = events
+                    )
                 }
 
                 "tap_xy" -> {

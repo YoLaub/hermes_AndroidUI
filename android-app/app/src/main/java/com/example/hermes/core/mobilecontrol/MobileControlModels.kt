@@ -61,8 +61,7 @@ data class MobileScreenData(
     @SerialName("package_name") val packageName: String,
     val title: String? = null,
     val elements: List<MobileElementInfo> = emptyList(),
-    val screenshot: MobileScreenshot? = null,
-    @SerialName("calendar_events") val calendarEvents: List<MobileCalendarEvent>? = null
+    val screenshot: MobileScreenshot? = null
 )
 
 @Serializable
@@ -100,7 +99,9 @@ data class MobileCommandResult(
     @SerialName("error_code") val errorCode: String? = null,
     @SerialName("executed_at") val executedAt: Long? = null,
     val message: String? = null,
-    val data: MobileScreenData? = null
+    val data: MobileScreenData? = null,
+    /** Answer of calendar_read only. */
+    @SerialName("calendar_events") val calendarEvents: List<MobileCalendarEvent>? = null
 )
 
 @Serializable
