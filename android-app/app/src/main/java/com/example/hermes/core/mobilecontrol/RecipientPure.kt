@@ -1,5 +1,7 @@
 package com.example.hermes.core.mobilecontrol
 
+import java.text.Normalizer
+
 data class ContactEntry(val name: String, val number: String)
 
 /**
@@ -16,22 +18,48 @@ object RecipientPure {
     }
 
     fun resolve(query: String, contacts: List<ContactEntry>): Resolution {
-        val q = query.trim()
-        if (q.isEmpty()) return Resolution.NotFound
-        val matches = if (q.any { it.isLetter() }) {
-            contacts.filter { it.name.trim().equals(q, ignoreCase = true) }
-        } else {
-            val digits = digitsOf(q)
-            if (digits.isEmpty()) return Resolution.NotFound
-            contacts.filter { sameNumber(digits, digitsOf(it.number)) }
-        }
-        val distinct = matches.map { it.name.trim().lowercase() to digitsOf(it.number) }.distinct()
+        val lines = collapse(matchesFor(query, contacts))
         return when {
-            matches.isEmpty() -> Resolution.NotFound
-            distinct.size > 1 -> Resolution.Ambiguous
-            else -> Resolution.Found(matches.first())
+            lines.isEmpty() -> Resolution.NotFound
+            lines.size > 1 -> Resolution.Ambiguous
+            else -> Resolution.Found(lines.first())
         }
     }
+
+    /** How many different phone lines answer to this query (counts only, for diagnostics). */
+    fun distinctLines(query: String, contacts: List<ContactEntry>): Int = collapse(matchesFor(query, contacts)).size
+
+    private fun matchesFor(query: String, contacts: List<ContactEntry>): List<ContactEntry> {
+        val q = normalise(query)
+        if (q.isEmpty()) return emptyList()
+        if (q.any { it.isLetter() }) return contacts.filter { normalise(it.name).equals(q, ignoreCase = true) }
+        val digits = digitsOf(q)
+        if (digits.isEmpty()) return emptyList()
+        return contacts.filter { sameNumber(digits, digitsOf(it.number)) }
+    }
+
+    /**
+     * Android lists a person once per account (Google, WhatsApp, SIM) and per saved number, often the same line written
+     * as "06 12 34 56 78" and "+33 6 12 34 56 78". Copies of one line under one name are ONE recipient; the international
+     * form is kept. Only genuinely different lines stay ambiguous.
+     */
+    private fun collapse(matches: List<ContactEntry>): List<ContactEntry> {
+        val out = ArrayList<ContactEntry>()
+        for (m in matches) {
+            val i = out.indexOfFirst {
+                normalise(it.name).equals(normalise(m.name), ignoreCase = true) &&
+                    sameNumber(digitsOf(it.number), digitsOf(m.number))
+            }
+            when {
+                i < 0 -> out += m
+                m.number.trim().startsWith("+") && !out[i].number.trim().startsWith("+") -> out[i] = m
+            }
+        }
+        return out
+    }
+
+    // Accented names compare equal whether the accent is one character or a letter plus a combining mark.
+    private fun normalise(s: String) = Normalizer.normalize(s.trim(), Normalizer.Form.NFC)
 
     /** Null when the text may be sent, otherwise why not. */
     fun textProblem(text: String?): String? = when {

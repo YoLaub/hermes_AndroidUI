@@ -666,8 +666,14 @@ class MobileControlManager(
             is RecipientPure.Resolution.Found -> r.contact
             RecipientPure.Resolution.NotFound ->
                 return reject(cmd, "RECIPIENT_NOT_IN_CONTACTS", "Le destinataire n'est pas un contact de l'utilisateur.")
-            RecipientPure.Resolution.Ambiguous ->
-                return reject(cmd, "RECIPIENT_AMBIGUOUS", "Plusieurs contacts correspondent : l'action est refusée.")
+            RecipientPure.Resolution.Ambiguous -> {
+                // Counts only: never the names or the numbers.
+                val lines = RecipientPure.distinctLines(to, contacts)
+                Log.w(TAG, "event=recipient_ambiguous command_id=${cmd.commandId} lines=$lines contacts=${contacts.size}")
+                return reject(cmd, "RECIPIENT_AMBIGUOUS",
+                    "$lines numéros différents correspondent à ce nom : l'action est refusée. " +
+                        "Demande à l'utilisateur le numéro complet à utiliser, puis réessaie avec ce numéro.")
+            }
         }
 
         val request = ConfirmationRequest(
