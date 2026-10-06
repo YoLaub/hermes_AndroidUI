@@ -237,7 +237,7 @@ They are asked when their WP starts, not now.
 
 ## 5. Ledger
 - [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [x] WP5  - [ ] WP6  - [ ] WP7
-- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [ ] WP14 (not verified on the phone)  - [ ] WP15 (same)
+- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [x] WP14 (screenshots tested on the phone by the user, 2026-10-06)  - [ ] WP15 (calendar query not yet tested on the phone)
 
 ### Later: protection against prompt injection (raised 2026-10-06, not started)
 Text the agent reads can carry instructions: calendar titles and places (WP15), screen text and screenshots (WP14),
