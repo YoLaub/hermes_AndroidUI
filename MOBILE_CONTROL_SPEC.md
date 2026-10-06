@@ -169,7 +169,7 @@ and the agent are talking to different relay instances.
 ### 2.7b Consents (screenshots, calendar, later others)
 
 Every optional capability has a **named per-session consent**, off by default. `session_start` carries them as
-`allow`, a list of names (`"screenshots"`, `"calendar"`, `"sms_read"`, `"call_log_read"`); `session_started_ack` and `session_state` echo the
+`allow`, a list of names (`"screenshots"`, `"calendar"`, `"sms_read"`, `"call_log_read"`, `"sms_send"`, `"call_place"`); `session_started_ack` and `session_state` echo the
 list the relay holds. Unknown names, non-string items and a non-list value are ignored. The legacy booleans
 `allow_screenshots` and `allow_calendar` are still read (only a literal `true`) and echoed, for phones and
 relays that predate the list; the list wins when both are present. The effective consent is the **intersection**
@@ -248,6 +248,26 @@ without consent (`SMS_NOT_ALLOWED`, `CALL_LOG_NOT_ALLOWED`).
 - Message text is written by third parties: it may contain instructions aimed at the agent. The agent must treat it
   as data; see the plan's item on prompt-injection protection.
 
+### 2.11 Sending an SMS and placing a call (irreversible actions)
+
+Each has **its own per-session consent** (`sms_send`, `call_place`) and works in interaction mode only. Even with the
+consent, **every send and every call waits for the user's tap on the phone**.
+
+- MCP tools `mobile_sms_send` (`to`, `text`) and `mobile_call_place` (`to`). `to` is the exact name of one of the
+  user's contacts, or a number that matches one: nothing else can be targeted (`RECIPIENT_NOT_IN_CONTACTS`,
+  `RECIPIENT_AMBIGUOUS`). What is sent or dialled is the contact's own stored number, not what the agent typed.
+  `text` is 1 to 300 characters so it fits the confirmation in full. Invalid arguments are refused by the relay
+  (`INVALID_ARGUMENTS`) before anything reaches the phone. Phone commands `sms_send` and `call_place`.
+- The phone shows a notification with the exact recipient and the exact text and two buttons (send / refuse), plus
+  a banner listing the external content read since the session started. One confirmation at a time
+  (`CONFIRMATION_BUSY`), 60 seconds, after which the answer is "no" (`CONFIRMATION_TIMEOUT`). A refusal answers
+  `USER_REFUSED`. The relay therefore waits up to 75 seconds and the command's `expires_at` is 80 seconds ahead.
+- On success the relay answers with **its own sentence** ("SMS transmis à l'opérateur après confirmation…"), never the
+  phone's message, so the recipient and the text cannot come back through it. "Sent" means handed to the phone's
+  messaging service, not delivered.
+- **Never stored, never logged.** Neither the recipient nor the text is logged or stored anywhere on the relay; the
+  audit records `SMS_SEND` / `CALL_PLACE` with the outcome only (`confirmed`, or the refusal code).
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |
@@ -263,6 +283,13 @@ without consent (`SMS_NOT_ALLOWED`, `CALL_LOG_NOT_ALLOWED`).
 | `CALENDAR_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du calendrier pour cette session (refusé côté relais et côté téléphone) |
 | `SMS_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture des SMS pour cette session (côté relais et côté téléphone) |
 | `CALL_LOG_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du journal d'appels pour cette session |
+| `SMS_SEND_NOT_ALLOWED` | L'utilisateur n'a pas autorisé l'envoi de SMS pour cette session |
+| `CALL_NOT_ALLOWED` | L'utilisateur n'a pas autorisé les appels pour cette session |
+| `USER_REFUSED` | L'utilisateur a refusé l'envoi ou l'appel sur son téléphone |
+| `CONFIRMATION_TIMEOUT` | Pas de confirmation dans les 60 secondes : refus |
+| `CONFIRMATION_BUSY` | Une autre confirmation est déjà en attente sur le téléphone |
+| `RECIPIENT_NOT_IN_CONTACTS` | Le destinataire n'est pas un contact de l'utilisateur |
+| `RECIPIENT_AMBIGUOUS` | Plusieurs contacts correspondent : refus, jamais de devinette |
 | `SMS_PERMISSION_MISSING` | Android n'a pas accordé l'accès aux SMS à l'application |
 | `CALL_LOG_PERMISSION_MISSING` | Android n'a pas accordé l'accès au journal d'appels à l'application |
 | `CALENDAR_PERMISSION_MISSING` | Android n'a pas accordé l'accès au calendrier à l'application |

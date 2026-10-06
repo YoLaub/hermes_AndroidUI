@@ -55,6 +55,7 @@ class MobileCommandArguments(BaseModel):
     x: Optional[int] = None
     y: Optional[int] = None
     days: Optional[int] = None
+    to: Optional[str] = None
 
 class MobileCommand(BaseModel):
     protocol: str = "mobile-control/1"
