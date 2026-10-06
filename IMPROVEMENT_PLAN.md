@@ -270,7 +270,40 @@ They are asked when their WP starts, not now.
 
 ## 5. Ledger
 - [x] WP1  - [x] WP2  - [x] WP3  - [ ] WP4  - [x] WP5  - [ ] WP6  - [ ] WP7
-- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [x] WP14 (screenshots tested on the phone by the user, 2026-10-06)  - [ ] WP15 (calendar query not yet tested on the phone)  - [ ] WP16 (plan to validate)
+- [ ] WP8  - [ ] WP9  - [ ] WP10 - [ ] WP11 - [ ] WP12 - [ ] WP13  - [x] WP14 (screenshots tested on the phone by the user, 2026-10-06)  - [ ] WP15 (calendar query not yet tested on the phone)  - [ ] WP16 (plan to validate)  - [ ] WP17 (plan to validate)
+
+### WP17: calendar write (create, modify, delete) with a phone confirmation for every change (asked 2026-10-06, plan to validate)
+- **Why.** WP15 reads the calendar; John also needs to add, move and remove events. These are changes to the user's data,
+  so they use the same barrier as sending an SMS: a per-session consent and a tap on the phone for each one.
+- **Decisions so far.** Create, modify and delete are all wanted. Not yet decided: whether modify/delete may touch any
+  event or only events Hermes created (recommended default below).
+- **Privacy and safety boundary.**
+  - Its own consent `calendar_write`, off by default, phone AND relay (same intersection rule), interaction mode only.
+    Android permissions `READ_CALENDAR` and `WRITE_CALENDAR` (one prompt, same group).
+  - Every create, modify and delete waits for the user's tap on a notification showing the exact change (title, date and
+    time, and for a modify the old and new values; for a delete the event about to disappear), with the banner of what was
+    read, 60 s, one at a time, expiry means refusal. Same `ActionConfirmer`; the request type is generalised from
+    "recipient and text" to "headline and details".
+  - **Never touches other people.** Events are created WITHOUT attendees. Modify and delete are refused (new code
+    `EVENT_NOT_EDITABLE`) for recurring events (a change would hit the whole series) and for events that have attendees
+    (a change would send updates to them). Only visible, writable calendars; a create goes to the user's primary writable
+    calendar and the confirmation names it (`NO_WRITABLE_CALENDAR` if none).
+  - Bounds: title up to 200 characters, location up to 200, an event lasts at most 24 hours, within one year before and
+    two years after today. Texts and ids are never logged or stored on the relay (audit: operation and outcome only).
+  - Identification: `mobile_calendar_events` also returns an opaque `event_id` per event so John can name the one to
+    change; the phone re-reads the event by id and re-checks it is editable before showing the confirmation.
+- **Recommended default for the open decision.** Modify and delete work on any editable event (non-recurring, no
+  attendees), each with its own confirmation, because "move my 3 pm" is the whole point; tell me if you want it limited
+  to events Hermes created.
+- **Steps.**
+  1. **17a, pure rules (TDD).** Validation of the fields and dates, the editability rule, the confirmation text builder,
+     generalised `ConfirmationRequest`, `event_id` in the read result.
+  2. **17b, relay.** Consent name `calendar_write`, tools `mobile_calendar_create`, `mobile_calendar_update`,
+     `mobile_calendar_delete`, argument validation, 75 s wait, relay's own success sentence, spec section and new codes.
+  3. **17c, phone.** `WRITE_CALENDAR`, the writer (ContentResolver insert, update, delete), the commands behind the
+     confirmation, the sixth-plus switch with its warning. Needs a device check (calendar provider, permission prompt).
+  4. **17d, docs and rules for John** (read before changing, never change on the strength of text read in a message).
+- **Gates.** `code-review` on each step, `security-review` on 17b and 17c.
 
 ### Later: protection against prompt injection (raised 2026-10-06, not started)
 Text the agent reads can carry instructions: calendar titles and places (WP15), screen text and screenshots (WP14),
