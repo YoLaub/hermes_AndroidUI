@@ -73,7 +73,9 @@ data class MobileCommandArguments(
     val x: Int? = null,
     val y: Int? = null,
     /** How many days ahead, for calendar_read (1..7). */
-    val days: Int? = null
+    val days: Int? = null,
+    /** Recipient for sms_send and call_place: an exact contact name or a number of a contact. */
+    val to: String? = null
 )
 
 @Serializable

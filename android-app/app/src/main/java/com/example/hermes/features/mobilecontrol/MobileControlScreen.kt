@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -155,7 +157,9 @@ fun MobileControlScreen(
                                     (if (session.allowScreenshots) " • Captures autorisées" else "") +
                                     (if (session.allowCalendar) " • Calendrier autorisé" else "") +
                                     (if (session.allows(Consent.SMS_READ)) " • SMS autorisés" else "") +
-                                    (if (session.allows(Consent.CALL_LOG_READ)) " • Journal d'appels autorisé" else ""),
+                                    (if (session.allows(Consent.CALL_LOG_READ)) " • Journal d'appels autorisé" else "") +
+                                    (if (session.allows(Consent.SMS_SEND)) " • Envoi de SMS autorisé" else "") +
+                                    (if (session.allows(Consent.CALL_PLACE)) " • Appels autorisés" else ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -406,7 +410,7 @@ fun MobileControlScreen(
             availableProfiles = state.availableProfiles,
             activeProfile = state.activeProfile,
             onDismiss = { showStartSessionDialog = false },
-            onConfirm = { app, profile, mode, duration, allowScreenshots, allowCalendar, allowSms, allowCallLog ->
+            onConfirm = { app, profile, mode, duration, consents ->
                 showStartSessionDialog = false
                 viewModel.startSession(
                     targetPackage = app.packageName,
@@ -414,12 +418,7 @@ fun MobileControlScreen(
                     profile = profile,
                     mode = mode,
                     durationMinutes = duration,
-                    consents = buildSet {
-                        if (allowScreenshots) add(Consent.SCREENSHOTS)
-                        if (allowCalendar) add(Consent.CALENDAR)
-                        if (allowSms) add(Consent.SMS_READ)
-                        if (allowCallLog) add(Consent.CALL_LOG_READ)
-                    }
+                    consents = consents
                 )
             }
         )
@@ -504,30 +503,84 @@ private fun AuditLogRow(log: AuditLogEntry) {
     }
 }
 
+private data class ConsentRow(val consent: String, val title: String, val description: String)
+
+// Every optional capability, each its own switch, each saying plainly where the data goes.
+private val CONSENT_ROWS = listOf(
+    ConsentRow(
+        Consent.SCREENSHOTS, "Autoriser les captures d'écran",
+        "Pendant cette session seulement, l'agent peut demander une image de la fenêtre de l'application cible " +
+            "(Android 14 ou plus récent). Elle est envoyée au modèle de John ou, s'il n'en lit pas les images, à son " +
+            "modèle de vision auxiliaire (le fournisseur configuré pour ce profil) et peut montrer messages, noms ou " +
+            "photos. Les champs de mot de passe cachés sont masqués ; un mot de passe affiché en clair ne peut pas " +
+            "l'être. Les fenêtres protégées ne sont jamais capturées."
+    ),
+    ConsentRow(
+        Consent.CALENDAR, "Autoriser la lecture du calendrier",
+        "Pendant cette session seulement, l'agent peut lire vos 7 prochains jours : titre, début, fin et lieu de " +
+            "chaque événement (50 au plus), jamais les participants ni les notes. Ces informations sont envoyées au " +
+            "modèle de John (le fournisseur configuré pour ce profil). Android vous demandera l'accès au calendrier."
+    ),
+    ConsentRow(
+        Consent.SMS_READ, "Autoriser la lecture des SMS",
+        "Pendant cette session seulement, l'agent peut lire vos 20 derniers SMS des dernières 24 h : expéditeur, " +
+            "heure et texte. Les codes de 4 à 8 chiffres sont remplacés par [code] avant l'envoi. Ces messages sont " +
+            "envoyés au modèle de John (le fournisseur configuré pour ce profil). Android vous demandera l'accès aux " +
+            "SMS et aux contacts (pour les noms)."
+    ),
+    ConsentRow(
+        Consent.CALL_LOG_READ, "Autoriser la lecture du journal d'appels",
+        "Pendant cette session seulement, l'agent peut lire vos 20 derniers appels des dernières 24 h : numéro ou " +
+            "nom, sens, heure et durée. Ces informations sont envoyées au modèle de John (le fournisseur configuré " +
+            "pour ce profil). Android vous demandera l'accès au journal d'appels et aux contacts."
+    ),
+    ConsentRow(
+        Consent.SMS_SEND, "Autoriser l'envoi de SMS (avec confirmation)",
+        "Pendant cette session seulement, l'agent peut PROPOSER un SMS à l'un de vos contacts. Rien n'est envoyé sans " +
+            "votre appui sur « Envoyer » dans une notification qui montre le destinataire et le texte exacts (60 s, " +
+            "sinon refus). Un envoi peut coûter de l'argent et ne s'annule pas. Android vous demandera l'accès à " +
+            "l'envoi de SMS et aux contacts."
+    ),
+    ConsentRow(
+        Consent.CALL_PLACE, "Autoriser les appels (avec confirmation)",
+        "Pendant cette session seulement, l'agent peut PROPOSER d'appeler l'un de vos contacts. Aucun appel n'est " +
+            "lancé sans votre appui sur « Appeler » dans une notification qui montre le contact (60 s, sinon refus). " +
+            "Android vous demandera l'accès aux appels et aux contacts."
+    )
+)
+
 @Composable
 private fun StartSessionDialog(
     allowedApps: List<AllowedApp>,
     availableProfiles: List<String>,
     activeProfile: String,
     onDismiss: () -> Unit,
-    onConfirm: (AllowedApp, String, MobileControlMode, Int, Boolean, Boolean, Boolean, Boolean) -> Unit
+    onConfirm: (AllowedApp, String, MobileControlMode, Int, Set<String>) -> Unit
 ) {
     var selectedApp by remember { mutableStateOf(allowedApps.firstOrNull()) }
-    // Always off when the dialog opens: the consent is given again, on purpose, for each session.
-    var allowScreenshots by remember { mutableStateOf(false) }
-    var allowCalendar by remember { mutableStateOf(false) }
-    // The Android permission is asked only when the user turns the calendar consent on; refused means off.
-    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        allowCalendar = granted
+    // Always off when the dialog opens: each consent is given again, on purpose, for each session.
+    var consents by remember { mutableStateOf(setOf<String>()) }
+    // The Android permissions of a consent are asked only when its switch is turned on; refused means off.
+    var askingFor by remember { mutableStateOf<String?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        val consent = askingFor
+        askingFor = null
+        if (consent != null && Consent.PERMISSIONS[consent].orEmpty().all { granted[it] == true }) {
+            consents = consents + consent
+        }
     }
-    var allowSms by remember { mutableStateOf(false) }
-    var allowCallLog by remember { mutableStateOf(false) }
-    // Contacts are asked together for names, but only the SMS / call log permission decides the switch.
-    val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-        allowSms = granted[Manifest.permission.READ_SMS] == true
-    }
-    val callLogPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-        allowCallLog = granted[Manifest.permission.READ_CALL_LOG] == true
+    fun toggle(consent: String, on: Boolean) {
+        if (!on) {
+            consents = consents - consent
+            return
+        }
+        val required = Consent.PERMISSIONS[consent].orEmpty()
+        if (required.isEmpty()) {
+            consents = consents + consent
+        } else {
+            askingFor = consent
+            permissionLauncher.launch((required + Consent.OPTIONAL_PERMISSIONS[consent].orEmpty()).toTypedArray())
+        }
     }
     val isJohnAvailable = availableProfiles.contains("john")
     var selectedMode by remember { mutableStateOf(MobileControlMode.INTERACTION) }
@@ -537,7 +590,7 @@ private fun StartSessionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Démarrer le contrôle mobile") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Application cible :", style = MaterialTheme.typography.labelMedium)
                 allowedApps.forEach { app ->
                     Row(
@@ -598,93 +651,16 @@ private fun StartSessionDialog(
                     }
                 }
 
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Autoriser les captures d'écran", style = MaterialTheme.typography.labelMedium)
-                        Text(
-                            "Pendant cette session seulement, l'agent peut demander une image de la fenêtre de " +
-                                "l'application cible (Android 14 ou plus récent). Elle est envoyée au modèle de John " +
-                                "ou, s'il n'en lit pas les images, à son modèle de vision auxiliaire (le fournisseur " +
-                                "configuré pour ce profil) et peut montrer messages, noms ou photos. " +
-                                "Les champs de mot de passe cachés sont masqués ; un mot de passe affiché en clair ne " +
-                                "peut pas l'être. Les fenêtres protégées ne sont jamais capturées.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = HermesTextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(checked = allowScreenshots, onCheckedChange = { allowScreenshots = it })
-                }
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Autoriser la lecture du calendrier", style = MaterialTheme.typography.labelMedium)
-                        Text(
-                            "Pendant cette session seulement, l'agent peut lire vos 7 prochains jours : titre, début, " +
-                                "fin et lieu de chaque événement (50 au plus), jamais les participants ni les notes. " +
-                                "Ces informations sont envoyées au modèle de John (le fournisseur configuré pour ce profil). " +
-                                "Android vous demandera l'accès au calendrier.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = HermesTextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = allowCalendar,
-                        onCheckedChange = { on ->
-                            if (on) calendarPermission.launch(Manifest.permission.READ_CALENDAR) else allowCalendar = false
+                CONSENT_ROWS.forEach { row ->
+                    HorizontalDivider()
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(row.title, style = MaterialTheme.typography.labelMedium)
+                            Text(row.description, style = MaterialTheme.typography.bodySmall, color = HermesTextSecondary)
                         }
-                    )
-                }
-                HorizontalDivider()
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Autoriser la lecture des SMS", style = MaterialTheme.typography.labelMedium)
-                        Text(
-                            "Pendant cette session seulement, l'agent peut lire vos 20 derniers SMS des dernières 24 h : " +
-                                "expéditeur, heure et texte. Les codes de 4 à 8 chiffres sont remplacés par [code] avant l'envoi. " +
-                                "Ces messages sont envoyés au modèle de John (le fournisseur configuré pour ce profil). " +
-                                "Android vous demandera l'accès aux SMS et aux contacts (pour les noms).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = HermesTextSecondary
-                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(checked = row.consent in consents, onCheckedChange = { toggle(row.consent, it) })
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = allowSms,
-                        onCheckedChange = { on ->
-                            if (on) smsPermission.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.READ_CONTACTS))
-                            else allowSms = false
-                        }
-                    )
-                }
-                HorizontalDivider()
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Autoriser la lecture du journal d'appels", style = MaterialTheme.typography.labelMedium)
-                        Text(
-                            "Pendant cette session seulement, l'agent peut lire vos 20 derniers appels des dernières 24 h : " +
-                                "numéro ou nom, sens, heure et durée. Ces informations sont envoyées au modèle de John " +
-                                "(le fournisseur configuré pour ce profil). Android vous demandera l'accès au journal d'appels.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = HermesTextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = allowCallLog,
-                        onCheckedChange = { on ->
-                            if (on) callLogPermission.launch(arrayOf(Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS))
-                            else allowCallLog = false
-                        }
-                    )
                 }
             }
         },
@@ -693,7 +669,7 @@ private fun StartSessionDialog(
                 onClick = {
                     val app = selectedApp
                     if (app != null && isJohnAvailable) {
-                        onConfirm(app, "john", selectedMode, selectedDuration, allowScreenshots, allowCalendar, allowSms, allowCallLog)
+                        onConfirm(app, "john", selectedMode, selectedDuration, consents)
                     }
                 },
                 enabled = selectedApp != null && isJohnAvailable

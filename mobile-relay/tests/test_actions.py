@@ -214,3 +214,24 @@ def test_the_status_reports_both_action_consents():
         connect_and_start(ws, allow=["sms_send"])
         text = mcp_raw("mobile_control_status")["content"][0]["text"]
     assert "Envoi de SMS : autorisé" in text and "Appels : non autorisés" in text
+
+
+def test_while_a_confirmation_is_pending_the_agent_cannot_issue_any_other_command():
+    """The agent must not be able to tap the confirmation's own button through the accessibility tools."""
+    with client.websocket_connect("/ws/device") as ws:
+        connect_and_start(ws, allow=["sms_send", "screenshots"])
+        box = {}
+        t = threading.Thread(target=lambda: box.update(
+            out=mcp_raw("mobile_sms_send", {"to": SECRET_WHO, "text": "salut"})))
+        t.start()
+        cmd = ws.receive_json()
+        assert cmd["operation"] == "sms_send"          # the phone now waits for the user
+        for tool, args in (("mobile_tap_xy", {"x": 5, "y": 5, "screen_revision": "rev_1"}),
+                           ("mobile_observe", {}), ("mobile_click_element", {"element_ref": "el_1"})):
+            r = mcp_raw(tool, args)
+            assert r["isError"] is True, tool
+            assert r["content"][0]["text"].startswith("CONCURRENT_COMMAND_DENIED"), r
+        ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "result", "command_id": cmd["command_id"],
+                                 "status": "rejected", "error_code": "USER_REFUSED", "message": "non"}))
+        t.join(10)
+    assert box["out"]["isError"] is True

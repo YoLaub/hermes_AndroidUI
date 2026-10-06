@@ -152,4 +152,12 @@ class ConsentTest {
             Consent.PERMISSIONS[Consent.CALL_PLACE]
         )
     }
+
+    @Test
+    fun contactsAreOptionalForReadsButRequiredForActions() {
+        assertEquals(listOf("android.permission.READ_CONTACTS"), Consent.OPTIONAL_PERMISSIONS[Consent.SMS_READ])
+        assertEquals(listOf("android.permission.READ_CONTACTS"), Consent.OPTIONAL_PERMISSIONS[Consent.CALL_LOG_READ])
+        assertTrue("android.permission.READ_CONTACTS" in Consent.PERMISSIONS[Consent.SMS_SEND]!!)
+        assertNull(Consent.OPTIONAL_PERMISSIONS[Consent.SMS_SEND])
+    }
 }

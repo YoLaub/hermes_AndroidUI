@@ -37,6 +37,16 @@ class MobileControlManager(
     private val calendarReader = CalendarReader(context)
     private val smsReader = SmsReader(context)
     private val callLogReader = CallLogReader(context)
+    private val contactsReader = ContactsReader(context)
+    private val smsSender = SmsSender(context)
+    private val callPlacer = CallPlacer(context)
+    private val externalReads = ExternalReads()
+    private val confirmationNotifier = ConfirmationNotifier(context)
+    private val confirmer = ActionConfirmer(
+        show = { confirmationNotifier.show(it) },
+        dismiss = { confirmationNotifier.dismiss() },
+        now = { System.currentTimeMillis() }
+    )
     private var sessionTimerJob: Job? = null
     private var confirmationTimeoutJob: Job? = null
 
@@ -138,6 +148,8 @@ class MobileControlManager(
         if (newlyActive?.id != before.active?.id) {
             // A different session (or none): no tap may rely on the previous session's screenshot.
             HermesAccessibilityService.getInstance()?.clearScreenshotContext()
+            externalReads.reset()
+            confirmer.cancelAll()
         }
         if (newlyActive != null && newlyActive.id != before.active?.id) {
             Log.i(TAG, "event=session_confirmed session_id=${newlyActive.id} profile=${newlyActive.allowedProfile}")
@@ -270,6 +282,8 @@ class MobileControlManager(
         val current = _activeSession.value
         if (current != null) {
             HermesAccessibilityService.getInstance()?.clearScreenshotContext()
+            externalReads.reset()
+            confirmer.cancelAll()
             _activeSession.value = null
             sessionTimerJob?.cancel()
             sessionTimerJob = null
@@ -341,6 +355,7 @@ class MobileControlManager(
         }
 
         // 9. Dispatch Operation
+        externalReads.record(cmd.operation)
         return try {
             when (cmd.operation) {
                 "observe" -> {
@@ -446,6 +461,8 @@ class MobileControlManager(
                         calls = calls
                     )
                 }
+
+                "sms_send", "call_place" -> confirmedAction(cmd, session)
 
                 "tap_xy" -> {
                     val x = cmd.arguments?.x
@@ -619,6 +636,76 @@ class MobileControlManager(
             errorCode = errorCode,
             executedAt = System.currentTimeMillis(),
             message = message
+        )
+    }
+
+    /** The user's tap on the confirmation notification (see ConfirmationReceiver). */
+    fun onConfirmationDecision(id: String, accept: Boolean) = confirmer.onUserDecision(id, accept)
+
+    /**
+     * Sends an SMS or places a call. Nothing happens before the user taps "yes" on the exact recipient and text, the
+     * recipient must be one of the user's contacts, and what is used is the contact's own number. No answer here
+     * ever contains the recipient or the text.
+     */
+    private suspend fun confirmedAction(cmd: MobileCommand, session: MobileControlSession): MobileCommandResult {
+        val isSms = cmd.operation == "sms_send"
+        val to = cmd.arguments?.to
+        val text = if (isSms) cmd.arguments?.text else null
+        if (to.isNullOrBlank()) return reject(cmd, "INVALID_ARGUMENTS", "Le destinataire est requis.")
+        if (isSms) RecipientPure.textProblem(text)?.let { return reject(cmd, "INVALID_ARGUMENTS", it) }
+
+        val missing = Consent.PERMISSIONS.getValue(if (isSms) Consent.SMS_SEND else Consent.CALL_PLACE).any {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing) {
+            return reject(cmd, "ACTION_PERMISSION_MISSING", "Android n'a pas accordé toutes les permissions nécessaires (envoi ou appel, et contacts).")
+        }
+
+        val contacts = withContext(Dispatchers.IO) { contactsReader.all() }
+        val contact = when (val r = RecipientPure.resolve(to, contacts)) {
+            is RecipientPure.Resolution.Found -> r.contact
+            RecipientPure.Resolution.NotFound ->
+                return reject(cmd, "RECIPIENT_NOT_IN_CONTACTS", "Le destinataire n'est pas un contact de l'utilisateur.")
+            RecipientPure.Resolution.Ambiguous ->
+                return reject(cmd, "RECIPIENT_AMBIGUOUS", "Plusieurs contacts correspondent : l'action est refusée.")
+        }
+
+        val request = ConfirmationRequest(
+            id = UUID.randomUUID().toString(),
+            kind = cmd.operation,
+            recipientName = contact.name,
+            recipientNumber = contact.number,
+            text = text,
+            readKinds = externalReads.kinds
+        )
+        when (confirmer.confirm(request)) {
+            null -> return reject(cmd, "CONFIRMATION_BUSY", "Une autre confirmation est déjà en attente sur le téléphone.")
+            Decision.REFUSED -> return reject(cmd, "USER_REFUSED", "L'utilisateur a refusé sur son téléphone.")
+            Decision.EXPIRED -> return reject(cmd, "CONFIRMATION_TIMEOUT", "Pas de confirmation dans le délai : refusé.")
+            Decision.ACCEPTED -> Unit
+        }
+
+        // The session may have ended while the user was deciding.
+        val still = _activeSession.value
+        if (still == null || still.id != session.id || still.isExpired) {
+            return reject(cmd, "SESSION_EXPIRED", "La session s'est terminée pendant la confirmation : rien n'a été fait.")
+        }
+
+        try {
+            withContext(Dispatchers.IO) {
+                if (isSms) smsSender.send(contact.number, text!!) else callPlacer.place(contact.number)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "event=action_failed command_id=${cmd.commandId} operation=${cmd.operation} type=${e.javaClass.simpleName}")
+            return reject(cmd, "ACTION_FAILED", "Android n'a pas pu exécuter l'action.")
+        }
+        Log.i(TAG, "event=action_done command_id=${cmd.commandId} operation=${cmd.operation}")
+        logAudit(cmd.operation.uppercase(), session.targetPackage, "SUCCESS", "confirmé par l'utilisateur", session.allowedProfile)
+        return MobileCommandResult(
+            commandId = cmd.commandId,
+            status = MobileCommandStatus.SUCCESS,
+            executedAt = System.currentTimeMillis(),
+            message = if (isSms) "SMS transmis après confirmation." else "Appel lancé après confirmation."
         )
     }
 

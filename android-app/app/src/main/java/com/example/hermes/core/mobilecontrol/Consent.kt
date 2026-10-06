@@ -25,6 +25,12 @@ object Consent {
         CALL_PLACE to listOf("android.permission.CALL_PHONE", "android.permission.READ_CONTACTS")
     )
 
+    /** Asked together with the required ones (for contact names), but their refusal does not block the consent. */
+    val OPTIONAL_PERMISSIONS: Map<String, List<String>> = mapOf(
+        SMS_READ to listOf("android.permission.READ_CONTACTS"),
+        CALL_LOG_READ to listOf("android.permission.READ_CONTACTS")
+    )
+
     private val BY_OPERATION = mapOf(
         "screenshot" to SCREENSHOTS,
         "tap_xy" to SCREENSHOTS,
