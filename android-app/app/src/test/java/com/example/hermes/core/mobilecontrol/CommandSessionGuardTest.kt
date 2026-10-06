@@ -11,11 +11,12 @@ class CommandSessionGuardTest {
         id: String = "ses_1",
         mode: MobileControlMode = MobileControlMode.INTERACTION,
         expiresAt: Long = now + 600_000L,
-        allowScreenshots: Boolean = false
+        allowScreenshots: Boolean = false,
+        allowCalendar: Boolean = false
     ) = MobileControlSession(
         id = id, targetPackage = "com.linkedin.android", targetAppName = "LinkedIn",
         allowedProfile = "john", mode = mode, startedAt = now, durationSeconds = 900, expiresAt = expiresAt,
-        allowScreenshots = allowScreenshots
+        allowScreenshots = allowScreenshots, allowCalendar = allowCalendar
     )
 
     private fun cmd(op: String = "observe", sessionId: String = "ses_1", pkg: String = "com.linkedin.android") =
@@ -135,5 +136,27 @@ class CommandSessionGuardTest {
     fun theSessionAndPackageAreStillCheckedBeforeConsent() {
         assertEquals("SESSION_NOT_ON_PHONE", check(null, cmd("screenshot"))!!.code)
         assertEquals("APP_NOT_ALLOWED", check(session(allowScreenshots = true), cmd("screenshot", pkg = "com.other"))!!.code)
+    }
+
+    // ── Calendar: its own consent, never implied by the screenshot consent ──
+
+    @Test
+    fun withoutCalendarConsentTheReadIsRefusedOnThePhoneEvenWithScreenshotConsent() {
+        val r = check(session(allowScreenshots = true), cmd("calendar_read"))!!
+        assertEquals("CALENDAR_NOT_ALLOWED", r.code)
+        assertTrue(r.message.contains("téléphone", ignoreCase = true))
+    }
+
+    @Test
+    fun calendarConsentAllowsTheReadAndNothingElse() {
+        val s = session(allowCalendar = true)
+        assertNull(check(s, cmd("calendar_read")))
+        assertEquals("SCREENSHOTS_NOT_ALLOWED", check(s, cmd("screenshot"))!!.code)
+    }
+
+    @Test
+    fun aConsentedCalendarReadIsAllowedInObservationMode() {
+        val obs = session(mode = MobileControlMode.OBSERVATION, allowCalendar = true)
+        assertNull(check(obs, cmd("calendar_read")))
     }
 }

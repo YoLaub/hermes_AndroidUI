@@ -254,4 +254,48 @@ class SessionConfirmationTest {
         )
         assertEquals(120, c.arguments!!.x); assertEquals(340, c.arguments!!.y)
     }
+
+    // ── Calendar consent follows the same rule as screenshots: phone AND relay, never granted by the relay ──
+
+    @Test
+    fun calendarConsentIsThePhoneChoiceAndTheRelayEcho() {
+        for (local in listOf(true, false)) for (relay in listOf(true, false, null)) {
+            val view = SessionView(pending = session().copy(allowCalendar = local), active = null)
+            val t = SessionConfirmation.onAck(view, ack().copy(allowCalendar = relay), now)
+            assertEquals("local=$local relay=$relay", local && relay == true, t.view.active!!.allowCalendar)
+        }
+    }
+
+    @Test
+    fun calendarConsentIsIndependentFromScreenshotConsent() {
+        val view = SessionView(pending = session().copy(allowCalendar = true), active = null)
+        val t = SessionConfirmation.onAck(view, ack().copy(allowScreenshots = true, allowCalendar = true), now)
+        assertTrue(t.view.active!!.allowCalendar)
+        assertFalse(t.view.active!!.allowScreenshots)
+    }
+
+    @Test
+    fun aSessionAdoptedFromTheRelayNeverHasCalendarAccess() {
+        val t = SessionConfirmation.onServerState(
+            SessionView(null, null),
+            MobileSessionState(active = true, sessionId = "ses_9", profile = "john",
+                targetPackage = "com.linkedin.android", mode = "interaction", allowCalendar = true, expiresInSeconds = 100), now
+        )
+        assertFalse(t.view.active!!.allowCalendar)
+    }
+
+    @Test
+    fun serverStateCannotGrantTheCalendarEither() {
+        val view = SessionView(null, session().copy(allowCalendar = false))
+        val t = SessionConfirmation.onServerState(
+            view, MobileSessionState(active = true, sessionId = "ses_1", profile = "john", allowCalendar = true, expiresInSeconds = 60), now)
+        assertFalse(t.view.active!!.allowCalendar)
+    }
+
+    @Test
+    fun sessionStartCarriesTheCalendarConsentOffByDefault() {
+        val msg = MobileSessionStartMsg(sessionId = "s", targetPackage = "p", allowedProfile = "john", mode = "interaction", durationSeconds = 60)
+        assertFalse(msg.allowCalendar)
+        assertTrue(json.encodeToString(msg.copy(allowCalendar = true)).contains("\"allow_calendar\":true"))
+    }
 }
