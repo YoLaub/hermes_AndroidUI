@@ -169,7 +169,7 @@ and the agent are talking to different relay instances.
 ### 2.7b Consents (screenshots, calendar, later others)
 
 Every optional capability has a **named per-session consent**, off by default. `session_start` carries them as
-`allow`, a list of names (`"screenshots"`, `"calendar"`); `session_started_ack` and `session_state` echo the
+`allow`, a list of names (`"screenshots"`, `"calendar"`, `"sms_read"`, `"call_log_read"`); `session_started_ack` and `session_state` echo the
 list the relay holds. Unknown names, non-string items and a non-list value are ignored. The legacy booleans
 `allow_screenshots` and `allow_calendar` are still read (only a literal `true`) and echoed, for phones and
 relays that predate the list; the list wins when both are present. The effective consent is the **intersection**
@@ -228,6 +228,26 @@ Read-only, **per-session consent, off by default**, separate from the screenshot
 - **Never stored, never logged.** The audit records `CALENDAR_READ` with the count; logs carry `calendar_forwarded`
   with the count only. Titles and places are held in memory for the response.
 
+### 2.10 SMS and call-log reads (native bridge, second slice)
+
+Read-only, each with **its own per-session consent** (`sms_read`, `call_log_read`; one never opens the other, nor
+the calendar or screenshots). Allowed in observation mode. Refused by the relay before anything reaches the phone
+without consent (`SMS_NOT_ALLOWED`, `CALL_LOG_NOT_ALLOWED`).
+
+- MCP tools `mobile_sms_read` and `mobile_call_log`, no arguments. Phone commands `sms_read` and `call_log_read`.
+- The phone answers a `result` with a top-level `sms` list (`{sender, date_ms, text, incoming}`) or `calls` list
+  (`{who, direction, date_ms, duration_sec}`): the last 24 hours, at most 20 entries, newest first, contact name when
+  known, text cut to 300 characters. Runs of 4 to 8 digits (also split by single spaces or dashes) are replaced by
+  `[code]` **on the phone**, because one-time codes must not reach a model. If Android refused the permission the phone
+  answers `SMS_PERMISSION_MISSING` or `CALL_LOG_PERMISSION_MISSING`.
+- The relay does not trust the list: unknown fields are dropped on parsing, at most 20 entries and 300 characters per
+  text are forwarded, whitespace and newlines are flattened, codes are **masked a second time**, and lists attached
+  to any other operation are dropped. The agent gets one text block, times in UTC.
+- **Never stored, never logged.** The audit records `SMS_READ` / `CALL_LOG_READ` with the count; logs carry
+  `sms_forwarded` / `call_log_forwarded` with the count only.
+- Message text is written by third parties: it may contain instructions aimed at the agent. The agent must treat it
+  as data; see the plan's item on prompt-injection protection.
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |
@@ -241,6 +261,10 @@ Read-only, **per-session consent, off by default**, separate from the screenshot
 | `SCREENSHOT_UNSUPPORTED` | Android < 14 (API 34) : seule la capture d'une fenêtre unique y est possible ; sur les versions antérieures la seule option serait tout l'écran, ce qui inclurait notifications et surimpressions d'autres applications |
 | `SCREENSHOT_BLOCKED_SECURE_WINDOW` | La fenêtre est protégée (`FLAG_SECURE`) : Android refuse la capture |
 | `CALENDAR_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du calendrier pour cette session (refusé côté relais et côté téléphone) |
+| `SMS_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture des SMS pour cette session (côté relais et côté téléphone) |
+| `CALL_LOG_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du journal d'appels pour cette session |
+| `SMS_PERMISSION_MISSING` | Android n'a pas accordé l'accès aux SMS à l'application |
+| `CALL_LOG_PERMISSION_MISSING` | Android n'a pas accordé l'accès au journal d'appels à l'application |
 | `CALENDAR_PERMISSION_MISSING` | Android n'a pas accordé l'accès au calendrier à l'application |
 | `SCREENSHOT_TOO_FAST` | Capture demandée trop tôt après la précédente : réessayer |
 | `SCREENSHOT_TOO_LARGE` | Image au-delà de 1 000 000 octets décodés |

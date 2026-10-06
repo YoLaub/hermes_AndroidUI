@@ -35,6 +35,19 @@ class MobileCalendarEvent(BaseModel):
     location: Optional[str] = None
     all_day: bool = False
 
+class MobileSmsItem(BaseModel):
+    """The only SMS fields the relay accepts. Anything else the phone sends is dropped on parsing."""
+    sender: str = "?"
+    date_ms: int
+    text: Optional[str] = None
+    incoming: bool = True
+
+class MobileCallItem(BaseModel):
+    who: str = "?"
+    direction: str = "other"
+    date_ms: int
+    duration_sec: int = 0
+
 class MobileCommandArguments(BaseModel):
     element_ref: Optional[str] = None
     text: Optional[str] = None
@@ -65,6 +78,8 @@ class MobileCommandResult(BaseModel):
     message: Optional[str] = None
     data: Optional[MobileScreenData] = None
     calendar_events: Optional[List[MobileCalendarEvent]] = None
+    sms: Optional[List[MobileSmsItem]] = None
+    calls: Optional[List[MobileCallItem]] = None
 
 class MobileSessionStartMsg(BaseModel):
     protocol: str = "mobile-control/1"
