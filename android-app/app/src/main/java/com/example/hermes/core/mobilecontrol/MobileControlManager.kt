@@ -347,7 +347,7 @@ class MobileControlManager(
 
         // 8. Foreground check (except for launch_app)
         val fgPackage = service.getForegroundPackage()
-        if (cmd.operation != "launch_app" && fgPackage.isNotBlank() && fgPackage != session.targetPackage) {
+        if (CommandSessionGuard.needsTargetInForeground(cmd.operation) && fgPackage.isNotBlank() && fgPackage != session.targetPackage) {
             // Check if fgPackage is a system dialog or keyboard
             if (!fgPackage.startsWith("com.android.") && !fgPackage.contains("inputmethod")) {
                 return reject(cmd, "APP_NOT_FOREGROUND", "L'application cible (${session.targetPackage}) n'est pas au premier plan (Actuel: $fgPackage).")
