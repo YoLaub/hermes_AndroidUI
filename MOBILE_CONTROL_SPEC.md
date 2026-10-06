@@ -169,7 +169,7 @@ and the agent are talking to different relay instances.
 ### 2.7b Consents (screenshots, calendar, later others)
 
 Every optional capability has a **named per-session consent**, off by default. `session_start` carries them as
-`allow`, a list of names (`"screenshots"`, `"calendar"`, `"sms_read"`, `"call_log_read"`, `"sms_send"`, `"call_place"`); `session_started_ack` and `session_state` echo the
+`allow`, a list of names (`"screenshots"`, `"calendar"`, `"sms_read"`, `"call_log_read"`, `"sms_send"`, `"call_place"`, `"calendar_write"`); `session_started_ack` and `session_state` echo the
 list the relay holds. Unknown names, non-string items and a non-list value are ignored. The legacy booleans
 `allow_screenshots` and `allow_calendar` are still read (only a literal `true`) and echoed, for phones and
 relays that predate the list; the list wins when both are present. The effective consent is the **intersection**
@@ -268,6 +268,29 @@ consent, **every send and every call waits for the user's tap on the phone**.
 - **Never stored, never logged.** Neither the recipient nor the text is logged or stored anywhere on the relay; the
   audit records `SMS_SEND` / `CALL_PLACE` with the outcome only (`confirmed`, or the refusal code).
 
+### 2.12 Calendar write: create, modify, delete
+
+Its own per-session consent (`calendar_write`, separate from reading), interaction mode only, and **every change waits for
+the user's tap on the phone** (same confirmation as 2.11: one at a time, 60 seconds, expiry means refusal).
+
+- MCP tools `mobile_calendar_create` (`title`, `start`, `end`, optional `location`), `mobile_calendar_update`
+  (`event_id`, then any of `title`, `start`, `end`, `location`; an empty `location` clears it) and `mobile_calendar_delete`
+  (`event_id`). Phone commands `calendar_create`, `calendar_update`, `calendar_delete`. `start` and `end` are local to the
+  phone, `2026-10-07T15:00` (seconds optional); the relay checks the shape, the phone parses them in its own time zone.
+  `event_id` is the number shown as `[id:N]` by `mobile_calendar_events` (1 to 20 digits).
+- The relay refuses invalid arguments before anything reaches the phone (`INVALID_ARGUMENTS`): title 1 to 200 characters,
+  location up to 200, ids and dates in their shapes, at least one field to change. Only the fields each operation uses are
+  forwarded.
+- On the phone: events are created **without attendees**, in the user's primary writable calendar (named in the
+  confirmation; `NO_WRITABLE_CALENDAR` if none). An event lasts at most 24 hours and starts within one year back or two
+  ahead. Modify and delete are refused (`EVENT_NOT_EDITABLE`) for recurring events (the change would hit the whole series),
+  events with attendees (they would receive an update), read-only or hidden calendars and all-day events; an unknown id
+  answers `EVENT_NOT_FOUND`. The phone re-reads the event by id before showing the confirmation, which shows the old and
+  the new values (modify) or the event about to disappear (delete).
+- On success the relay answers with **its own sentence**, never the phone's message. **Never stored, never logged**:
+  titles, places and ids are not logged or stored on the relay; the audit records `CALENDAR_CREATE` / `CALENDAR_UPDATE` /
+  `CALENDAR_DELETE` with the outcome only.
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |
@@ -285,6 +308,10 @@ consent, **every send and every call waits for the user's tap on the phone**.
 | `CALL_LOG_NOT_ALLOWED` | L'utilisateur n'a pas autorisé la lecture du journal d'appels pour cette session |
 | `SMS_SEND_NOT_ALLOWED` | L'utilisateur n'a pas autorisé l'envoi de SMS pour cette session |
 | `CALL_NOT_ALLOWED` | L'utilisateur n'a pas autorisé les appels pour cette session |
+| `CALENDAR_WRITE_NOT_ALLOWED` | L'utilisateur n'a pas autorisé l'écriture du calendrier pour cette session |
+| `EVENT_NOT_EDITABLE` | Événement récurrent, avec invités, en lecture seule, masqué ou sur toute la journée : jamais modifié |
+| `EVENT_NOT_FOUND` | Aucun événement avec cet identifiant |
+| `NO_WRITABLE_CALENDAR` | Aucun calendrier visible et modifiable pour créer l'événement |
 | `USER_REFUSED` | L'utilisateur a refusé l'envoi ou l'appel sur son téléphone |
 | `CONFIRMATION_TIMEOUT` | Pas de confirmation dans les 60 secondes : refus |
 | `CONFIRMATION_BUSY` | Une autre confirmation est déjà en attente sur le téléphone |

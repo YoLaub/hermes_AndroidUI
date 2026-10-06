@@ -57,6 +57,12 @@ class MobileCommandArguments(BaseModel):
     y: Optional[int] = None
     days: Optional[int] = None
     to: Optional[str] = None
+    # Calendar write (create / update / delete). Dates are local to the phone, "2026-10-07T15:00".
+    event_id: Optional[str] = None
+    title: Optional[str] = None
+    start: Optional[str] = None
+    end: Optional[str] = None
+    location: Optional[str] = None
 
 class MobileCommand(BaseModel):
     protocol: str = "mobile-control/1"
