@@ -160,4 +160,24 @@ class ConsentTest {
         assertTrue("android.permission.READ_CONTACTS" in Consent.PERMISSIONS[Consent.SMS_SEND]!!)
         assertNull(Consent.OPTIONAL_PERMISSIONS[Consent.SMS_SEND])
     }
+
+    // ── Calendar write: its own consent, both calendar permissions ──
+
+    @Test
+    fun calendarChangesMapToTheirOwnConsentAndCode() {
+        for (op in listOf("calendar_create", "calendar_update", "calendar_delete")) {
+            assertEquals(op, Consent.CALENDAR_WRITE, Consent.requiredFor(op))
+        }
+        assertEquals("CALENDAR_WRITE_NOT_ALLOWED", Consent.refusalCode(Consent.CALENDAR_WRITE))
+        assertTrue(Consent.CALENDAR_WRITE in Consent.KNOWN)
+        assertNotEquals(Consent.CALENDAR, Consent.CALENDAR_WRITE)
+    }
+
+    @Test
+    fun writingNeedsBothCalendarPermissions() {
+        assertEquals(
+            listOf("android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"),
+            Consent.PERMISSIONS[Consent.CALENDAR_WRITE]
+        )
+    }
 }

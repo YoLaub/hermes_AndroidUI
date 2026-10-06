@@ -9,7 +9,10 @@ data class ConfirmationRequest(
     val recipientNumber: String,
     val text: String?,
     /** Kinds of external content read since the session started, shown as a banner. */
-    val readKinds: Set<String>
+    val readKinds: Set<String>,
+    /** For changes that are not a message or a call (calendar): the question and the exact change shown. */
+    val headline: String? = null,
+    val details: String? = null
 )
 
 enum class Decision { ACCEPTED, REFUSED, EXPIRED }
@@ -69,6 +72,23 @@ object ConfirmationText {
         Consent.SMS_READ to "SMS",
         Consent.CALL_LOG_READ to "journal d'appels"
     )
+
+    /** The question at the top of the confirmation. */
+    fun titleOf(r: ConfirmationRequest): String = when (r.kind) {
+        "sms_send" -> "Envoyer ce SMS à ${r.recipientName} (${r.recipientNumber}) ?"
+        "call_place" -> "Appeler ${r.recipientName} (${r.recipientNumber}) ?"
+        else -> r.headline ?: "Hermes demande votre accord."
+    }
+
+    /** The exact content being confirmed, then the banner about what was read. Empty when there is nothing to add. */
+    fun bodyOf(r: ConfirmationRequest): String {
+        val core = when (r.kind) {
+            "sms_send" -> r.text?.let { "« $it »" }
+            "call_place" -> null
+            else -> r.details
+        }
+        return listOfNotNull(core, banner(r.readKinds)).joinToString("\n\n")
+    }
 
     fun banner(readKinds: Set<String>): String? {
         val parts = LABELS.filterKeys { it in readKinds }.values

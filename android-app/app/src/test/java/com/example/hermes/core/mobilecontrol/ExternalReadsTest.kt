@@ -28,4 +28,9 @@ class ExternalReadsTest {
         reads.reset()
         assertTrue(reads.kinds.isEmpty())
     }
+
+    @Test
+    fun calendarChangesReadNothingExternal() {
+        for (op in listOf("calendar_create", "calendar_update", "calendar_delete")) assertNull(op, ExternalReads.kindFor(op))
+    }
 }

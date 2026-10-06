@@ -27,7 +27,8 @@ class CalendarReader(private val context: Context) {
             CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END,
             CalendarContract.Instances.EVENT_LOCATION,
-            CalendarContract.Instances.ALL_DAY
+            CalendarContract.Instances.ALL_DAY,
+            CalendarContract.Instances.EVENT_ID
         )
         val rows = ArrayList<RawCalendarRow>()
         context.contentResolver.query(
@@ -41,7 +42,8 @@ class CalendarReader(private val context: Context) {
                     beginMs = c.getLong(1),
                     endMs = c.getLong(2),
                     location = c.getString(3),
-                    allDay = c.getInt(4) == 1
+                    allDay = c.getInt(4) == 1,
+                    eventId = c.getLong(5)
                 )
             }
         }

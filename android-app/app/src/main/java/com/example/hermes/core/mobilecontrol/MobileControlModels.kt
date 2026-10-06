@@ -52,7 +52,9 @@ data class MobileCalendarEvent(
     @SerialName("start_ms") val startMs: Long,
     @SerialName("end_ms") val endMs: Long,
     val location: String? = null,
-    @SerialName("all_day") val allDay: Boolean = false
+    @SerialName("all_day") val allDay: Boolean = false,
+    /** Opaque id of the event (calendar provider), to name the event to modify or delete. */
+    @SerialName("event_id") val eventId: String? = null
 )
 
 @Serializable
@@ -75,7 +77,13 @@ data class MobileCommandArguments(
     /** How many days ahead, for calendar_read (1..7). */
     val days: Int? = null,
     /** Recipient for sms_send and call_place: an exact contact name or a number of a contact. */
-    val to: String? = null
+    val to: String? = null,
+    /** Calendar changes: the event to modify or delete, and the fields (dates local to the phone, 2026-10-07T15:00). */
+    @SerialName("event_id") val eventId: String? = null,
+    val title: String? = null,
+    val start: String? = null,
+    val end: String? = null,
+    val location: String? = null
 )
 
 @Serializable
