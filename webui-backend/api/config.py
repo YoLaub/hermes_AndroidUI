@@ -660,7 +660,10 @@ def _resolve_cli_toolsets(cfg=None, platform="webui"):
         elif "cli" in pt:
             target_platform = "cli"
         else:
-            target_platform = platform or "cli"
+            # The profile lists no toolsets at all: keep what a WebUI session always had (the "cli" defaults).
+            # Asking the agent for the "webui" platform here yields the composite name "hermes-webui", which is empty
+            # in some agent versions, so the session would have no tools.
+            target_platform = "cli"
 
     resolved = None
     try:
