@@ -662,6 +662,33 @@ def _extract_gateway_routing_metadata(agent, result, requested_model=None, reque
     return None
 
 
+def _enter_profile_home(profile_home):
+    """Point hermes-agent's get_hermes_home() at the session's profile for this thread.
+
+    The library reads only os.environ and its own context-local override, never the WebUI's thread dict, so
+    without this a profile's plugins (e.g. its memory provider) are looked up under the process home.
+    Returns the reset token, or None when there is nothing to scope.
+    """
+    if not profile_home:
+        return None
+    try:
+        from hermes_constants import set_hermes_home_override
+        return set_hermes_home_override(profile_home)
+    except Exception:
+        logger.debug("hermes_constants has no home override; profile plugins use the process home", exc_info=True)
+        return None
+
+
+def _exit_profile_home(token):
+    if token is None:
+        return
+    try:
+        from hermes_constants import reset_hermes_home_override
+        reset_hermes_home_override(token)
+    except Exception:
+        logger.debug("Failed to reset the Hermes home override", exc_info=True)
+
+
 def _build_agent_thread_env(profile_runtime_env: dict | None, workspace: str, session_id: str, profile_home: str) -> dict:
     """Build thread-local agent env with per-run values overriding profile defaults.
 
@@ -2927,6 +2954,7 @@ def _run_agent_streaming(
     old_session_platform = None
     old_hermes_home = None
     old_profile_env = {}
+    _home_override_token = None
 
     # MCP discovery moved to AFTER the per-profile HERMES_HOME mutation below
     # (was here at v0.51.30) — the previous placement always read the default
@@ -3198,6 +3226,7 @@ def _run_agent_streaming(
             _profile_home,
         )
         _set_thread_env(**_thread_env)
+        _home_override_token = _enter_profile_home(_profile_home)
         # Prewarm skill-tool imports *before* acquiring the lock so that
         # first-time module initialisation (which can be slow) does not
         # block other concurrent sessions waiting on _ENV_LOCK (#2024).
@@ -4929,6 +4958,7 @@ def _run_agent_streaming(
                     _unreg_clarify_notify(session_id)
                 except Exception:
                     logger.debug("Failed to unregister clarify callback")
+            _exit_profile_home(_home_override_token)
             with _ENV_LOCK:
                 for _key, _old_value in old_profile_env.items():
                     if _old_value is None: os.environ.pop(_key, None)

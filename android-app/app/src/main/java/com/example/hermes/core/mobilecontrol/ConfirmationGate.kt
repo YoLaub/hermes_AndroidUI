@@ -15,7 +15,8 @@ data class ConfirmationRequest(
     val details: String? = null
 )
 
-enum class Decision { ACCEPTED, REFUSED, EXPIRED }
+/** UNAVAILABLE: the confirmation could not even be shown (notifications off), so nothing was asked and nothing is done. */
+enum class Decision { ACCEPTED, REFUSED, EXPIRED, UNAVAILABLE }
 
 /**
  * Pure state machine for the confirmation of an irreversible action: one at a time, a delay of 60 seconds after

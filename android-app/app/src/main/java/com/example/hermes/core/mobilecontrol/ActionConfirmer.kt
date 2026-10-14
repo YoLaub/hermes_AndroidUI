@@ -12,7 +12,9 @@ class ActionConfirmer(
     private val show: (ConfirmationRequest) -> Unit,
     private val dismiss: (String) -> Unit,
     private val now: () -> Long,
-    private val timeoutMs: Long = 60_000L
+    private val timeoutMs: Long = 60_000L,
+    /** False when the request could not reach the user (notifications off): then nothing is opened and nothing waits. */
+    private val canShow: () -> Boolean = { true }
 ) {
     private val gate = ConfirmationGate(timeoutMs)
     private val waiting = HashMap<String, CompletableDeferred<Decision>>()
@@ -20,6 +22,7 @@ class ActionConfirmer(
 
     /** Null when another confirmation is already pending: nothing is shown then. */
     suspend fun confirm(request: ConfirmationRequest): Decision? {
+        if (!canShow()) return Decision.UNAVAILABLE
         val answer = CompletableDeferred<Decision>()
         synchronized(lock) {
             if (gate.open(request, now()) == ConfirmationGate.Open.BUSY) return null
