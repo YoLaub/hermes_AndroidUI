@@ -689,6 +689,33 @@ def _exit_profile_home(token):
         logger.debug("Failed to reset the Hermes home override", exc_info=True)
 
 
+# Secrets a profile's plugin reads from os.environ while the agent is built (e.g. its memory provider).
+# Everything else stays out of os.environ; see _non_secret_runtime_env in _run_agent_streaming.
+_AGENT_INIT_SECRETS = ("AGENT_MEMORY_TOKEN",)
+
+
+def _build_agent(agent_cls, agent_kwargs, profile_runtime_env):
+    """Build an agent with the profile's init-time secrets in os.environ, only for the duration of the call.
+
+    Plugins resolve their credentials from os.environ when Hermes activates them. The profile's token lives in the
+    WebUI's private env, so expose just the allow-listed names, under the env lock, then put things back.
+    """
+    wanted = {k: profile_runtime_env[k] for k in _AGENT_INIT_SECRETS if (profile_runtime_env or {}).get(k)}
+    if not wanted:
+        return agent_cls(**agent_kwargs)
+    with _ENV_LOCK:
+        previous = {k: os.environ.get(k) for k in wanted}
+        os.environ.update(wanted)
+        try:
+            return agent_cls(**agent_kwargs)
+        finally:
+            for k, old in previous.items():
+                if old is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = old
+
+
 def _build_agent_thread_env(profile_runtime_env: dict | None, workspace: str, session_id: str, profile_home: str) -> dict:
     """Build thread-local agent env with per-run values overriding profile defaults.
 
@@ -3789,7 +3816,7 @@ def _run_agent_streaming(
             # Mirrors gateway _agent_cache.  Keeps _user_turn_count alive so
             # injectionFrequency: "first-turn" actually suppresses after turn 1.
             if ephemeral:
-                agent = _AIAgent(**_agent_kwargs)
+                agent = _build_agent(_AIAgent, _agent_kwargs, _profile_runtime_env)
                 logger.debug('[webui] Created ephemeral agent for session %s', session_id)
             else:
                 import hashlib as _hashlib
@@ -3889,7 +3916,7 @@ def _run_agent_streaming(
                     if hasattr(agent, '_interrupt_message'):
                         agent._interrupt_message = None
                 else:
-                    agent = _AIAgent(**_agent_kwargs)
+                    agent = _build_agent(_AIAgent, _agent_kwargs, _profile_runtime_env)
                     # Register the new agent with the memory lifecycle so
                     # its commit_memory_session() can be found later.
                     try:
@@ -4245,7 +4272,7 @@ def _run_agent_streaming(
                             _agent_kwargs['provider'] = resolved_provider
                             if 'credential_pool' in _agent_params:
                                 _agent_kwargs['credential_pool'] = _heal_rt.get('credential_pool')
-                            agent = _AIAgent(**_agent_kwargs)
+                            agent = _build_agent(_AIAgent, _agent_kwargs, _profile_runtime_env)
                             with STREAMS_LOCK:
                                 AGENT_INSTANCES[stream_id] = agent
                             from api.config import SESSION_AGENT_CACHE as _SAC, SESSION_AGENT_CACHE_LOCK as _SAC_L
@@ -5057,7 +5084,7 @@ def _run_agent_streaming(
                     _heal_kwargs['provider'] = resolved_provider
                     if 'credential_pool' in _agent_params:
                         _heal_kwargs['credential_pool'] = _heal_rt.get('credential_pool')
-                    _heal_agent = _AIAgent(**_heal_kwargs)
+                    _heal_agent = _build_agent(_AIAgent, _heal_kwargs, _profile_runtime_env)
                     with STREAMS_LOCK:
                         AGENT_INSTANCES[stream_id] = _heal_agent
                     from api.config import SESSION_AGENT_CACHE as _SAC2, SESSION_AGENT_CACHE_LOCK as _SAC2_L
