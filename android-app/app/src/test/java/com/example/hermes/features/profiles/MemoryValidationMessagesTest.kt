@@ -35,4 +35,13 @@ class MemoryValidationMessagesTest {
         assertFalse(shown.contains("secret-body-with-token"))
         assertEquals("Erreur du service mémoire", shown)
     }
+
+    @Test
+    fun aLockedOutSourceAndAMissingRelayAreExplained() {
+        assertEquals("Trop d'essais, réessaie dans quelques minutes", validationErrorMessage(IOException("HTTP 429: x")))
+        assertEquals(
+            "Renseigne d'abord l'adresse du relais mobile",
+            validationErrorMessage(IOException("Adresse du relais non configurée"))
+        )
+    }
 }

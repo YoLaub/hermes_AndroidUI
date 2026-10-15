@@ -26,6 +26,8 @@ internal fun validationErrorMessage(error: Throwable): String {
     val text = error.message.orEmpty()
     return when {
         text.contains("Jeton propriétaire non configuré") -> "Saisis d'abord le jeton propriétaire"
+        text.contains("Adresse du relais non configurée") -> "Renseigne d'abord l'adresse du relais mobile"
+        text.startsWith("HTTP 429") -> "Trop d'essais, réessaie dans quelques minutes"
         text.startsWith("HTTP 401") || text.startsWith("HTTP 403") -> "Jeton propriétaire refusé ou absent"
         text.startsWith("HTTP 404") -> "Élément introuvable"
         text.startsWith("HTTP 409") -> "Élément non validable"

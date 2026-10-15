@@ -401,16 +401,23 @@ class HermesRepository(
 
     suspend fun setMemoryOwnerToken(token: String?): Boolean = preferences.setMemoryOwnerToken(token)
 
+    // The owner token goes to the mobile relay, never to the Hermes server that hosts the agents.
+    private suspend fun relayUrlOrNull(): String? = preferences.mobileRelayUrl.first()?.trim()?.takeIf { it.isNotEmpty() }
+
     suspend fun getMemoryValidations(): Result<MemoryValidationsResponse> {
         val token = preferences.memoryOwnerToken.first()
             ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
-        return apiClient.getMemoryValidations(getBaseUrl(), token)
+        val relay = relayUrlOrNull()
+            ?: return Result.failure(java.io.IOException("Adresse du relais non configurée"))
+        return apiClient.getMemoryValidations(relay, token)
     }
 
     suspend fun decideMemoryValidation(eventId: String, confirm: Boolean): Result<MemoryValidationDecisionResponse> {
         val token = preferences.memoryOwnerToken.first()
             ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
-        return apiClient.decideMemoryValidation(getBaseUrl(), token, eventId, if (confirm) "confirmed" else "rejected")
+        val relay = relayUrlOrNull()
+            ?: return Result.failure(java.io.IOException("Adresse du relais non configurée"))
+        return apiClient.decideMemoryValidation(relay, token, eventId, if (confirm) "confirmed" else "rejected")
     }
 
     // ── OpenBao Secrets Management ──
