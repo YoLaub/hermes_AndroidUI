@@ -395,6 +395,24 @@ class HermesRepository(
         return apiClient.dispatchKanban(getBaseUrl(), board)
     }
 
+    // ── Memory validations (agent-memory owner token, typed by the user, sealed on the device) ──
+
+    val memoryOwnerToken: Flow<String?> = preferences.memoryOwnerToken
+
+    suspend fun setMemoryOwnerToken(token: String?): Boolean = preferences.setMemoryOwnerToken(token)
+
+    suspend fun getMemoryValidations(): Result<MemoryValidationsResponse> {
+        val token = preferences.memoryOwnerToken.first()
+            ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
+        return apiClient.getMemoryValidations(getBaseUrl(), token)
+    }
+
+    suspend fun decideMemoryValidation(eventId: String, confirm: Boolean): Result<MemoryValidationDecisionResponse> {
+        val token = preferences.memoryOwnerToken.first()
+            ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
+        return apiClient.decideMemoryValidation(getBaseUrl(), token, eventId, if (confirm) "confirmed" else "rejected")
+    }
+
     // ── OpenBao Secrets Management ──
 
     val openbaoUrl: Flow<String> = preferences.openbaoUrl

@@ -34,6 +34,7 @@ fun ProfileDrawerContent(
     onOpenWorkspaces: () -> Unit,
     onOpenEnv: () -> Unit,
     onOpenOpenbao: () -> Unit = {},
+    onOpenValidations: () -> Unit = {},
     onRestartGateway: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -323,6 +324,22 @@ fun ProfileDrawerContent(
                     Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = HermesSecondary)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Coffre OpenBao (Secrets)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Memory validations Button
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenValidations()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesPrimary)
+                ) {
+                    Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Mémoire : à valider", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 // Restart Gateway Button

@@ -14,9 +14,9 @@ class SecretMigrationTest {
     }
 
     @Test
-    fun theSecretKeysAreExactlyTheFourPersistedSecrets() {
+    fun theSecretKeysAreExactlyThePersistedSecrets() {
         assertEquals(
-            setOf("session_cookie", "password", "openbao_token", "mobile_device_token"),
+            setOf("session_cookie", "password", "openbao_token", "mobile_device_token", "memory_owner_token"),
             SecretKeys.NAMES
         )
     }
