@@ -50,6 +50,7 @@ fun ChatScreen(
     var showOpenBaoDialog by remember { mutableStateOf(false) }
     var showSkillsDialog by remember { mutableStateOf(false) }
     var showMemoryDialog by remember { mutableStateOf(false) }
+    var showValidationsDialog by remember { mutableStateOf(false) }
     var showWorkspaceDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -553,6 +554,11 @@ fun ChatScreen(
                         viewModel.loadProviders()
                         showProfileEnvDialog = true
                     },
+                    onOpenValidations = {
+                        showProfilesSheet = false
+                        viewModel.loadMemoryValidations()
+                        showValidationsDialog = true
+                    },
                     onOpenOpenbao = {
                         showProfilesSheet = false
                         viewModel.loadOpenbaoSecrets()
@@ -708,6 +714,19 @@ fun ChatScreen(
                     showSkillsDialog = false
                     viewModel.clearSkillDetail()
                 }
+            )
+        }
+
+        if (showValidationsDialog) {
+            MemoryValidationsDialog(
+                items = state.memoryValidations,
+                isLoading = state.isValidationsLoading,
+                error = state.validationsError,
+                hasToken = state.hasMemoryOwnerToken,
+                onSaveToken = { viewModel.saveMemoryOwnerToken(it) },
+                onRefresh = { viewModel.loadMemoryValidations() },
+                onDecide = { id, confirm -> viewModel.decideMemoryValidation(id, confirm) },
+                onDismiss = { showValidationsDialog = false }
             )
         }
 

@@ -80,6 +80,7 @@ class HermesPreferences(
         val KEY_MOBILE_DEVICE_ID = stringPreferencesKey("mobile_device_id")
         val KEY_MOBILE_DEVICE_TOKEN = stringPreferencesKey("mobile_device_token")
         val KEY_MOBILE_RELAY_URL = stringPreferencesKey("mobile_relay_url")
+        val KEY_MEMORY_OWNER_TOKEN = stringPreferencesKey("memory_owner_token")
         const val DEFAULT_SERVER_URL = "http://10.0.2.2:8000"
         const val DEFAULT_OPENBAO_URL = "https://hermes-bao.john-world.store"
         const val DEFAULT_OPENBAO_MOUNT = "hermes"
@@ -102,6 +103,8 @@ class HermesPreferences(
     val sessionCookie: Flow<String?> = secretFlow(KEY_SESSION_COOKIE)
 
     val password: Flow<String?> = secretFlow(KEY_PASSWORD)
+
+    val memoryOwnerToken: Flow<String?> = secretFlow(KEY_MEMORY_OWNER_TOKEN)
 
     val activeProfile: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_ACTIVE_PROFILE] ?: "default"
@@ -203,6 +206,18 @@ class HermesPreferences(
                 stored = preferences.putSecret(KEY_OPENBAO_TOKEN, token.trim())
             } else {
                 preferences.remove(KEY_OPENBAO_TOKEN)
+            }
+        }
+        return stored
+    }
+
+    suspend fun setMemoryOwnerToken(token: String?): Boolean {
+        var stored = true
+        context.dataStore.edit { preferences ->
+            if (token != null && token.isNotBlank()) {
+                stored = preferences.putSecret(KEY_MEMORY_OWNER_TOKEN, token.trim())
+            } else {
+                preferences.remove(KEY_MEMORY_OWNER_TOKEN)
             }
         }
         return stored

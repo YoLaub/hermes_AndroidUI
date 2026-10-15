@@ -11,6 +11,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+private const val MEMORY_OWNER_TOKEN_HEADER = "X-Memory-Owner-Token"
+
 class HermesApiClient(
     val authInterceptor: AuthInterceptor,
     val okHttpClient: OkHttpClient = OkHttpClient.Builder()
@@ -113,6 +115,30 @@ class HermesApiClient(
         val request = Request.Builder()
             .url("$baseUrl/api/providers")
             .get()
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun getMemoryValidations(baseUrl: String, ownerToken: String): Result<MemoryValidationsResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/memory/validations?limit=50")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .get()
+            .build()
+        executeRequest(request)
+    }
+
+    suspend fun decideMemoryValidation(
+        baseUrl: String,
+        ownerToken: String,
+        eventId: String,
+        decision: String
+    ): Result<MemoryValidationDecisionResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(MemoryValidationDecisionRequest(decision)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/memory/validations/${java.net.URLEncoder.encode(eventId, "UTF-8")}")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .post(body)
             .build()
         executeRequest(request)
     }

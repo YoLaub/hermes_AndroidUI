@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hermes.core.data.HermesRepository
 import com.example.hermes.core.model.*
+import com.example.hermes.features.profiles.validationErrorMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,10 @@ data class ChatUiState(
     val isSkillsLoading: Boolean = false,
     val memoryData: MemoryResponse? = null,
     val isMemoryLoading: Boolean = false,
+    val memoryValidations: List<MemoryValidation> = emptyList(),
+    val isValidationsLoading: Boolean = false,
+    val validationsError: String? = null,
+    val hasMemoryOwnerToken: Boolean = false,
     val workspaces: List<WorkspaceInfo> = emptyList(),
     val activeWorkspace: String? = null,
     val isWorkspacesLoading: Boolean = false,
@@ -955,6 +960,46 @@ class ChatViewModel(
             repository.deleteSkill(name)
             loadSkills()
             _uiState.update { it.copy(selectedSkillDetail = null) }
+        }
+    }
+
+    // ── Memory validations (agent-memory) ──
+    fun loadMemoryValidations() {
+        viewModelScope.launch {
+            val hasToken = !repository.memoryOwnerToken.first().isNullOrBlank()
+            _uiState.update { it.copy(hasMemoryOwnerToken = hasToken, validationsError = null) }
+            if (!hasToken) return@launch
+            _uiState.update { it.copy(isValidationsLoading = true) }
+            val res = repository.getMemoryValidations()
+            _uiState.update {
+                if (res.isSuccess) it.copy(memoryValidations = res.getOrThrow().items, isValidationsLoading = false)
+                else it.copy(isValidationsLoading = false, validationsError = validationErrorMessage(res.exceptionOrNull()!!))
+            }
+        }
+    }
+
+    fun saveMemoryOwnerToken(token: String) {
+        viewModelScope.launch {
+            val stored = repository.setMemoryOwnerToken(token)
+            if (!stored) {
+                _uiState.update { it.copy(validationsError = "Stockage sécurisé indisponible : jeton non enregistré") }
+            } else {
+                loadMemoryValidations()
+            }
+        }
+    }
+
+    fun decideMemoryValidation(eventId: String, confirm: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isValidationsLoading = true, validationsError = null) }
+            val res = repository.decideMemoryValidation(eventId, confirm)
+            if (res.isSuccess) {
+                loadMemoryValidations()
+            } else {
+                _uiState.update {
+                    it.copy(isValidationsLoading = false, validationsError = validationErrorMessage(res.exceptionOrNull()!!))
+                }
+            }
         }
     }
 

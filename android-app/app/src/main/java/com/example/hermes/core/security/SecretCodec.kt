@@ -2,7 +2,7 @@ package com.example.hermes.core.security
 
 /** Names of the DataStore entries that hold secrets and must never be stored in plaintext. */
 object SecretKeys {
-    val NAMES: Set<String> = setOf("session_cookie", "password", "openbao_token", "mobile_device_token")
+    val NAMES: Set<String> = setOf("session_cookie", "password", "openbao_token", "mobile_device_token", "memory_owner_token")
 }
 
 class SecretCodec(private val cipher: SecretCipher) {
