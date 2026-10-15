@@ -21,6 +21,12 @@ class HermesApiClient(
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
+        .build(),
+    // Talks to the mobile relay, a different server from Hermes: it must never receive the Hermes session cookie.
+    val relayClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 ) {
 
@@ -119,28 +125,28 @@ class HermesApiClient(
         executeRequest(request)
     }
 
-    suspend fun getMemoryValidations(baseUrl: String, ownerToken: String): Result<MemoryValidationsResponse> = withContext(Dispatchers.IO) {
+    suspend fun getMemoryValidations(relayUrl: String, ownerToken: String): Result<MemoryValidationsResponse> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url("$baseUrl/api/memory/validations?limit=50")
+            .url("$relayUrl/api/memory/validations?limit=50")
             .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
             .get()
             .build()
-        executeRequest(request)
+        executeRequest(request, relayClient)
     }
 
     suspend fun decideMemoryValidation(
-        baseUrl: String,
+        relayUrl: String,
         ownerToken: String,
         eventId: String,
         decision: String
     ): Result<MemoryValidationDecisionResponse> = withContext(Dispatchers.IO) {
         val body = json.encodeToString(MemoryValidationDecisionRequest(decision)).toRequestBody(jsonMediaType)
         val request = Request.Builder()
-            .url("$baseUrl/api/memory/validations/${java.net.URLEncoder.encode(eventId, "UTF-8")}")
+            .url("$relayUrl/api/memory/validations/${java.net.URLEncoder.encode(eventId, "UTF-8")}")
             .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
             .post(body)
             .build()
-        executeRequest(request)
+        executeRequest(request, relayClient)
     }
 
     suspend fun getProfileEnv(baseUrl: String): Result<ProfileEnvResponse> = withContext(Dispatchers.IO) {
@@ -644,9 +650,9 @@ class HermesApiClient(
         executeRequest(request)
     }
 
-    private inline fun <reified T> executeRequest(request: Request): Result<T> {
+    private inline fun <reified T> executeRequest(request: Request, client: OkHttpClient = okHttpClient): Result<T> {
         return try {
-            val result: T = executeRequestInternal(request)
+            val result: T = executeRequestInternal(request, client)
             Result.success(result)
         } catch (e: Exception) {
             Result.failure(e)
@@ -654,8 +660,8 @@ class HermesApiClient(
     }
 
     @PublishedApi
-    internal inline fun <reified T> executeRequestInternal(request: Request): T {
-        okHttpClient.newCall(request).execute().use { response ->
+    internal inline fun <reified T> executeRequestInternal(request: Request, client: OkHttpClient = okHttpClient): T {
+        client.newCall(request).execute().use { response ->
             val bodyString = response.body?.string() ?: ""
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code}: $bodyString")

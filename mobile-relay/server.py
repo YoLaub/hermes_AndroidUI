@@ -12,6 +12,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
+import memory_validations
 from database import (
     atomic_register_or_update_device,
     check_and_record_pairing_attempt,
@@ -469,6 +470,40 @@ def authenticate_hermes_profile(request: Request) -> str:
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "hermes-mobile-relay", "instance_id": INSTANCE_ID, "connected_devices": len(manager.active_connections)}
+
+# ── agent-memory owner validations (for the Android app) ─────────────────────
+# The owner token is typed in the app and sent per request in its own header. It is deliberately not one of the MCP
+# tokens the agents hold. agent-memory judges it; the relay only passes it on and throttles repeated refusals.
+
+def _owner_token(request: Request, source: str) -> str:
+    enforce_not_blocked(source, "memory")
+    token = request.headers.get("X-Memory-Owner-Token", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing owner token.")
+    return token
+
+
+def _memory_answer(source: str, status: int, payload: dict):
+    if status in (401, 403):
+        note_auth_failure(source, "memory")
+    return JSONResponse(payload, status_code=status)
+
+
+@app.get("/api/memory/validations")
+def memory_validations_pending(request: Request, limit: str = "50"):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.pending(token, limit)
+    return _memory_answer(source, status, payload)
+
+
+@app.post("/api/memory/validations/{event_id}")
+def memory_validation_decide(request: Request, event_id: str, body: Dict[str, Any]):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.decide(token, event_id, body.get("decision"))
+    return _memory_answer(source, 200 if status == 204 else status, {"ok": True} if status == 204 else payload)
+
 
 @app.post("/api/pair/generate", response_model=PairingGenerateResponse)
 def generate_pairing_code(request: Request, req: PairingGenerateRequest):

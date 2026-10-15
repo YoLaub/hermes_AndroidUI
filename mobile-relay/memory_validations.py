@@ -1,6 +1,6 @@
-"""Relay of the agent-memory owner validation routes for the Android app.
+"""The agent-memory owner validation routes, relayed for the Android app.
 
-agent-memory is not published; the WebUI sits in the same Compose and reaches it through AGENT_MEMORY_URL. The
+agent-memory is not published; the relay sits in the same Compose network and reaches it through AGENT_MEMORY_URL. The
 owner token is typed in the app and arrives with each request: it goes upstream as a Bearer header and is never
 stored, logged or echoed back. Everything coming from the service is data for display, never instructions.
 """

@@ -3555,14 +3555,6 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/profile/env":
         return j(handler, get_profile_env())
 
-    # ── agent-memory owner validations (relay; the owner token comes from the app, per request) ──
-    if parsed.path == "/api/memory/validations":
-        from api import memory_validations as _mv
-        status, payload = _mv.pending(
-            handler.headers.get("X-Memory-Owner-Token"), parse_qs(parsed.query).get("limit", ["50"])[0]
-        )
-        return j(handler, payload, status=status)
-
     # ── Plugins/hooks visibility (read-only, no callback/source internals) ──
     if parsed.path == "/api/plugins":
         return _handle_plugins(handler, parsed)
@@ -4919,15 +4911,6 @@ def handle_post(handler, parsed) -> bool:
         except Exception as exc:
             logger.exception("failed to remove worktree for session %s", sid)
             return bad(handler, _sanitize_error(exc), status=500)
-
-    if parsed.path.startswith("/api/memory/validations/"):
-        from api import memory_validations as _mv
-        status, payload = _mv.decide(
-            handler.headers.get("X-Memory-Owner-Token"),
-            parsed.path[len("/api/memory/validations/"):],
-            body.get("decision") if isinstance(body, dict) else None,
-        )
-        return j(handler, {"ok": True} if status == 204 else payload, status=200 if status == 204 else status)
 
     if parsed.path == "/api/session/delete":
         sid = body.get("session_id", "")

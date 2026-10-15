@@ -1,5 +1,5 @@
 """
-The WebUI relays two owner routes of the agent-memory service for the Android app.
+The relay serves two owner routes of the agent-memory service for the Android app.
 
 The owner token is typed in the app and only passes through here: it goes upstream as a Bearer header and is never
 stored, logged or echoed back. Runs against a real local HTTP server standing in for agent-memory.
@@ -8,8 +8,8 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import memory_validations as mv
 import pytest
-from api import memory_validations as mv
 
 ITEM = {
     "event_id": "ev-1", "occurred_at": "2026-10-14T23:03:54Z", "zone": "other",
