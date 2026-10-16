@@ -67,3 +67,22 @@ def test_background_worker_keeps_scoped_keys_out_of_the_process_env(tmp_path, mo
         assert profiles.os.environ["OPENAI_API_KEY"] == "sk-worker"
         assert config._thread_ctx.env["AGENT_MEMORY_TOKEN"] == "tok-memtest"
     assert "OPENAI_API_KEY" not in profiles.os.environ
+
+
+def test_profile_env_listing_only_shows_the_profile_env_file(tmp_path, monkeypatch):
+    profile_home = tmp_path / "profile"
+    base_home = tmp_path / "base"
+    profile_home.mkdir()
+    base_home.mkdir()
+    (profile_home / ".env").write_text("AGENT_MEMORY_TOKEN=tok-memtest\n")
+    (base_home / ".env").write_text("BASE_ONLY_TOKEN=from-base\n")
+    monkeypatch.setattr(providers, "_get_hermes_home", lambda: profile_home)
+    monkeypatch.setattr("api.profiles._resolve_base_hermes_home", lambda: base_home)
+    monkeypatch.setattr(providers, "get_config", lambda: {"model": {"provider": "openai", "api_key": "sk-from-config"}})
+    monkeypatch.setenv("COOLIFY_SECRET_TOKEN", "from-coolify")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-from-process")
+
+    result = providers.get_profile_env()
+
+    assert [e["key"] for e in result["entries"]] == ["AGENT_MEMORY_TOKEN"]
+    assert result["env"] == {"AGENT_MEMORY_TOKEN": "tok-memtest"}
