@@ -702,6 +702,7 @@ def profile_env_for_background_worker(
         from api.streaming import _ENV_LOCK
 
         profile_home_path = Path(get_hermes_home_for_profile(profile))
+        from api.providers import _PROFILE_SCOPED_ENV_KEYS
         runtime_env = get_profile_runtime_env(profile_home_path)
     except Exception:
         log.debug(
@@ -721,6 +722,8 @@ def profile_env_for_background_worker(
     # os.getenv() directly for provider credentials.  Keep the _ENV_LOCK scope
     # narrow: serialize only setup/restore, not the whole worker body.
     skill_home_snapshot = None
+    # Profile-scoped credentials stay in the thread-local env only, never in the shared process env.
+    process_env = {k: v for k, v in runtime_env.items() if k not in _PROFILE_SCOPED_ENV_KEYS}
     old_runtime_env: dict[str, Optional[str]] = {}
     old_hermes_home = None
     had_hermes_home = False
@@ -728,11 +731,11 @@ def profile_env_for_background_worker(
     try:
         _set_thread_env(**thread_env)
         with _ENV_LOCK:
-            old_runtime_env = {key: os.environ.get(key) for key in runtime_env}
+            old_runtime_env = {key: os.environ.get(key) for key in process_env}
             had_hermes_home = "HERMES_HOME" in os.environ
             old_hermes_home = os.environ.get("HERMES_HOME")
             skill_home_snapshot = snapshot_skill_home_modules()
-            os.environ.update(runtime_env)
+            os.environ.update(process_env)
             os.environ["HERMES_HOME"] = str(profile_home_path)
             try:
                 patch_skill_home_modules(profile_home_path)

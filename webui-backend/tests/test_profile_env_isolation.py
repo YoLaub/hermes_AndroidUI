@@ -52,3 +52,18 @@ def test_switching_profile_does_not_load_scoped_keys_into_the_process(tmp_path, 
     assert "AGENT_MEMORY_URL" not in profiles.os.environ
     assert profiles.os.environ["OPENAI_API_KEY"] == "sk-test"
     profiles.os.environ.pop("OPENAI_API_KEY", None)
+
+
+def test_background_worker_keeps_scoped_keys_out_of_the_process_env(tmp_path, monkeypatch):
+    from api import config, profiles
+
+    (tmp_path / ".env").write_text("AGENT_MEMORY_TOKEN=tok-memtest\nOPENAI_API_KEY=sk-worker\n")
+    for key in ("AGENT_MEMORY_TOKEN", "OPENAI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(profiles, "get_hermes_home_for_profile", lambda name: tmp_path)
+
+    with profiles.profile_env_for_background_worker("memtest"):
+        assert "AGENT_MEMORY_TOKEN" not in profiles.os.environ
+        assert profiles.os.environ["OPENAI_API_KEY"] == "sk-worker"
+        assert config._thread_ctx.env["AGENT_MEMORY_TOKEN"] == "tok-memtest"
+    assert "OPENAI_API_KEY" not in profiles.os.environ
