@@ -36,3 +36,19 @@ def test_model_provider_keys_still_reach_the_process(profile_env):
     providers.set_profile_env_var("OPENAI_API_KEY", "sk-test")
     assert "OPENAI_API_KEY=sk-test" in profile_env.read_text().splitlines()
     assert providers.os.environ["OPENAI_API_KEY"] == "sk-test"
+
+
+def test_switching_profile_does_not_load_scoped_keys_into_the_process(tmp_path, monkeypatch):
+    from api import profiles
+
+    (tmp_path / ".env").write_text("AGENT_MEMORY_TOKEN=tok-memtest\nAGENT_MEMORY_URL=https://m\nOPENAI_API_KEY=sk-test\n")
+    for key in ("AGENT_MEMORY_TOKEN", "AGENT_MEMORY_URL", "OPENAI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(profiles, "_loaded_profile_env_keys", set())
+
+    profiles._reload_dotenv(tmp_path)
+
+    assert "AGENT_MEMORY_TOKEN" not in profiles.os.environ
+    assert "AGENT_MEMORY_URL" not in profiles.os.environ
+    assert profiles.os.environ["OPENAI_API_KEY"] == "sk-test"
+    profiles.os.environ.pop("OPENAI_API_KEY", None)

@@ -805,6 +805,7 @@ def _reload_dotenv(home: Path):
     env_path = home / '.env'
     if not env_path.exists():
         return
+    from api.providers import _PROFILE_SCOPED_ENV_KEYS
     try:
         loaded_keys: set[str] = set()
         for line in env_path.read_text(encoding="utf-8").splitlines():
@@ -813,7 +814,7 @@ def _reload_dotenv(home: Path):
                 k, v = line.split('=', 1)
                 k = k.strip()
                 v = v.strip().strip('"').strip("'")
-                if k and v:
+                if k and v and k not in _PROFILE_SCOPED_ENV_KEYS:
                     os.environ[k] = v
                     loaded_keys.add(k)
         _loaded_profile_env_keys = loaded_keys
