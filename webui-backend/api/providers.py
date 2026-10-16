@@ -809,6 +809,11 @@ def _provider_has_shadowed_codex_oauth_value(provider_id: str) -> bool:
     return any(_looks_like_codex_oauth_token(str(value or "")) for value in values)
 
 
+# Keys that belong to one profile only: written to its .env, never mirrored into the shared os.environ.
+# _build_agent hands AGENT_MEMORY_TOKEN to the memory plugin from the profile's own env while the agent is built.
+_PROFILE_SCOPED_ENV_KEYS = frozenset({"AGENT_MEMORY_TOKEN", "AGENT_MEMORY_URL"})
+
+
 def _write_env_file(env_path: Path, updates: dict[str, str | None]) -> None:
     """Write key=value pairs to the .env file.
 
@@ -848,7 +853,8 @@ def _write_env_file(env_path: Path, updates: dict[str, str | None]) -> None:
         for key, value in updates.items():
             if value is None:
                 # Mark the line for removal (None sentinel) and clear env.
-                os.environ.pop(key, None)
+                if key not in _PROFILE_SCOPED_ENV_KEYS:
+                    os.environ.pop(key, None)
                 if key in existing_key_indices:
                     output_lines[existing_key_indices[key]] = None  # type: ignore[assignment]
                 continue
@@ -858,7 +864,8 @@ def _write_env_file(env_path: Path, updates: dict[str, str | None]) -> None:
             # Reject embedded newlines/carriage returns to prevent .env injection
             if "\n" in clean or "\r" in clean:
                 raise ValueError("API key must not contain newline characters.")
-            os.environ[key] = clean
+            if key not in _PROFILE_SCOPED_ENV_KEYS:
+                os.environ[key] = clean
 
             if key in existing_key_indices:
                 output_lines[existing_key_indices[key]] = f"{key}={clean}"
