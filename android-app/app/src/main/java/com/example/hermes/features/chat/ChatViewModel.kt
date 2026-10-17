@@ -37,6 +37,7 @@ data class ChatUiState(
     val memoryData: MemoryResponse? = null,
     val isMemoryLoading: Boolean = false,
     val memoryValidations: List<MemoryValidation> = emptyList(),
+    val memoryActions: List<MemoryAction> = emptyList(),
     val isValidationsLoading: Boolean = false,
     val validationsError: String? = null,
     val hasMemoryOwnerToken: Boolean = false,
@@ -978,6 +979,33 @@ class ChatViewModel(
         }
     }
 
+    fun loadMemoryActions() {
+        viewModelScope.launch {
+            val hasToken = !repository.memoryOwnerToken.first().isNullOrBlank()
+            if (!hasToken) return@launch
+            _uiState.update { it.copy(isValidationsLoading = true) }
+            val res = repository.getMemoryActions()
+            _uiState.update {
+                if (res.isSuccess) it.copy(memoryActions = res.getOrThrow().items, isValidationsLoading = false)
+                else it.copy(isValidationsLoading = false, validationsError = validationErrorMessage(res.exceptionOrNull()!!))
+            }
+        }
+    }
+
+    fun decideMemoryAction(actionId: String, approve: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isValidationsLoading = true, validationsError = null) }
+            val res = repository.decideMemoryAction(actionId, approve)
+            if (res.isSuccess) {
+                loadMemoryActions()
+            } else {
+                _uiState.update {
+                    it.copy(isValidationsLoading = false, validationsError = validationErrorMessage(res.exceptionOrNull()!!))
+                }
+            }
+        }
+    }
+
     fun saveMemoryOwnerToken(token: String) {
         viewModelScope.launch {
             val stored = repository.setMemoryOwnerToken(token)
@@ -985,6 +1013,7 @@ class ChatViewModel(
                 _uiState.update { it.copy(validationsError = "Stockage sécurisé indisponible : jeton non enregistré") }
             } else {
                 loadMemoryValidations()
+                loadMemoryActions()
             }
         }
     }

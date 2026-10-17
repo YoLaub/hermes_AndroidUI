@@ -420,6 +420,22 @@ class HermesRepository(
         return apiClient.decideMemoryValidation(relay, token, eventId, if (confirm) "confirmed" else "rejected")
     }
 
+    suspend fun getMemoryActions(): Result<MemoryActionsResponse> {
+        val token = preferences.memoryOwnerToken.first()
+            ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
+        val relay = relayUrlOrNull()
+            ?: return Result.failure(java.io.IOException("Adresse du relais non configurée"))
+        return apiClient.getMemoryActions(relay, token)
+    }
+
+    suspend fun decideMemoryAction(actionId: String, approve: Boolean): Result<MemoryValidationDecisionResponse> {
+        val token = preferences.memoryOwnerToken.first()
+            ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
+        val relay = relayUrlOrNull()
+            ?: return Result.failure(java.io.IOException("Adresse du relais non configurée"))
+        return apiClient.decideMemoryAction(relay, token, actionId, if (approve) "approved" else "rejected")
+    }
+
     // ── OpenBao Secrets Management ──
 
     val openbaoUrl: Flow<String> = preferences.openbaoUrl
