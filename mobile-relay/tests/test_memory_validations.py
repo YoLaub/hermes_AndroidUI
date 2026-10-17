@@ -36,7 +36,7 @@ class Upstream:
                 self.end_headers()
                 self.wfile.write(data)
 
-            do_GET = do_POST = _answer
+            do_GET = do_POST = do_PUT = _answer
 
             def log_message(self, *args):
                 pass
@@ -187,4 +187,89 @@ def test_an_action_id_that_could_change_the_path_is_refused(upstream, action_id)
 def test_a_malformed_token_never_reaches_the_service_for_actions(upstream):
     assert mv.pending_actions("a\r\nX-Evil: 1")[0] == 401
     assert mv.decide_action("", ACTION["id"], "approved")[0] == 401
+    assert upstream.seen == []
+
+
+PROFILE = {"name": "gaston", "state": "active", "read": ["other", "git"], "write": ["other"]}
+
+
+def test_profiles_are_relayed_with_only_the_known_fields(upstream):
+    upstream.reply = (200, {"items": [dict(PROFILE, token="never-relayed", token_sha256="x")]})
+    status, payload = mv.profiles("tok-owner")
+    assert (status, payload) == (200, {"items": [PROFILE]})
+    method, path, auth, _ = upstream.seen[0]
+    assert (method, path, auth) == ("GET", "/owner/v1/profiles", "Bearer tok-owner")
+
+
+def test_a_profile_is_created_and_its_token_comes_back_once(upstream):
+    upstream.reply = (201, {"name": "gaston", "token": "one-time-token", "extra": 1})
+    status, payload = mv.create_profile("tok-owner", "gaston", ["other"], ["other"])
+    assert (status, payload) == (201, {"name": "gaston", "token": "one-time-token"})
+    method, path, _, body = upstream.seen[0]
+    assert (method, path) == ("POST", "/owner/v1/profiles")
+    assert json.loads(body) == {"name": "gaston", "read": ["other"], "write": ["other"]}
+
+
+def test_a_profile_with_no_grant_at_all_is_valid(upstream):
+    upstream.reply = (201, {"name": "empty", "token": "t"})
+    assert mv.create_profile("tok", "empty", [], [])[0] == 201
+
+
+@pytest.mark.parametrize("name", ["", "Gaston", "a b", "../x", "a/b", "x" * 101, "é"])
+def test_a_profile_name_outside_the_rules_is_refused_before_the_service(upstream, name):
+    assert mv.create_profile("tok", name, [], [])[0] == 422
+    assert mv.set_grants("tok", name, [], [])[0] == 422
+    assert mv.revoke_profile("tok", name)[0] == 422
+    assert upstream.seen == []
+
+
+@pytest.mark.parametrize("read,write", [(["nowhere"], []), ([], ["x"]), ("other", []), ([], None), ([1], [])])
+def test_unknown_zones_or_wrong_shapes_are_refused_before_the_service(upstream, read, write):
+    assert mv.set_grants("tok", "gaston", read, write)[0] == 422
+    assert upstream.seen == []
+
+
+def test_grants_are_replaced_with_a_put(upstream):
+    upstream.reply = (204, None)
+    assert mv.set_grants("tok-owner", "gaston", ["other"], []) == (204, {})
+    method, path, auth, body = upstream.seen[0]
+    assert (method, path, auth) == ("PUT", "/owner/v1/profiles/gaston/grants", "Bearer tok-owner")
+    assert json.loads(body) == {"read": ["other"], "write": []}
+
+
+def test_a_profile_is_revoked(upstream):
+    upstream.reply = (204, None)
+    assert mv.revoke_profile("tok-owner", "gaston") == (204, {})
+    method, path, _, body = upstream.seen[0]
+    assert (method, path) == ("POST", "/owner/v1/profiles/gaston/revoke")
+
+
+def test_the_service_detail_of_a_refusal_is_kept_for_profiles(upstream):
+    detail = "the zone(s) secrets cannot be granted through the API: use the admin command (python -m agent_memory.admin set-grants)"
+    upstream.reply = (403, {"detail": detail})
+    status, payload = mv.set_grants("tok-owner", "gaston", ["secrets"], [])
+    assert (status, payload["detail"]) == (403, detail)
+
+
+def test_a_detail_that_is_not_text_or_that_holds_the_token_is_dropped(upstream):
+    upstream.reply = (422, {"detail": [{"loc": ["body"], "input": "tok-owner"}]})
+    assert "detail" not in mv.create_profile("tok-owner", "gaston", [], [])[1]
+    upstream.reply = (403, {"detail": "bad token tok-owner"})
+    status, payload = mv.revoke_profile("tok-owner", "gaston")
+    assert status == 403 and "tok-owner" not in json.dumps(payload)
+
+
+def test_a_long_detail_is_cut(upstream):
+    upstream.reply = (403, {"detail": "d" * 5000})
+    assert len(mv.revoke_profile("tok", "gaston")[1]["detail"]) <= mv.DETAIL_MAX
+
+
+def test_the_older_calls_still_hide_the_detail(upstream):
+    upstream.reply = (409, {"detail": "internal wording"})
+    assert mv.decide("tok", "ev-1", "confirmed")[1] == {"error": "refused by agent-memory"}
+
+
+def test_a_malformed_token_never_reaches_the_service_for_profiles(upstream):
+    assert mv.profiles("a\r\nX: 1")[0] == 401
+    assert mv.create_profile("", "gaston", [], [])[0] == 401
     assert upstream.seen == []
