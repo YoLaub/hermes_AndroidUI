@@ -505,6 +505,22 @@ def memory_validation_decide(request: Request, event_id: str, body: Dict[str, An
     return _memory_answer(source, 200 if status == 204 else status, {"ok": True} if status == 204 else payload)
 
 
+@app.get("/api/memory/actions")
+def memory_actions_pending(request: Request):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.pending_actions(token)
+    return _memory_answer(source, status, payload)
+
+
+@app.post("/api/memory/actions/{action_id}")
+def memory_action_decide(request: Request, action_id: str, body: Dict[str, Any]):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.decide_action(token, action_id, body.get("decision"))
+    return _memory_answer(source, 200 if status == 204 else status, {"ok": True} if status == 204 else payload)
+
+
 @app.post("/api/pair/generate", response_model=PairingGenerateResponse)
 def generate_pairing_code(request: Request, req: PairingGenerateRequest):
     # Requirement 2: Authentifier /api/pair/generate
