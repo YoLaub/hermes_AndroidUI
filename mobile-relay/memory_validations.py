@@ -11,12 +11,15 @@ import urllib.error
 import urllib.request
 
 PREVIEW_MAX = 500
+LABEL_MAX = 2000
 RESPONSE_MAX = 1024 * 1024
 TIMEOUT = 10
 DECISIONS = ("confirmed", "rejected")
+ACTION_DECISIONS = ("approved", "rejected")
 _EVENT_ID = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 _TOKEN = re.compile(r"[\x21-\x7e]{1,512}")
 _FIELDS = ("event_id", "occurred_at", "zone", "origin", "status", "source", "preview")
+_ACTION_FIELDS = ("id", "kind", "profile", "session_id", "label", "reason", "requested_at")
 _PASSED_THROUGH = (401, 403, 404, 409, 422)
 
 
@@ -92,6 +95,36 @@ def decide(token, event_id, decision):
     if not isinstance(event_id, str) or not _EVENT_ID.fullmatch(event_id):
         return 422, {"error": "invalid event id"}
     status, payload = _call("POST", f"/owner/v1/validations/{event_id}", token, {"decision": decision})
+    if status in (200, 204):
+        return 204, {}
+    return status, payload
+
+
+def _clean_action(item):
+    if not isinstance(item, dict):
+        return None
+    cleaned = {k: item.get(k) for k in _ACTION_FIELDS}
+    label = cleaned.get("label")
+    cleaned["label"] = label[:LABEL_MAX] if isinstance(label, str) else ""
+    return cleaned
+
+
+def pending_actions(token):
+    """The action gate: what the agents asked to do and the owner has not decided yet."""
+    status, payload = _call("GET", "/owner/v1/actions/pending", token)
+    if status != 200:
+        return status, payload
+    items = payload.get("items") if isinstance(payload, dict) else None
+    cleaned = [c for c in (_clean_action(i) for i in (items if isinstance(items, list) else [])) if c]
+    return 200, {"items": cleaned}
+
+
+def decide_action(token, action_id, decision):
+    if decision not in ACTION_DECISIONS:
+        return 422, {"error": "decision must be approved or rejected"}
+    if not isinstance(action_id, str) or not _EVENT_ID.fullmatch(action_id):
+        return 422, {"error": "invalid action id"}
+    status, payload = _call("POST", f"/owner/v1/actions/{action_id}/decision", token, {"decision": decision})
     if status in (200, 204):
         return 204, {}
     return status, payload

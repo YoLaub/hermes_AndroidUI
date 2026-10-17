@@ -23,3 +23,21 @@ data class MemoryValidationDecisionRequest(val decision: String)
 
 @Serializable
 data class MemoryValidationDecisionResponse(val ok: Boolean = false)
+
+/**
+ * A request the action gate holds for the owner. [label] is the target as the agent asked for it (a command, an
+ * address, a tool name): untrusted text, to be shown as plain text only. [id] is the one `admin actions` lists.
+ */
+@Serializable
+data class MemoryAction(
+    val id: String,
+    val kind: String? = null,
+    val profile: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    val label: String = "",
+    val reason: String? = null,
+    @SerialName("requested_at") val requestedAt: String? = null
+)
+
+@Serializable
+data class MemoryActionsResponse(val items: List<MemoryAction> = emptyList())

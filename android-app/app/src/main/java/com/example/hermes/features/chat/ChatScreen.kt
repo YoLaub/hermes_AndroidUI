@@ -557,6 +557,7 @@ fun ChatScreen(
                     onOpenValidations = {
                         showProfilesSheet = false
                         viewModel.loadMemoryValidations()
+                        viewModel.loadMemoryActions()
                         showValidationsDialog = true
                     },
                     onOpenOpenbao = {
@@ -720,11 +721,16 @@ fun ChatScreen(
         if (showValidationsDialog) {
             MemoryValidationsDialog(
                 items = state.memoryValidations,
+                actions = state.memoryActions,
                 isLoading = state.isValidationsLoading,
                 error = state.validationsError,
                 hasToken = state.hasMemoryOwnerToken,
                 onSaveToken = { viewModel.saveMemoryOwnerToken(it) },
-                onRefresh = { viewModel.loadMemoryValidations() },
+                onRefresh = {
+                    viewModel.loadMemoryValidations()
+                    viewModel.loadMemoryActions()
+                },
+                onDecideAction = { id, approve -> viewModel.decideMemoryAction(id, approve) },
                 onDecide = { id, confirm -> viewModel.decideMemoryValidation(id, confirm) },
                 onDismiss = { showValidationsDialog = false }
             )

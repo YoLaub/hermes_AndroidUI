@@ -138,3 +138,53 @@ def test_an_unreachable_service_is_a_bad_gateway(monkeypatch):
 def test_without_a_configured_service_nothing_is_called(monkeypatch):
     monkeypatch.delenv("AGENT_MEMORY_URL", raising=False)
     assert mv.pending("tok", limit=5)[0] == 503
+
+
+ACTION = {
+    "id": "1c9eb27b-5212-498a-ad1f-641749940202", "kind": "run", "profile": "gaston", "session_id": "423772f5e8bb",
+    "label": "set -o pipefail", "reason": "this session has read untrusted content: it cannot write or run anything alone",
+    "requested_at": "2026-10-16T21:00:00Z",
+}
+
+
+def test_pending_actions_are_relayed_with_the_token_as_a_bearer(upstream):
+    upstream.reply = (200, {"items": [ACTION]})
+    status, payload = mv.pending_actions("tok-owner")
+    assert (status, payload) == (200, {"items": [ACTION]})
+    method, path, auth, _ = upstream.seen[0]
+    assert (method, path, auth) == ("GET", "/owner/v1/actions/pending", "Bearer tok-owner")
+
+
+def test_only_the_known_fields_of_an_action_are_relayed_and_a_long_label_is_cut(upstream):
+    upstream.reply = (200, {"items": [dict(ACTION, label="a" * 9000, fingerprint="internal")]})
+    _, payload = mv.pending_actions("tok")
+    item = payload["items"][0]
+    assert "fingerprint" not in item
+    assert len(item["label"]) <= mv.LABEL_MAX
+
+
+def test_an_action_decision_is_sent_upstream(upstream):
+    upstream.reply = (204, None)
+    status, payload = mv.decide_action("tok-owner", ACTION["id"], "approved")
+    assert (status, payload) == (204, {})
+    method, path, auth, body = upstream.seen[0]
+    assert (method, path, auth) == ("POST", f"/owner/v1/actions/{ACTION['id']}/decision", "Bearer tok-owner")
+    assert json.loads(body) == {"decision": "approved"}
+
+
+@pytest.mark.parametrize("decision", ["", "confirmed", "APPROVED", None])
+def test_an_action_needs_approved_or_rejected(upstream, decision):
+    assert mv.decide_action("tok", ACTION["id"], decision)[0] == 422
+    assert upstream.seen == []
+
+
+@pytest.mark.parametrize("action_id", ["", "../admin", "a/b", "x" * 200, "id?x=1"])
+def test_an_action_id_that_could_change_the_path_is_refused(upstream, action_id):
+    assert mv.decide_action("tok", action_id, "rejected")[0] == 422
+    assert upstream.seen == []
+
+
+def test_a_malformed_token_never_reaches_the_service_for_actions(upstream):
+    assert mv.pending_actions("a\r\nX-Evil: 1")[0] == 401
+    assert mv.decide_action("", ACTION["id"], "approved")[0] == 401
+    assert upstream.seen == []

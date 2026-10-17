@@ -109,3 +109,65 @@ def test_an_accepted_token_is_not_counted_as_a_failure(upstream):
 def test_no_cors_header_is_added(upstream):
     r = client_from("203.0.113.11").get("/api/memory/validations", headers={**OWNER, "Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in r.headers
+
+
+ACTION_ID = "1c9eb27b-5212-498a-ad1f-641749940202"
+
+
+@pytest.fixture
+def actions_upstream(monkeypatch):
+    calls = []
+    reply = {"pending": (200, {"items": [{"id": ACTION_ID}]}), "decide": (204, {})}
+
+    def pending_actions(token):
+        calls.append(("pending", token))
+        return reply["pending"]
+
+    def decide_action(token, action_id, decision):
+        calls.append(("decide", token, action_id, decision))
+        return reply["decide"]
+
+    monkeypatch.setattr(server.memory_validations, "pending_actions", pending_actions)
+    monkeypatch.setattr(server.memory_validations, "decide_action", decide_action)
+    return type("Up", (), {"calls": calls, "reply": reply})
+
+
+def test_pending_actions_are_returned_with_the_token_passed_upstream(actions_upstream):
+    r = client_from("203.0.113.20").get("/api/memory/actions", headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"items": [{"id": ACTION_ID}]})
+    assert actions_upstream.calls == [("pending", "tok-owner")]
+
+
+def test_an_action_decision_is_sent_and_answered_ok(actions_upstream):
+    r = client_from("203.0.113.21").post(f"/api/memory/actions/{ACTION_ID}", json={"decision": "approved"}, headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"ok": True})
+    assert actions_upstream.calls == [("decide", "tok-owner", ACTION_ID, "approved")]
+
+
+def test_action_routes_without_the_owner_token_never_reach_the_service(actions_upstream):
+    c = client_from("203.0.113.22")
+    assert c.get("/api/memory/actions").status_code == 401
+    assert c.post(f"/api/memory/actions/{ACTION_ID}", json={"decision": "approved"}).status_code == 401
+    assert actions_upstream.calls == []
+
+
+def test_an_action_refusal_keeps_its_status_and_never_echoes_the_token(actions_upstream):
+    actions_upstream.reply["decide"] = (404, {"error": "refused by agent-memory"})
+    r = client_from("203.0.113.23").post(f"/api/memory/actions/{ACTION_ID}", json={"decision": "approved"}, headers=OWNER)
+    assert r.status_code == 404
+    assert "tok-owner" not in json.dumps(r.json())
+
+
+def test_an_action_body_that_is_not_an_object_is_refused(actions_upstream):
+    r = client_from("203.0.113.24").post(f"/api/memory/actions/{ACTION_ID}", json=["approved"], headers=OWNER)
+    assert r.status_code == 422
+    assert actions_upstream.calls == []
+
+
+def test_repeated_refusals_on_the_action_routes_lock_the_source_out(actions_upstream):
+    actions_upstream.reply["pending"] = (401, {"error": "refused by agent-memory"})
+    attacker = client_from("203.0.113.25")
+    for _ in range(10):
+        assert attacker.get("/api/memory/actions", headers=OWNER).status_code == 401
+    assert attacker.get("/api/memory/actions", headers=OWNER).status_code == 429
+    assert len(actions_upstream.calls) == 10

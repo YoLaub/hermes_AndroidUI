@@ -134,6 +134,30 @@ class HermesApiClient(
         executeRequest(request, relayClient)
     }
 
+    suspend fun getMemoryActions(relayUrl: String, ownerToken: String): Result<MemoryActionsResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/actions")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .get()
+            .build()
+        executeRequest(request, relayClient)
+    }
+
+    suspend fun decideMemoryAction(
+        relayUrl: String,
+        ownerToken: String,
+        actionId: String,
+        decision: String
+    ): Result<MemoryValidationDecisionResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(MemoryValidationDecisionRequest(decision)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/actions/${java.net.URLEncoder.encode(actionId, "UTF-8")}")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .post(body)
+            .build()
+        executeRequest(request, relayClient)
+    }
+
     suspend fun decideMemoryValidation(
         relayUrl: String,
         ownerToken: String,
