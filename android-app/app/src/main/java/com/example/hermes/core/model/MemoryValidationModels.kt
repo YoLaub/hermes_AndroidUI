@@ -41,3 +41,27 @@ data class MemoryAction(
 
 @Serializable
 data class MemoryActionsResponse(val items: List<MemoryAction> = emptyList())
+
+/** A profile of the memory service with the zones it may read and write. Never carries a token. */
+@Serializable
+data class MemoryProfile(
+    val name: String,
+    val state: String = "active",
+    val read: List<String> = emptyList(),
+    val write: List<String> = emptyList()
+)
+
+@Serializable
+data class MemoryProfilesResponse(val items: List<MemoryProfile> = emptyList())
+
+@Serializable
+data class MemoryProfileCreateRequest(val name: String, val read: List<String>, val write: List<String>)
+
+@Serializable
+data class MemoryProfileGrantsRequest(val read: List<String>, val write: List<String>)
+
+/** The answer to a creation: [token] is shown once and then dropped; it is masked if the object is ever printed. */
+@Serializable
+data class MemoryProfileCreated(val name: String, val token: String) {
+    override fun toString(): String = "MemoryProfileCreated(name=$name, token=***)"
+}

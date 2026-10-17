@@ -436,6 +436,26 @@ class HermesRepository(
         return apiClient.decideMemoryAction(relay, token, actionId, if (approve) "approved" else "rejected")
     }
 
+    private suspend fun <T> withOwnerAndRelay(call: suspend (relay: String, token: String) -> Result<T>): Result<T> {
+        val token = preferences.memoryOwnerToken.first()
+            ?: return Result.failure(java.io.IOException("Jeton propriétaire non configuré"))
+        val relay = relayUrlOrNull()
+            ?: return Result.failure(java.io.IOException("Adresse du relais non configurée"))
+        return call(relay, token)
+    }
+
+    suspend fun getMemoryProfiles(): Result<MemoryProfilesResponse> =
+        withOwnerAndRelay { relay, token -> apiClient.getMemoryProfiles(relay, token) }
+
+    suspend fun createMemoryProfile(name: String, read: List<String>, write: List<String>): Result<MemoryProfileCreated> =
+        withOwnerAndRelay { relay, token -> apiClient.createMemoryProfile(relay, token, name, read, write) }
+
+    suspend fun setMemoryProfileGrants(name: String, read: List<String>, write: List<String>): Result<MemoryValidationDecisionResponse> =
+        withOwnerAndRelay { relay, token -> apiClient.setMemoryProfileGrants(relay, token, name, read, write) }
+
+    suspend fun revokeMemoryProfile(name: String): Result<MemoryValidationDecisionResponse> =
+        withOwnerAndRelay { relay, token -> apiClient.revokeMemoryProfile(relay, token, name) }
+
     // ── OpenBao Secrets Management ──
 
     val openbaoUrl: Flow<String> = preferences.openbaoUrl

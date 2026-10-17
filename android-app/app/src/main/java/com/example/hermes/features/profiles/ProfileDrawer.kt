@@ -35,6 +35,7 @@ fun ProfileDrawerContent(
     onOpenEnv: () -> Unit,
     onOpenOpenbao: () -> Unit = {},
     onOpenValidations: () -> Unit = {},
+    onOpenMemoryProfiles: () -> Unit = {},
     onRestartGateway: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -340,6 +341,22 @@ fun ProfileDrawerContent(
                     Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Mémoire : à valider", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Memory profiles and zone grants Button
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenMemoryProfiles()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesPrimary)
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Mémoire : profils et zones", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 // Restart Gateway Button

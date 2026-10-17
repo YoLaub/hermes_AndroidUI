@@ -134,6 +134,60 @@ class HermesApiClient(
         executeRequest(request, relayClient)
     }
 
+    suspend fun getMemoryProfiles(relayUrl: String, ownerToken: String): Result<MemoryProfilesResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/profiles")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .get()
+            .build()
+        executeRequest(request, relayClient)
+    }
+
+    suspend fun createMemoryProfile(
+        relayUrl: String,
+        ownerToken: String,
+        name: String,
+        read: List<String>,
+        write: List<String>
+    ): Result<MemoryProfileCreated> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(MemoryProfileCreateRequest(name, read, write)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/profiles")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .post(body)
+            .build()
+        executeRequest(request, relayClient)
+    }
+
+    suspend fun setMemoryProfileGrants(
+        relayUrl: String,
+        ownerToken: String,
+        name: String,
+        read: List<String>,
+        write: List<String>
+    ): Result<MemoryValidationDecisionResponse> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(MemoryProfileGrantsRequest(read, write)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/profiles/${java.net.URLEncoder.encode(name, "UTF-8")}/grants")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .put(body)
+            .build()
+        executeRequest(request, relayClient)
+    }
+
+    suspend fun revokeMemoryProfile(
+        relayUrl: String,
+        ownerToken: String,
+        name: String
+    ): Result<MemoryValidationDecisionResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/profiles/${java.net.URLEncoder.encode(name, "UTF-8")}/revoke")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .post("".toRequestBody(jsonMediaType))
+            .build()
+        executeRequest(request, relayClient)
+    }
+
     suspend fun getMemoryActions(relayUrl: String, ownerToken: String): Result<MemoryActionsResponse> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("$relayUrl/api/memory/actions")

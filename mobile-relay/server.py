@@ -483,8 +483,8 @@ def _owner_token(request: Request, source: str) -> str:
     return token
 
 
-def _memory_answer(source: str, status: int, payload: dict):
-    if status in (401, 403):
+def _memory_answer(source: str, status: int, payload: dict, counted=(401, 403)):
+    if status in counted:
         note_auth_failure(source, "memory")
     return JSONResponse(payload, status_code=status)
 
@@ -519,6 +519,49 @@ def memory_action_decide(request: Request, action_id: str, body: Dict[str, Any])
     token = _owner_token(request, source)
     status, payload = memory_validations.decide_action(token, action_id, body.get("decision"))
     return _memory_answer(source, 200 if status == 204 else status, {"ok": True} if status == 204 else payload)
+
+
+# A 403 on the profile routes is a business refusal (editing is off, secrets and finance are admin-only), not a bad
+# token: only a 401 counts against the source.
+_PROFILE_COUNTED = (401,)
+
+
+def _profile_answer(source: str, status: int, payload: dict):
+    if status == 204:
+        return _memory_answer(source, 200, {"ok": True}, _PROFILE_COUNTED)
+    return _memory_answer(source, status, payload, _PROFILE_COUNTED)
+
+
+@app.get("/api/memory/profiles")
+def memory_profiles(request: Request):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.profiles(token)
+    return _profile_answer(source, status, payload)
+
+
+@app.post("/api/memory/profiles")
+def memory_profile_create(request: Request, body: Dict[str, Any]):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.create_profile(token, body.get("name"), body.get("read", []), body.get("write", []))
+    return _profile_answer(source, status, payload)
+
+
+@app.put("/api/memory/profiles/{name}/grants")
+def memory_profile_grants(request: Request, name: str, body: Dict[str, Any]):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.set_grants(token, name, body.get("read", []), body.get("write", []))
+    return _profile_answer(source, status, payload)
+
+
+@app.post("/api/memory/profiles/{name}/revoke")
+def memory_profile_revoke(request: Request, name: str):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.revoke_profile(token, name)
+    return _profile_answer(source, status, payload)
 
 
 @app.post("/api/pair/generate", response_model=PairingGenerateResponse)

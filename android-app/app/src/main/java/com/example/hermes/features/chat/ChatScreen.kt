@@ -51,6 +51,7 @@ fun ChatScreen(
     var showSkillsDialog by remember { mutableStateOf(false) }
     var showMemoryDialog by remember { mutableStateOf(false) }
     var showValidationsDialog by remember { mutableStateOf(false) }
+    var showMemoryProfilesDialog by remember { mutableStateOf(false) }
     var showWorkspaceDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -554,6 +555,11 @@ fun ChatScreen(
                         viewModel.loadProviders()
                         showProfileEnvDialog = true
                     },
+                    onOpenMemoryProfiles = {
+                        showProfilesSheet = false
+                        viewModel.loadMemoryProfiles()
+                        showMemoryProfilesDialog = true
+                    },
                     onOpenValidations = {
                         showProfilesSheet = false
                         viewModel.loadMemoryValidations()
@@ -714,6 +720,25 @@ fun ChatScreen(
                 onDismiss = {
                     showSkillsDialog = false
                     viewModel.clearSkillDetail()
+                }
+            )
+        }
+
+        if (showMemoryProfilesDialog) {
+            MemoryProfilesDialog(
+                profiles = state.memoryProfiles,
+                created = state.createdProfile,
+                isLoading = state.isProfilesLoading,
+                error = state.profilesError,
+                hasToken = state.hasMemoryOwnerToken,
+                onRefresh = { viewModel.loadMemoryProfiles() },
+                onCreate = { name, read, write -> viewModel.createMemoryProfile(name, read, write) },
+                onSaveGrants = { name, read, write -> viewModel.setMemoryProfileGrants(name, read, write) },
+                onRevoke = { viewModel.revokeMemoryProfile(it) },
+                onDismissCreated = { viewModel.dismissCreatedProfileToken() },
+                onDismiss = {
+                    viewModel.dismissCreatedProfileToken()
+                    showMemoryProfilesDialog = false
                 }
             )
         }

@@ -12,6 +12,7 @@ import urllib.request
 
 PREVIEW_MAX = 500
 LABEL_MAX = 2000
+DETAIL_MAX = 400
 RESPONSE_MAX = 1024 * 1024
 TIMEOUT = 10
 DECISIONS = ("confirmed", "rejected")
@@ -20,6 +21,9 @@ _EVENT_ID = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 _TOKEN = re.compile(r"[\x21-\x7e]{1,512}")
 _FIELDS = ("event_id", "occurred_at", "zone", "origin", "status", "source", "preview")
 _ACTION_FIELDS = ("id", "kind", "profile", "session_id", "label", "reason", "requested_at")
+_PROFILE_NAME = re.compile(r"[a-z0-9_-]{1,100}")
+ZONES = ("secrets", "finance", "health", "legal", "personal", "professional", "git", "other")
+_PROFILE_FIELDS = ("name", "state", "read", "write")
 _PASSED_THROUGH = (401, 403, 404, 409, 422)
 
 
@@ -35,7 +39,21 @@ def _base_url():
     return (os.environ.get("AGENT_MEMORY_URL") or "").strip().rstrip("/")
 
 
-def _call(method, path, token, body=None):
+def _refusal(error, token, keep_detail):
+    """The refusal sent to the app. The service's own wording is relayed only when asked for, as short text without the token."""
+    refused = {"error": "refused by agent-memory"}
+    if not keep_detail:
+        return refused
+    try:
+        detail = json.loads(error.read(RESPONSE_MAX + 1)).get("detail")
+    except (ValueError, AttributeError, OSError):
+        return refused
+    if isinstance(detail, str) and token not in detail:
+        refused["detail"] = detail[:DETAIL_MAX]
+    return refused
+
+
+def _call(method, path, token, body=None, keep_detail=False):
     """Return (status, parsed JSON or {}); statuses the service uses to refuse are kept, the rest is a 502."""
     if not isinstance(token, str) or not _TOKEN.fullmatch(token):
         return 401, {"error": "owner token missing or malformed"}
@@ -52,10 +70,12 @@ def _call(method, path, token, body=None):
             raw = response.read(RESPONSE_MAX + 1)
             status = response.status
     except urllib.error.HTTPError as error:
-        error.close()
-        if error.code in _PASSED_THROUGH:
-            return error.code, {"error": "refused by agent-memory"}
-        return 502, {"error": "agent-memory error"}
+        try:
+            if error.code in _PASSED_THROUGH:
+                return error.code, _refusal(error, token, keep_detail)
+            return 502, {"error": "agent-memory error"}
+        finally:
+            error.close()
     except (urllib.error.URLError, TimeoutError, OSError):
         return 502, {"error": "agent-memory unreachable"}
     if len(raw) > RESPONSE_MAX:
@@ -128,3 +148,58 @@ def decide_action(token, action_id, decision):
     if status in (200, 204):
         return 204, {}
     return status, payload
+
+
+def _profile_name_ok(name):
+    return isinstance(name, str) and _PROFILE_NAME.fullmatch(name) is not None
+
+
+def _zones(value):
+    """A list of known zones without repeats, or None when the shape is wrong."""
+    if not isinstance(value, list) or not all(isinstance(z, str) and z in ZONES for z in value):
+        return None
+    return list(dict.fromkeys(value))
+
+
+def _clean_profile(item):
+    if not isinstance(item, dict):
+        return None
+    return {k: item.get(k) for k in _PROFILE_FIELDS}
+
+
+def profiles(token):
+    status, payload = _call("GET", "/owner/v1/profiles", token, keep_detail=True)
+    if status != 200:
+        return status, payload
+    items = payload.get("items") if isinstance(payload, dict) else None
+    cleaned = [c for c in (_clean_profile(i) for i in (items if isinstance(items, list) else [])) if c]
+    return 200, {"items": cleaned}
+
+
+def create_profile(token, name, read, write):
+    """The service answers with the profile's token, shown once: it only passes through here."""
+    read, write = _zones(read), _zones(write)
+    if not _profile_name_ok(name) or read is None or write is None:
+        return 422, {"error": "invalid profile name or zones"}
+    status, payload = _call("POST", "/owner/v1/profiles", token, {"name": name, "read": read, "write": write}, keep_detail=True)
+    if status != 201:
+        return status, payload
+    created = payload if isinstance(payload, dict) else {}
+    if not isinstance(created.get("name"), str) or not isinstance(created.get("token"), str):
+        return 502, {"error": "agent-memory sent invalid data"}
+    return 201, {"name": created["name"], "token": created["token"]}
+
+
+def set_grants(token, name, read, write):
+    read, write = _zones(read), _zones(write)
+    if not _profile_name_ok(name) or read is None or write is None:
+        return 422, {"error": "invalid profile name or zones"}
+    status, payload = _call("PUT", f"/owner/v1/profiles/{name}/grants", token, {"read": read, "write": write}, keep_detail=True)
+    return (204, {}) if status in (200, 204) else (status, payload)
+
+
+def revoke_profile(token, name):
+    if not _profile_name_ok(name):
+        return 422, {"error": "invalid profile name"}
+    status, payload = _call("POST", f"/owner/v1/profiles/{name}/revoke", token, keep_detail=True)
+    return (204, {}) if status in (200, 204) else (status, payload)
