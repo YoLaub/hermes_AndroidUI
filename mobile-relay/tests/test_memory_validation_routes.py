@@ -171,3 +171,76 @@ def test_repeated_refusals_on_the_action_routes_lock_the_source_out(actions_upst
         assert attacker.get("/api/memory/actions", headers=OWNER).status_code == 401
     assert attacker.get("/api/memory/actions", headers=OWNER).status_code == 429
     assert len(actions_upstream.calls) == 10
+
+
+@pytest.fixture
+def profiles_upstream(monkeypatch):
+    calls = []
+    reply = {"any": (200, {"items": []})}
+
+    def make(name):
+        def fn(token, *args):
+            calls.append((name, token, *args))
+            return reply["any"]
+        return fn
+
+    for name in ("profiles", "create_profile", "set_grants", "revoke_profile"):
+        monkeypatch.setattr(server.memory_validations, name, make(name))
+    return type("Up", (), {"calls": calls, "reply": reply})
+
+
+def test_profiles_are_listed_with_the_token_passed_upstream(profiles_upstream):
+    r = client_from("203.0.113.30").get("/api/memory/profiles", headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"items": []})
+    assert profiles_upstream.calls == [("profiles", "tok-owner")]
+
+
+def test_a_profile_is_created_and_answered_201_with_its_one_time_token(profiles_upstream):
+    profiles_upstream.reply["any"] = (201, {"name": "gaston", "token": "one-time"})
+    r = client_from("203.0.113.31").post(
+        "/api/memory/profiles", json={"name": "gaston", "read": ["other"], "write": []}, headers=OWNER)
+    assert (r.status_code, r.json()) == (201, {"name": "gaston", "token": "one-time"})
+    assert profiles_upstream.calls == [("create_profile", "tok-owner", "gaston", ["other"], [])]
+
+
+def test_grants_and_revocation_are_answered_ok(profiles_upstream):
+    profiles_upstream.reply["any"] = (204, {})
+    c = client_from("203.0.113.32")
+    r = c.put("/api/memory/profiles/gaston/grants", json={"read": ["git"], "write": []}, headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"ok": True})
+    r = c.post("/api/memory/profiles/gaston/revoke", headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"ok": True})
+    assert profiles_upstream.calls == [
+        ("set_grants", "tok-owner", "gaston", ["git"], []), ("revoke_profile", "tok-owner", "gaston")]
+
+
+def test_profile_routes_without_the_owner_token_never_reach_the_service(profiles_upstream):
+    c = client_from("203.0.113.33")
+    assert c.get("/api/memory/profiles").status_code == 401
+    assert c.post("/api/memory/profiles", json={"name": "a"}).status_code == 401
+    assert c.put("/api/memory/profiles/a/grants", json={}).status_code == 401
+    assert c.post("/api/memory/profiles/a/revoke").status_code == 401
+    assert profiles_upstream.calls == []
+
+
+def test_a_body_that_is_not_an_object_is_refused_for_profiles(profiles_upstream):
+    c = client_from("203.0.113.34")
+    assert c.post("/api/memory/profiles", json=["x"], headers=OWNER).status_code == 422
+    assert c.put("/api/memory/profiles/a/grants", json=["x"], headers=OWNER).status_code == 422
+    assert profiles_upstream.calls == []
+
+
+def test_the_service_wording_of_a_403_reaches_the_app_and_does_not_lock_the_owner_out(profiles_upstream):
+    profiles_upstream.reply["any"] = (403, {"error": "refused by agent-memory", "detail": "editing grants is off"})
+    c = client_from("203.0.113.35")
+    for _ in range(15):
+        r = c.post("/api/memory/profiles/a/revoke", headers=OWNER)
+        assert (r.status_code, r.json()["detail"]) == (403, "editing grants is off")
+
+
+def test_repeated_401_on_profiles_lock_the_source_out(profiles_upstream):
+    profiles_upstream.reply["any"] = (401, {"error": "refused by agent-memory"})
+    attacker = client_from("203.0.113.36")
+    for _ in range(10):
+        assert attacker.get("/api/memory/profiles", headers=OWNER).status_code == 401
+    assert attacker.get("/api/memory/profiles", headers=OWNER).status_code == 429
