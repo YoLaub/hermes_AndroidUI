@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hermes.core.data.HermesRepository
 import com.example.hermes.core.model.*
+import com.example.hermes.features.profiles.profileErrorMessage
 import com.example.hermes.features.profiles.validationErrorMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,11 @@ data class ChatUiState(
     val isMemoryLoading: Boolean = false,
     val memoryValidations: List<MemoryValidation> = emptyList(),
     val memoryActions: List<MemoryAction> = emptyList(),
+    val memoryProfiles: List<MemoryProfile> = emptyList(),
+    val isProfilesLoading: Boolean = false,
+    val profilesError: String? = null,
+    /** Shown once, then dropped by [ChatViewModel.dismissCreatedProfileToken]. Never persisted or logged. */
+    val createdProfile: MemoryProfileCreated? = null,
     val isValidationsLoading: Boolean = false,
     val validationsError: String? = null,
     val hasMemoryOwnerToken: Boolean = false,
@@ -1004,6 +1010,56 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    // ── Memory profiles and their zone grants ──
+    fun loadMemoryProfiles() {
+        viewModelScope.launch {
+            val hasToken = !repository.memoryOwnerToken.first().isNullOrBlank()
+            _uiState.update { it.copy(hasMemoryOwnerToken = hasToken, profilesError = null) }
+            if (!hasToken) return@launch
+            _uiState.update { it.copy(isProfilesLoading = true) }
+            val res = repository.getMemoryProfiles()
+            _uiState.update {
+                if (res.isSuccess) it.copy(memoryProfiles = res.getOrThrow().items, isProfilesLoading = false)
+                else it.copy(isProfilesLoading = false, profilesError = profileErrorMessage(res.exceptionOrNull()!!))
+            }
+        }
+    }
+
+    private fun changeProfiles(call: suspend () -> Result<*>) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProfilesLoading = true, profilesError = null) }
+            val res = call()
+            if (res.isSuccess) loadMemoryProfiles()
+            else _uiState.update {
+                it.copy(isProfilesLoading = false, profilesError = profileErrorMessage(res.exceptionOrNull()!!))
+            }
+        }
+    }
+
+    fun setMemoryProfileGrants(name: String, read: List<String>, write: List<String>) =
+        changeProfiles { repository.setMemoryProfileGrants(name, read, write) }
+
+    fun revokeMemoryProfile(name: String) = changeProfiles { repository.revokeMemoryProfile(name) }
+
+    fun createMemoryProfile(name: String, read: List<String>, write: List<String>) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProfilesLoading = true, profilesError = null) }
+            val res = repository.createMemoryProfile(name, read, write)
+            if (res.isSuccess) {
+                _uiState.update { it.copy(createdProfile = res.getOrThrow()) }
+                loadMemoryProfiles()
+            } else {
+                _uiState.update {
+                    it.copy(isProfilesLoading = false, profilesError = profileErrorMessage(res.exceptionOrNull()!!))
+                }
+            }
+        }
+    }
+
+    fun dismissCreatedProfileToken() {
+        _uiState.update { it.copy(createdProfile = null) }
     }
 
     fun saveMemoryOwnerToken(token: String) {
