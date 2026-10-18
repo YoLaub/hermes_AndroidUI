@@ -564,6 +564,32 @@ def memory_profile_revoke(request: Request, name: str):
     return _profile_answer(source, status, payload)
 
 
+@app.get("/api/memory/mandates")
+def memory_mandates(request: Request):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.mandates(token)
+    return _profile_answer(source, status, payload)
+
+
+@app.post("/api/memory/mandates")
+def memory_mandate_create(request: Request, body: Dict[str, Any]):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.create_mandate(
+        token, body.get("profile"), body.get("label"), body.get("hosts", []), body.get("folders", []),
+        body.get("expires_at"))
+    return _profile_answer(source, status, payload)
+
+
+@app.post("/api/memory/mandates/{mandate_id}/revoke")
+def memory_mandate_revoke(request: Request, mandate_id: str):
+    source = client_ip(request)
+    token = _owner_token(request, source)
+    status, payload = memory_validations.revoke_mandate(token, mandate_id)
+    return _profile_answer(source, status, payload)
+
+
 @app.post("/api/pair/generate", response_model=PairingGenerateResponse)
 def generate_pairing_code(request: Request, req: PairingGenerateRequest):
     # Requirement 2: Authentifier /api/pair/generate

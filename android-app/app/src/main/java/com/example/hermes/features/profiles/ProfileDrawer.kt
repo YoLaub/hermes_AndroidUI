@@ -36,6 +36,7 @@ fun ProfileDrawerContent(
     onOpenOpenbao: () -> Unit = {},
     onOpenValidations: () -> Unit = {},
     onOpenMemoryProfiles: () -> Unit = {},
+    onOpenMandates: () -> Unit = {},
     onRestartGateway: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -357,6 +358,22 @@ fun ProfileDrawerContent(
                     Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Mémoire : profils et zones", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Mandates Button
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenMandates()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HermesPrimary)
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Mémoire : mandats", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 // Restart Gateway Button

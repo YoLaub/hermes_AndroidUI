@@ -6,6 +6,7 @@ stored, logged or echoed back. Everything coming from the service is data for di
 """
 import json
 import os
+from datetime import datetime
 import re
 import urllib.error
 import urllib.request
@@ -23,7 +24,9 @@ _FIELDS = ("event_id", "occurred_at", "zone", "origin", "status", "source", "pre
 _ACTION_FIELDS = ("id", "kind", "profile", "session_id", "label", "reason", "requested_at")
 _PROFILE_NAME = re.compile(r"[a-z0-9_-]{1,100}")
 ZONES = ("secrets", "finance", "health", "legal", "personal", "professional", "git", "other")
-_PROFILE_FIELDS = ("name", "state", "read", "write")
+_PROFILE_FIELDS = ("name", "state", "read", "write", "gate_level")
+_MANDATE_FIELDS = ("id", "profile", "label", "hosts", "folders", "created_at", "expires_at", "state")
+_MANDATE_ID = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 _PASSED_THROUGH = (401, 403, 404, 409, 422)
 
 
@@ -202,4 +205,59 @@ def revoke_profile(token, name):
     if not _profile_name_ok(name):
         return 422, {"error": "invalid profile name"}
     status, payload = _call("POST", f"/owner/v1/profiles/{name}/revoke", token, keep_detail=True)
+    return (204, {}) if status in (200, 204) else (status, payload)
+
+
+def _clean_mandate(item):
+    if not isinstance(item, dict):
+        return None
+    cleaned = {k: item.get(k) for k in _MANDATE_FIELDS}
+    for key in ("hosts", "folders"):
+        cleaned[key] = [v for v in cleaned[key] if isinstance(v, str)] if isinstance(cleaned[key], list) else []
+    return cleaned
+
+
+def mandates(token):
+    status, payload = _call("GET", "/owner/v1/mandates", token, keep_detail=True)
+    if status != 200:
+        return status, payload
+    items = payload.get("items") if isinstance(payload, dict) else None
+    cleaned = [c for c in (_clean_mandate(i) for i in (items if isinstance(items, list) else [])) if c]
+    return 200, {"items": cleaned}
+
+
+def _strings(value):
+    return isinstance(value, list) and all(isinstance(v, str) for v in value)
+
+
+def _aware_instant(value):
+    """True for an ISO 8601 instant that carries its time zone; the service decides whether it is acceptable."""
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
+
+
+def create_mandate(token, profile, label, hosts, folders, expires_at):
+    """What the owner entrusts to one profile for one task. The service judges the perimeter and says why it refuses."""
+    if not (_profile_name_ok(profile) and isinstance(label, str) and _strings(hosts) and _strings(folders)
+            and _aware_instant(expires_at)):
+        return 422, {"error": "invalid mandate"}
+    body = {"profile": profile, "label": label, "hosts": hosts, "folders": folders, "expires_at": expires_at}
+    status, payload = _call("POST", "/owner/v1/mandates", token, body, keep_detail=True)
+    if status != 201:
+        return status, payload
+    created = payload.get("id") if isinstance(payload, dict) else None
+    if not isinstance(created, str):
+        return 502, {"error": "agent-memory sent invalid data"}
+    return 201, {"id": created}
+
+
+def revoke_mandate(token, mandate_id):
+    if not isinstance(mandate_id, str) or not _MANDATE_ID.fullmatch(mandate_id):
+        return 422, {"error": "invalid mandate id"}
+    status, payload = _call("POST", f"/owner/v1/mandates/{mandate_id}/revoke", token, keep_detail=True)
     return (204, {}) if status in (200, 204) else (status, payload)

@@ -244,3 +244,58 @@ def test_repeated_401_on_profiles_lock_the_source_out(profiles_upstream):
     for _ in range(10):
         assert attacker.get("/api/memory/profiles", headers=OWNER).status_code == 401
     assert attacker.get("/api/memory/profiles", headers=OWNER).status_code == 429
+
+
+@pytest.fixture
+def mandates_upstream(monkeypatch):
+    calls = []
+    reply = {"any": (200, {"items": []})}
+
+    def make(name):
+        def fn(token, *args, **kwargs):
+            calls.append((name, token, *args, *kwargs.values()))
+            return reply["any"]
+        return fn
+
+    for name in ("mandates", "create_mandate", "revoke_mandate"):
+        monkeypatch.setattr(server.memory_validations, name, make(name))
+    return type("Up", (), {"calls": calls, "reply": reply})
+
+
+def test_mandates_are_listed_with_the_token_passed_upstream(mandates_upstream):
+    r = client_from("203.0.113.40").get("/api/memory/mandates", headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"items": []})
+    assert mandates_upstream.calls == [("mandates", "tok-owner")]
+
+
+def test_a_mandate_is_created_and_answered_201(mandates_upstream):
+    mandates_upstream.reply["any"] = (201, {"id": "m-1"})
+    body = {"profile": "gaston", "label": "Trip", "hosts": ["a.org"], "folders": [],
+            "expires_at": "2026-10-20T10:00:00+00:00"}
+    r = client_from("203.0.113.41").post("/api/memory/mandates", json=body, headers=OWNER)
+    assert (r.status_code, r.json()) == (201, {"id": "m-1"})
+    assert mandates_upstream.calls == [("create_mandate", "tok-owner", "gaston", "Trip", ["a.org"], [],
+                                        "2026-10-20T10:00:00+00:00")]
+
+
+def test_a_mandate_is_revoked_and_answered_ok(mandates_upstream):
+    mandates_upstream.reply["any"] = (204, {})
+    r = client_from("203.0.113.42").post("/api/memory/mandates/m-1/revoke", headers=OWNER)
+    assert (r.status_code, r.json()) == (200, {"ok": True})
+    assert mandates_upstream.calls == [("revoke_mandate", "tok-owner", "m-1")]
+
+
+def test_mandate_routes_without_the_owner_token_never_reach_the_service(mandates_upstream):
+    c = client_from("203.0.113.43")
+    assert c.get("/api/memory/mandates").status_code == 401
+    assert c.post("/api/memory/mandates", json={}).status_code == 401
+    assert c.post("/api/memory/mandates/m-1/revoke").status_code == 401
+    assert mandates_upstream.calls == []
+
+
+def test_a_refused_mandate_keeps_the_service_wording_and_does_not_lock_the_owner_out(mandates_upstream):
+    mandates_upstream.reply["any"] = (422, {"error": "refused by agent-memory", "detail": "too many active mandates"})
+    c = client_from("203.0.113.44")
+    for _ in range(15):
+        r = c.post("/api/memory/mandates", json={"profile": "a"}, headers=OWNER)
+        assert (r.status_code, r.json()["detail"]) == (422, "too many active mandates")

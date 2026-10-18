@@ -188,6 +188,47 @@ class HermesApiClient(
         executeRequest(request, relayClient)
     }
 
+    suspend fun getMemoryMandates(relayUrl: String, ownerToken: String): Result<MemoryMandatesResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/mandates")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .get()
+            .build()
+        executeRequest(request, relayClient)
+    }
+
+    suspend fun createMemoryMandate(
+        relayUrl: String,
+        ownerToken: String,
+        profile: String,
+        label: String,
+        hosts: List<String>,
+        folders: List<String>,
+        expiresAt: String
+    ): Result<MemoryMandateCreated> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(MemoryMandateCreateRequest(profile, label, hosts, folders, expiresAt))
+            .toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/mandates")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .post(body)
+            .build()
+        executeRequest(request, relayClient)
+    }
+
+    suspend fun revokeMemoryMandate(
+        relayUrl: String,
+        ownerToken: String,
+        mandateId: String
+    ): Result<MemoryValidationDecisionResponse> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$relayUrl/api/memory/mandates/${java.net.URLEncoder.encode(mandateId, "UTF-8")}/revoke")
+            .header(MEMORY_OWNER_TOKEN_HEADER, ownerToken)
+            .post("".toRequestBody(jsonMediaType))
+            .build()
+        executeRequest(request, relayClient)
+    }
+
     suspend fun getMemoryActions(relayUrl: String, ownerToken: String): Result<MemoryActionsResponse> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("$relayUrl/api/memory/actions")
