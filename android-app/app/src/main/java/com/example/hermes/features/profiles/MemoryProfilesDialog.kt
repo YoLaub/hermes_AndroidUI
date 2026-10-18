@@ -165,6 +165,14 @@ private fun ProfileCard(
                 Text(profile.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                 Text(if (revoked) "révoqué" else "actif", fontSize = 12.sp)
             }
+            // Read-only: only the administrator's command can change the level.
+            profile.gateLevel?.let { level ->
+                AssistChip(
+                    onClick = {},
+                    enabled = false,
+                    label = { Text("Niveau de garde : ${if (level == "high") "élevé" else "normal"} (terminal)", fontSize = 11.sp) }
+                )
+            }
             if (revoked) {
                 Text(
                     "Lecture : ${profile.read.joinToString().ifEmpty { "aucune" }} • Écriture : ${profile.write.joinToString().ifEmpty { "aucune" }}",

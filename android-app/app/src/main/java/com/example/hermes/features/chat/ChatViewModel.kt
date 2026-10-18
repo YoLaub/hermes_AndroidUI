@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hermes.core.data.HermesRepository
 import com.example.hermes.core.model.*
+import com.example.hermes.features.profiles.mandateErrorMessage
 import com.example.hermes.features.profiles.profileErrorMessage
 import com.example.hermes.features.profiles.validationErrorMessage
 import kotlinx.coroutines.Job
@@ -44,6 +45,9 @@ data class ChatUiState(
     val profilesError: String? = null,
     /** Shown once, then dropped by [ChatViewModel.dismissCreatedProfileToken]. Never persisted or logged. */
     val createdProfile: MemoryProfileCreated? = null,
+    val memoryMandates: List<MemoryMandate> = emptyList(),
+    val isMandatesLoading: Boolean = false,
+    val mandatesError: String? = null,
     val isValidationsLoading: Boolean = false,
     val validationsError: String? = null,
     val hasMemoryOwnerToken: Boolean = false,
@@ -1060,6 +1064,57 @@ class ChatViewModel(
 
     fun dismissCreatedProfileToken() {
         _uiState.update { it.copy(createdProfile = null) }
+    }
+
+    // ── Mandates: what the owner entrusts to one profile for one task ──
+    fun loadMemoryMandates() {
+        viewModelScope.launch {
+            val hasToken = !repository.memoryOwnerToken.first().isNullOrBlank()
+            _uiState.update { it.copy(hasMemoryOwnerToken = hasToken, mandatesError = null) }
+            if (!hasToken) return@launch
+            _uiState.update { it.copy(isMandatesLoading = true) }
+            // The profiles feed the form's choice of profile.
+            val profiles = repository.getMemoryProfiles()
+            val mandates = repository.getMemoryMandates()
+            _uiState.update {
+                val failure = (mandates.exceptionOrNull() ?: profiles.exceptionOrNull())
+                it.copy(
+                    memoryProfiles = profiles.getOrNull()?.items ?: it.memoryProfiles,
+                    memoryMandates = mandates.getOrNull()?.items ?: it.memoryMandates,
+                    isMandatesLoading = false,
+                    mandatesError = failure?.let(::mandateErrorMessage)
+                )
+            }
+        }
+    }
+
+    /** [onDone] runs only when the server accepted the mandate, so the form stays open with the server's reason otherwise. */
+    fun createMemoryMandate(
+        profile: String, label: String, hosts: List<String>, folders: List<String>, expiresAt: String, onDone: () -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMandatesLoading = true, mandatesError = null) }
+            val res = repository.createMemoryMandate(profile, label.trim(), hosts, folders, expiresAt)
+            if (res.isSuccess) {
+                onDone()
+                loadMemoryMandates()
+            } else {
+                _uiState.update {
+                    it.copy(isMandatesLoading = false, mandatesError = mandateErrorMessage(res.exceptionOrNull()!!))
+                }
+            }
+        }
+    }
+
+    fun revokeMemoryMandate(id: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMandatesLoading = true, mandatesError = null) }
+            val res = repository.revokeMemoryMandate(id)
+            if (res.isSuccess) loadMemoryMandates()
+            else _uiState.update {
+                it.copy(isMandatesLoading = false, mandatesError = mandateErrorMessage(res.exceptionOrNull()!!))
+            }
+        }
     }
 
     fun saveMemoryOwnerToken(token: String) {

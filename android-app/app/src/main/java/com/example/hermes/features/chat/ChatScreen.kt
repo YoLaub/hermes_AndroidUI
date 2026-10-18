@@ -52,6 +52,7 @@ fun ChatScreen(
     var showMemoryDialog by remember { mutableStateOf(false) }
     var showValidationsDialog by remember { mutableStateOf(false) }
     var showMemoryProfilesDialog by remember { mutableStateOf(false) }
+    var showMandatesDialog by remember { mutableStateOf(false) }
     var showWorkspaceDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -560,6 +561,11 @@ fun ChatScreen(
                         viewModel.loadMemoryProfiles()
                         showMemoryProfilesDialog = true
                     },
+                    onOpenMandates = {
+                        showProfilesSheet = false
+                        viewModel.loadMemoryMandates()
+                        showMandatesDialog = true
+                    },
                     onOpenValidations = {
                         showProfilesSheet = false
                         viewModel.loadMemoryValidations()
@@ -740,6 +746,22 @@ fun ChatScreen(
                     viewModel.dismissCreatedProfileToken()
                     showMemoryProfilesDialog = false
                 }
+            )
+        }
+
+        if (showMandatesDialog) {
+            MemoryMandatesDialog(
+                mandates = state.memoryMandates,
+                profiles = state.memoryProfiles,
+                isLoading = state.isMandatesLoading,
+                error = state.mandatesError,
+                hasToken = state.hasMemoryOwnerToken,
+                onRefresh = { viewModel.loadMemoryMandates() },
+                onCreate = { profile, label, hosts, folders, expiresAt, onDone ->
+                    viewModel.createMemoryMandate(profile, label, hosts, folders, expiresAt, onDone)
+                },
+                onRevoke = { viewModel.revokeMemoryMandate(it) },
+                onDismiss = { showMandatesDialog = false }
             )
         }
 

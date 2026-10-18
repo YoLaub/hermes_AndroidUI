@@ -456,6 +456,17 @@ class HermesRepository(
     suspend fun revokeMemoryProfile(name: String): Result<MemoryValidationDecisionResponse> =
         withOwnerAndRelay { relay, token -> apiClient.revokeMemoryProfile(relay, token, name) }
 
+    suspend fun getMemoryMandates(): Result<MemoryMandatesResponse> =
+        withOwnerAndRelay { relay, token -> apiClient.getMemoryMandates(relay, token) }
+
+    suspend fun createMemoryMandate(
+        profile: String, label: String, hosts: List<String>, folders: List<String>, expiresAt: String
+    ): Result<MemoryMandateCreated> =
+        withOwnerAndRelay { relay, token -> apiClient.createMemoryMandate(relay, token, profile, label, hosts, folders, expiresAt) }
+
+    suspend fun revokeMemoryMandate(id: String): Result<MemoryValidationDecisionResponse> =
+        withOwnerAndRelay { relay, token -> apiClient.revokeMemoryMandate(relay, token, id) }
+
     // ── OpenBao Secrets Management ──
 
     val openbaoUrl: Flow<String> = preferences.openbaoUrl
