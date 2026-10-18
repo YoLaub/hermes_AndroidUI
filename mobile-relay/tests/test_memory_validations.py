@@ -190,7 +190,7 @@ def test_a_malformed_token_never_reaches_the_service_for_actions(upstream):
     assert upstream.seen == []
 
 
-PROFILE = {"name": "gaston", "state": "active", "read": ["other", "git"], "write": ["other"]}
+PROFILE = {"name": "gaston", "state": "active", "read": ["other", "git"], "write": ["other"], "gate_level": "normal"}
 
 
 def test_profiles_are_relayed_with_only_the_known_fields(upstream):
@@ -272,4 +272,65 @@ def test_the_older_calls_still_hide_the_detail(upstream):
 def test_a_malformed_token_never_reaches_the_service_for_profiles(upstream):
     assert mv.profiles("a\r\nX: 1")[0] == 401
     assert mv.create_profile("", "gaston", [], [])[0] == 401
+    assert upstream.seen == []
+
+
+MANDATE = {
+    "id": "m-1", "profile": "gaston", "label": "Trip research", "hosts": ["site.org", "*.site.org"],
+    "folders": ["/home/gaston/notes"], "created_at": "2026-10-19T10:00:00+00:00",
+    "expires_at": "2026-10-20T10:00:00+00:00", "state": "active",
+}
+
+
+def test_the_gate_level_of_a_profile_is_relayed_read_only(upstream):
+    upstream.reply = (200, {"items": [dict(PROFILE, gate_level="high", token="never")]})
+    _, payload = mv.profiles("tok")
+    assert payload == {"items": [dict(PROFILE, gate_level="high")]}
+
+
+def test_mandates_are_relayed_with_only_the_known_fields(upstream):
+    upstream.reply = (200, {"items": [dict(MANDATE, internal="x")]})
+    status, payload = mv.mandates("tok-owner")
+    assert (status, payload) == (200, {"items": [MANDATE]})
+    method, path, auth, _ = upstream.seen[0]
+    assert (method, path, auth) == ("GET", "/owner/v1/mandates", "Bearer tok-owner")
+
+
+def test_a_mandate_is_created_and_its_id_returned(upstream):
+    upstream.reply = (201, {"id": "m-9"})
+    fields = {k: MANDATE[k] for k in ("profile", "label", "hosts", "folders", "expires_at")}
+    status, payload = mv.create_mandate("tok-owner", **fields)
+    assert (status, payload) == (201, {"id": "m-9"})
+    method, path, auth, body = upstream.seen[0]
+    assert (method, path, auth) == ("POST", "/owner/v1/mandates", "Bearer tok-owner")
+    assert json.loads(body) == fields
+
+
+def test_the_wording_of_a_refused_mandate_is_kept(upstream):
+    upstream.reply = (422, {"detail": "'/root/.ssh' is a sensitive place: it cannot be entrusted"})
+    status, payload = mv.create_mandate("tok", "gaston", "x", [], ["/root/.ssh"], "2026-10-20T10:00:00+00:00")
+    assert status == 422 and "sensitive place" in payload["detail"]
+
+
+@pytest.mark.parametrize("bad", [
+    dict(profile="../x"), dict(label=5), dict(hosts="site.org"), dict(folders=[1]), dict(hosts=[None]),
+    dict(expires_at=None), dict(expires_at="tomorrow"),
+])
+def test_a_malformed_mandate_is_refused_before_calling_the_service(upstream, bad):
+    fields = dict(profile="gaston", label="x", hosts=["a.org"], folders=[], expires_at="2026-10-20T10:00:00+00:00")
+    fields.update(bad)
+    assert mv.create_mandate("tok", **fields)[0] == 422
+    assert upstream.seen == []
+
+
+def test_a_mandate_is_revoked(upstream):
+    upstream.reply = (204, None)
+    assert mv.revoke_mandate("tok-owner", "m-1") == (204, {})
+    method, path, auth, _ = upstream.seen[0]
+    assert (method, path, auth) == ("POST", "/owner/v1/mandates/m-1/revoke", "Bearer tok-owner")
+
+
+@pytest.mark.parametrize("mandate_id", ["", "../admin", "a/b", "x" * 200])
+def test_a_mandate_id_that_could_change_the_path_is_refused(upstream, mandate_id):
+    assert mv.revoke_mandate("tok", mandate_id)[0] == 422
     assert upstream.seen == []
