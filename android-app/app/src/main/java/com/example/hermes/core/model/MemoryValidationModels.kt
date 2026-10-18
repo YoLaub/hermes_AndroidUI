@@ -48,7 +48,9 @@ data class MemoryProfile(
     val name: String,
     val state: String = "active",
     val read: List<String> = emptyList(),
-    val write: List<String> = emptyList()
+    val write: List<String> = emptyList(),
+    /** "high" or "normal"; read-only here, only the administrator's command can change it. */
+    @SerialName("gate_level") val gateLevel: String? = null
 )
 
 @Serializable
@@ -65,3 +67,34 @@ data class MemoryProfileGrantsRequest(val read: List<String>, val write: List<St
 data class MemoryProfileCreated(val name: String, val token: String) {
     override fun toString(): String = "MemoryProfileCreated(name=$name, token=***)"
 }
+
+/**
+ * What the owner entrusted to one profile for one task, until [expiresAt]. [label] is the owner's own text. [state]
+ * is "active", "expired" or "revoked", as the server judged it.
+ */
+@Serializable
+data class MemoryMandate(
+    val id: String,
+    val profile: String = "",
+    val label: String = "",
+    val hosts: List<String> = emptyList(),
+    val folders: List<String> = emptyList(),
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    val state: String = "active"
+)
+
+@Serializable
+data class MemoryMandatesResponse(val items: List<MemoryMandate> = emptyList())
+
+@Serializable
+data class MemoryMandateCreateRequest(
+    val profile: String,
+    val label: String,
+    val hosts: List<String>,
+    val folders: List<String>,
+    @SerialName("expires_at") val expiresAt: String
+)
+
+@Serializable
+data class MemoryMandateCreated(val id: String)
