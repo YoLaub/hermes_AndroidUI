@@ -35,7 +35,6 @@ fun WorkspaceHubScreen(
     notesViewModel: NotesViewModel,
     calendarViewModel: CalendarViewModel,
     forumViewModel: ForumViewModel,
-    onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(WorkspaceTab.NOTES) }
@@ -74,51 +73,10 @@ fun WorkspaceHubScreen(
                         }
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour",
-                            tint = HermesTextPrimary
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = OnyxDarkSurface
                 )
             )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = OnyxDarkSurface,
-                tonalElevation = 8.dp
-            ) {
-                WorkspaceTab.entries.forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { selectedTab = tab },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.title,
-                                tint = if (isSelected) HermesPrimary else HermesTextMuted
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = tab.title,
-                                fontSize = 12.sp,
-                                color = if (isSelected) HermesPrimary else HermesTextMuted,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = HermesPrimaryContainer
-                        )
-                    )
-                }
-            }
         },
         containerColor = OnyxDarkBackground
     ) { innerPadding ->
@@ -127,15 +85,34 @@ fun WorkspaceHubScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTab) {
-                WorkspaceTab.NOTES -> {
-                    NotesScreen(viewModel = notesViewModel)
+            Column(Modifier.fillMaxSize()) {
+                // Sections as top tabs: the app's bottom bar now holds the five destinations.
+                PrimaryTabRow(
+                    selectedTabIndex = selectedTab.ordinal,
+                    containerColor = OnyxDarkSurface,
+                    contentColor = HermesPrimary
+                ) {
+                    WorkspaceTab.entries.forEach { tab ->
+                        Tab(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            text = { Text(tab.title, style = MaterialTheme.typography.labelLarge) },
+                            icon = { Icon(tab.icon, contentDescription = null) },
+                            selectedContentColor = HermesPrimary,
+                            unselectedContentColor = HermesTextSecondary
+                        )
+                    }
                 }
-                WorkspaceTab.CALENDAR -> {
-                    CalendarScreen(viewModel = calendarViewModel)
-                }
-                WorkspaceTab.FORUM -> {
-                    ForumScreen(viewModel = forumViewModel)
+                when (selectedTab) {
+                    WorkspaceTab.NOTES -> {
+                        NotesScreen(viewModel = notesViewModel)
+                    }
+                    WorkspaceTab.CALENDAR -> {
+                        CalendarScreen(viewModel = calendarViewModel)
+                    }
+                    WorkspaceTab.FORUM -> {
+                        ForumScreen(viewModel = forumViewModel)
+                    }
                 }
             }
         }

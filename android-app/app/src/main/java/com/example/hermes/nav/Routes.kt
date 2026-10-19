@@ -1,0 +1,22 @@
+package com.example.hermes.nav
+
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+
+// Tab roots
+@Serializable data object ChatRoute : NavKey
+@Serializable data object InboxRoute : NavKey
+@Serializable data object SpaceRoute : NavKey
+@Serializable data object ControlRoute : NavKey
+@Serializable data object AgentRoute : NavKey
+
+// Pushed screens
+@Serializable data object KanbanRoute : NavKey
+
+fun rootOf(tab: Tab): NavKey = when (tab) {
+    Tab.Chat -> ChatRoute
+    Tab.Inbox -> InboxRoute
+    Tab.Space -> SpaceRoute
+    Tab.Control -> ControlRoute
+    Tab.Agent -> AgentRoute
+}

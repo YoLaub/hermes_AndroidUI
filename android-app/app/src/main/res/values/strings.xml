@@ -26,4 +26,25 @@
 
     <!-- Read-only chip -->
     <string name="terminal_only">Terminal uniquement</string>
+    <!-- Navigation -->
+    <string name="nav_chat">Chat</string>
+    <string name="nav_inbox">À traiter</string>
+    <string name="nav_space">Espace</string>
+    <string name="nav_control">Contrôle</string>
+    <string name="nav_control_a11y">Contrôle du téléphone</string>
+    <string name="nav_agent">Agent</string>
+    <plurals name="nav_inbox_a11y">
+        <item quantity="one">À traiter, %d élément en attente</item>
+        <item quantity="other">À traiter, %d éléments en attente</item>
+    </plurals>
+    <string name="nav_control_live_a11y">Contrôle du téléphone, session en cours</string>
+
+    <!-- Provisional tab contents (until the dedicated screens land) -->
+    <string name="inbox_memory_and_actions">Mémoire à valider et actions</string>
+    <string name="inbox_memory_and_actions_sub">Éléments de mémoire et actions de la garde en attente</string>
+    <string name="agent_change_profile">Changer de profil</string>
+    <string name="agent_profile_tools">Outils du profil</string>
+    <string name="agent_profile_tools_sub">Compétences, mémoire, dossiers, variables, garde, passerelle</string>
+    <string name="agent_settings">Réglages</string>
+    <string name="agent_settings_sub">Serveur, compétences, mémoire, espaces de travail</string>
 </resources>
