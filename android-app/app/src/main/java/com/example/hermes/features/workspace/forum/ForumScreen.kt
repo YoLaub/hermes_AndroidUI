@@ -81,8 +81,7 @@ fun ForumScreen(
 
                 // New Room Button
                 IconButton(
-                    onClick = { viewModel.openCreateRoom() },
-                    modifier = Modifier.size(32.dp)
+                    onClick = { viewModel.openCreateRoom() }
                 ) {
                     Icon(
                         imageVector = Icons.Default.AddCircleOutline,
@@ -94,8 +93,7 @@ fun ForumScreen(
 
                 // A2A External Agents Button
                 IconButton(
-                    onClick = { viewModel.openA2AManager() },
-                    modifier = Modifier.size(32.dp)
+                    onClick = { viewModel.openA2AManager() }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Language,

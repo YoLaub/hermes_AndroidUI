@@ -279,8 +279,7 @@ fun A2AAgentManagerDialog(
                                     }
 
                                     IconButton(
-                                        onClick = { onDeleteAgent(agent.id) },
-                                        modifier = Modifier.size(28.dp)
+                                        onClick = { onDeleteAgent(agent.id) }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.DeleteOutline,

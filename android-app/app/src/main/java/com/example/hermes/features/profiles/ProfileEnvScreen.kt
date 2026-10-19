@@ -357,8 +357,7 @@ fun ProfileEnvScreen(
                                                         editingVarKey = entry.key
                                                         editingVarValue = entry.value
                                                         showAddVarDialog = true
-                                                    },
-                                                    modifier = Modifier.size(32.dp)
+                                                    }
                                                 ) {
                                                     Icon(
                                                         Icons.Default.Edit,
@@ -368,8 +367,7 @@ fun ProfileEnvScreen(
                                                     )
                                                 }
                                                 IconButton(
-                                                    onClick = { pendingDelete = PendingEnvDelete(entry.key, isProvider = false) },
-                                                    modifier = Modifier.size(32.dp)
+                                                    onClick = { pendingDelete = PendingEnvDelete(entry.key, isProvider = false) }
                                                 ) {
                                                     Icon(
                                                         Icons.Default.DeleteOutline,
@@ -456,8 +454,7 @@ fun ProfileEnvScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (provider.hasKey) {
                                                 IconButton(
-                                                    onClick = { pendingDelete = PendingEnvDelete(provider.id, isProvider = true, label = provider.displayName.ifBlank { provider.id }) },
-                                                    modifier = Modifier.size(32.dp)
+                                                    onClick = { pendingDelete = PendingEnvDelete(provider.id, isProvider = true, label = provider.displayName.ifBlank { provider.id }) }
                                                 ) {
                                                     Icon(
                                                         Icons.Default.DeleteOutline,

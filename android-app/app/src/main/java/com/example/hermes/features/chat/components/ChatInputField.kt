@@ -174,8 +174,7 @@ fun ChatInputField(
                             label = { Text(att.filename, maxLines = 1) },
                             trailingIcon = {
                                 IconButton(
-                                    onClick = { onRemoveAttachment(att) },
-                                    modifier = Modifier.size(16.dp)
+                                    onClick = { onRemoveAttachment(att) }
                                 ) {
                                     Icon(Icons.Default.Close, contentDescription = "Remove")
                                 }
@@ -193,8 +192,7 @@ fun ChatInputField(
                 // Attach button
                 IconButton(
                     onClick = onAttachClicked,
-                    enabled = !isStreaming,
-                    modifier = Modifier.size(44.dp)
+                    enabled = !isStreaming
                 ) {
                     Icon(
                         imageVector = Icons.Default.AttachFile,

@@ -108,8 +108,7 @@ fun SessionsDrawerContent(
                             onClick = {
                                 searchQuery = ""
                                 onClearSearch()
-                            },
-                            modifier = Modifier.size(24.dp)
+                            }
                         ) {
                             Icon(Icons.Default.Close, contentDescription = "Effacer", tint = HermesTextMuted, modifier = Modifier.size(16.dp))
                         }
@@ -163,7 +162,6 @@ fun SessionsDrawerContent(
                 FilledTonalIconButton(
                     onClick = onRepairSessions,
                     enabled = !isRepairingSessions,
-                    modifier = Modifier.size(32.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = OnyxDarkSurfaceVariant
                     )
@@ -312,8 +310,7 @@ fun SessionsDrawerContent(
                                 }
 
                                 IconButton(
-                                    onClick = { onDeleteSession(session.sessionId) },
-                                    modifier = Modifier.size(24.dp)
+                                    onClick = { onDeleteSession(session.sessionId) }
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,

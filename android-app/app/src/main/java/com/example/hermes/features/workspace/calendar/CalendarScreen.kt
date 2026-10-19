@@ -86,8 +86,7 @@ fun CalendarScreen(
 
                 // Rights & Permissions Button
                 IconButton(
-                    onClick = { viewModel.openPermissionSheet() },
-                    modifier = Modifier.size(32.dp)
+                    onClick = { viewModel.openPermissionSheet() }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Security,

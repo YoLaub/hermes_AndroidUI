@@ -193,8 +193,7 @@ fun EventCard(
 
                 // Delete Icon
                 IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(24.dp)
+                    onClick = onDelete
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,

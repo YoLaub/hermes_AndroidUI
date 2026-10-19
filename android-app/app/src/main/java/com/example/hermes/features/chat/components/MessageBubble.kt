@@ -155,8 +155,7 @@ fun MessageBubble(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(displayContent))
                                     isCopied = true
-                                },
-                                modifier = Modifier.size(24.dp)
+                                }
                             ) {
                                 Icon(
                                     imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,

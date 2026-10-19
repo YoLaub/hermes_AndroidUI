@@ -87,8 +87,7 @@ fun MarkdownText(
                                     fontFamily = FontFamily.Monospace
                                 )
                                 IconButton(
-                                    onClick = { clipboardManager.setText(AnnotatedString(block.code)) },
-                                    modifier = Modifier.size(24.dp)
+                                    onClick = { clipboardManager.setText(AnnotatedString(block.code)) }
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
