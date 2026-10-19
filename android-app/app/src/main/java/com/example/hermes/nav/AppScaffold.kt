@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -112,7 +113,15 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
             }
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()).consumeWindowInsets(padding)) {
+        // imePadding lifts the screens above the keyboard; without it Android pans the whole window
+        // and the top bar leaves the screen.
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(bottom = padding.calculateBottomPadding())
+                .consumeWindowInsets(padding)
+                .imePadding()
+        ) {
             // Above every tab while the agent controls the phone; it takes the status bar over.
             val session = control.activeSession
             if (session != null) {
