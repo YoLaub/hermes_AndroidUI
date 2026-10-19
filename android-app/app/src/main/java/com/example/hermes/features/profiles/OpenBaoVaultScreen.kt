@@ -41,6 +41,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.OpenBaoHealth
 import com.example.hermes.core.model.OpenBaoSecretItem
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
+import com.example.hermes.core.data.HermesPreferences.Companion.DEFAULT_OPENBAO_MOUNT
+import com.example.hermes.core.data.HermesPreferences.Companion.DEFAULT_OPENBAO_URL
 
 private val SUGGESTED_SECRET_KEYS = listOf(
     "CRM_API_KEY",
@@ -125,7 +129,7 @@ fun OpenBaoVaultScreen(
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Retour",
+                                contentDescription = stringResource(R.string.action_back),
                                 tint = HermesTextPrimary
                             )
                         }
@@ -145,12 +149,12 @@ fun OpenBaoVaultScreen(
                         }
                         Column {
                             Text(
-                                text = "Coffre OpenBao",
+                                text = stringResource(R.string.settings_openbao),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "${openbaoMount.ifBlank { "hermes" }}/${activeProfile.lowercase()}/runtime",
+                                text = stringResource(R.string.openbao_runtime_path, openbaoMount.ifBlank { DEFAULT_OPENBAO_MOUNT }, activeProfile.lowercase()),
                                 style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
                                 color = HermesSecondary
                             )
@@ -167,7 +171,7 @@ fun OpenBaoVaultScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = "Actualiser",
+                                contentDescription = stringResource(R.string.action_refresh),
                                 tint = HermesTextSecondary
                             )
                         }
@@ -246,7 +250,7 @@ fun OpenBaoVaultScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Web UI", style = MaterialTheme.typography.labelSmall, color = HermesPrimary)
+                                Text(stringResource(R.string.openbao_web_ui), style = MaterialTheme.typography.labelSmall, color = HermesPrimary)
                             }
                         }
                     }
@@ -274,7 +278,7 @@ fun OpenBaoVaultScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "Les agents chargent leurs secrets au démarrage. Après ajout ou modification, redémarrez le conteneur du profil (sans toucher à OpenBao).",
+                                text = stringResource(R.string.openbao_les_agents_chargent_leurs_secrets),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextPrimary,
                                 modifier = Modifier.weight(1f)
@@ -297,11 +301,11 @@ fun OpenBaoVaultScreen(
                                 if (isRestartingGateway) {
                                     CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = HermesPrimary)
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Redémarrage en cours...", fontSize = 12.sp)
+                                    Text(stringResource(R.string.openbao_redemarrage_en_cours), fontSize = 12.sp)
                                 } else {
                                     Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(15.dp), tint = HermesPrimary)
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Redémarrer la passerelle (${activeProfile.replaceFirstChar { it.uppercase() }})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(stringResource(R.string.openbao_redemarrer_la_passerelle, activeProfile.replaceFirstChar { it.uppercase() }), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -336,7 +340,7 @@ fun OpenBaoVaultScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    text = "Connexion OpenBao",
+                                    text = stringResource(R.string.openbao_connexion_openbao),
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                                     color = HermesTextPrimary
                                 )
@@ -358,8 +362,8 @@ fun OpenBaoVaultScreen(
                                 OutlinedTextField(
                                     value = configUrlInput,
                                     onValueChange = { configUrlInput = it },
-                                    label = { Text("URL du serveur OpenBao") },
-                                    placeholder = { Text("https://hermes-bao.john-world.store") },
+                                    label = { Text(stringResource(R.string.openbao_url_du_serveur_openbao)) },
+                                    placeholder = { Text(DEFAULT_OPENBAO_URL) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -371,11 +375,11 @@ fun OpenBaoVaultScreen(
                                 OutlinedTextField(
                                     value = configTokenInput,
                                     onValueChange = { configTokenInput = it },
-                                    label = { Text("Token utilisateur dédié (droits restreints)") },
-                                    placeholder = { Text("hvs.xxxxxxxx (Ne pas utiliser de Root Token)") },
+                                    label = { Text(stringResource(R.string.openbao_token_utilisateur_dedie_droits_restreints)) },
+                                    placeholder = { Text(stringResource(R.string.openbao_hvs_xxxxxxxx_ne_pas_utiliser)) },
                                     supportingText = {
                                         Text(
-                                            "Utilisez un token utilisateur dédié avec accès limité à ${configMountInput.ifBlank { "hermes" }}/data/${activeProfile.lowercase()}/runtime.",
+                                            stringResource(R.string.openbao_token_scope_hint, configMountInput.ifBlank { DEFAULT_OPENBAO_MOUNT }, activeProfile.lowercase()),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = HermesTextMuted
                                         )
@@ -401,8 +405,8 @@ fun OpenBaoVaultScreen(
                                 OutlinedTextField(
                                     value = configMountInput,
                                     onValueChange = { configMountInput = it },
-                                    label = { Text("Point de montage KV v2") },
-                                    placeholder = { Text("hermes") },
+                                    label = { Text(stringResource(R.string.openbao_point_de_montage_kv_v2)) },
+                                    placeholder = { Text(DEFAULT_OPENBAO_MOUNT) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -429,7 +433,7 @@ fun OpenBaoVaultScreen(
                                         colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("Enregistrer & Tester", color = Color.White)
+                                        Text(stringResource(R.string.openbao_enregistrer_tester), color = Color.White)
                                     }
                                 }
                             }
@@ -449,7 +453,7 @@ fun OpenBaoVaultScreen(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Filtrer les secrets...", style = MaterialTheme.typography.bodySmall) },
+                        placeholder = { Text(stringResource(R.string.openbao_filtrer_les_secrets), style = MaterialTheme.typography.bodySmall) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Search,
@@ -463,7 +467,7 @@ fun OpenBaoVaultScreen(
                                 IconButton(onClick = { searchQuery = "" }) {
                                     Icon(
                                         imageVector = Icons.Default.Clear,
-                                        contentDescription = "Effacer",
+                                        contentDescription = stringResource(R.string.auth_clear),
                                         tint = HermesTextSecondary,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -494,7 +498,7 @@ fun OpenBaoVaultScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ajouter", color = HermesSecondary, style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.workspaces_add_confirm), color = HermesSecondary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
@@ -544,7 +548,7 @@ fun OpenBaoVaultScreen(
                                 color = HermesTextSecondary
                             )
                             Text(
-                                text = "Chemin sécurisé : ${openbaoMount.ifBlank { "hermes" }}/${activeProfile.lowercase()}/runtime",
+                                text = stringResource(R.string.openbao_secure_path, openbaoMount.ifBlank { DEFAULT_OPENBAO_MOUNT }, activeProfile.lowercase()),
                                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                                 color = HermesTextMuted
                             )
@@ -630,7 +634,7 @@ fun OpenBaoVaultScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.ContentCopy,
-                                                contentDescription = "Copier",
+                                                contentDescription = stringResource(R.string.openbao_copier),
                                                 tint = HermesTextSecondary,
                                                 modifier = Modifier.size(18.dp)
                                             )
@@ -646,7 +650,7 @@ fun OpenBaoVaultScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Edit,
-                                                contentDescription = "Modifier",
+                                                contentDescription = stringResource(R.string.openbao_modifier),
                                                 tint = HermesPrimary,
                                                 modifier = Modifier.size(18.dp)
                                             )
@@ -659,7 +663,7 @@ fun OpenBaoVaultScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Delete,
-                                                    contentDescription = "Supprimer",
+                                                    contentDescription = stringResource(R.string.action_delete),
                                                     tint = HermesError,
                                                     modifier = Modifier.size(18.dp)
                                                 )
@@ -672,7 +676,7 @@ fun OpenBaoVaultScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Lock,
-                                                    contentDescription = "Système requis",
+                                                    contentDescription = stringResource(R.string.openbao_systeme_requis),
                                                     tint = HermesTextMuted,
                                                     modifier = Modifier.size(16.dp)
                                                 )
@@ -710,7 +714,7 @@ fun OpenBaoVaultScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Les clés sont automatiquement converties en MAJUSCULES et chiffrées dans OpenBao.",
+                        text = stringResource(R.string.openbao_les_cles_sont_automatiquement_converties),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextSecondary
                     )
@@ -718,7 +722,7 @@ fun OpenBaoVaultScreen(
                     // Suggested chips for quick picking
                     if (editingKey == null) {
                         Text(
-                            text = "Suggestions courantes :",
+                            text = stringResource(R.string.openbao_suggestions_courantes),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextMuted
                         )
@@ -745,8 +749,8 @@ fun OpenBaoVaultScreen(
                     OutlinedTextField(
                         value = keyInput,
                         onValueChange = { keyInput = it.uppercase() },
-                        label = { Text("Nom de la variable (CLE)") },
-                        placeholder = { Text("EXEMPLE: CRM_API_KEY") },
+                        label = { Text(stringResource(R.string.openbao_nom_de_la_variable_cle)) },
+                        placeholder = { Text(stringResource(R.string.openbao_exemple_crm_api_key)) },
                         enabled = editingKey == null && !isSaving,
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -763,8 +767,8 @@ fun OpenBaoVaultScreen(
                     OutlinedTextField(
                         value = valueInput,
                         onValueChange = { valueInput = it },
-                        label = { Text("Valeur du secret / Token") },
-                        placeholder = { Text("sk-xxxx ou token...") },
+                        label = { Text(stringResource(R.string.openbao_valeur_du_secret_token)) },
+                        placeholder = { Text(stringResource(R.string.openbao_sk_xxxx_ou_token)) },
                         enabled = !isSaving,
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = if (showSecretValue) VisualTransformation.None else PasswordVisualTransformation(),
@@ -809,7 +813,7 @@ fun OpenBaoVaultScreen(
                     if (isSaving) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
                     } else {
-                        Text("Enregistrer", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.action_save), color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             },
@@ -818,7 +822,7 @@ fun OpenBaoVaultScreen(
                     onClick = { showAddEditDialog = false },
                     enabled = !isSaving
                 ) {
-                    Text("Annuler", color = HermesTextSecondary)
+                    Text(stringResource(R.string.action_cancel), color = HermesTextSecondary)
                 }
             },
             containerColor = OnyxDarkSurface
@@ -829,10 +833,10 @@ fun OpenBaoVaultScreen(
     secretToDelete?.let { keyToDelete ->
         AlertDialog(
             onDismissRequest = { secretToDelete = null },
-            title = { Text("Supprimer le secret ?", color = HermesTextPrimary) },
+            title = { Text(stringResource(R.string.openbao_supprimer_le_secret), color = HermesTextPrimary) },
             text = {
                 Text(
-                    text = "Êtes-vous sûr de vouloir supprimer définitivement le secret \"$keyToDelete\" d'OpenBao ?",
+                    text = stringResource(R.string.openbao_etes_vous_sur_de_vouloir, keyToDelete),
                     color = HermesTextSecondary
                 )
             },
@@ -850,12 +854,12 @@ fun OpenBaoVaultScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = HermesError)
                 ) {
-                    Text("Supprimer", color = Color.White)
+                    Text(stringResource(R.string.action_delete), color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { secretToDelete = null }) {
-                    Text("Annuler", color = HermesTextSecondary)
+                    Text(stringResource(R.string.action_cancel), color = HermesTextSecondary)
                 }
             },
             containerColor = OnyxDarkSurface

@@ -365,4 +365,30 @@
     <string name="control_journal">Journal d\'activité</string>
     <string name="control_show_detail">Détail technique</string>
     <string name="control_hide_detail">Masquer le détail</string>
+    <!-- OpenBao vault -->
+    <string name="openbao_web_ui">Web UI</string>
+    <string name="openbao_les_agents_chargent_leurs_secrets">Les agents chargent leurs secrets au démarrage. Après ajout ou modification, redémarrez le conteneur du profil (sans toucher à OpenBao).</string>
+    <string name="openbao_redemarrage_en_cours">Redémarrage en cours...</string>
+    <string name="openbao_redemarrer_la_passerelle">Redémarrer la passerelle (%1$s)</string>
+    <string name="openbao_connexion_openbao">Connexion OpenBao</string>
+    <string name="openbao_url_du_serveur_openbao">URL du serveur OpenBao</string>
+    <string name="openbao_token_utilisateur_dedie_droits_restreints">Token utilisateur dédié (droits restreints)</string>
+    <string name="openbao_hvs_xxxxxxxx_ne_pas_utiliser">hvs.xxxxxxxx (Ne pas utiliser de Root Token)</string>
+    <string name="openbao_point_de_montage_kv_v2">Point de montage KV v2</string>
+    <string name="openbao_enregistrer_tester">Enregistrer &amp; Tester</string>
+    <string name="openbao_filtrer_les_secrets">Filtrer les secrets...</string>
+    <string name="openbao_copier">Copier</string>
+    <string name="openbao_modifier">Modifier</string>
+    <string name="openbao_systeme_requis">Système requis</string>
+    <string name="openbao_les_cles_sont_automatiquement_converties">Les clés sont automatiquement converties en MAJUSCULES et chiffrées dans OpenBao.</string>
+    <string name="openbao_suggestions_courantes">Suggestions courantes :</string>
+    <string name="openbao_nom_de_la_variable_cle">Nom de la variable (CLE)</string>
+    <string name="openbao_exemple_crm_api_key">EXEMPLE: CRM_API_KEY</string>
+    <string name="openbao_valeur_du_secret_token">Valeur du secret / Token</string>
+    <string name="openbao_sk_xxxx_ou_token">sk-xxxx ou token...</string>
+    <string name="openbao_supprimer_le_secret">Supprimer le secret ?</string>
+    <string name="openbao_runtime_path" translatable="false">%1$s/%2$s/runtime</string>
+    <string name="openbao_secure_path">Chemin sécurisé : %1$s/%2$s/runtime</string>
+    <string name="openbao_token_scope_hint">Utilisez un token utilisateur dédié avec accès limité à %1$s/data/%2$s/runtime.</string>
+    <string name="openbao_etes_vous_sur_de_vouloir">Êtes-vous sûr de vouloir supprimer définitivement le secret \"%1$s\" d\'OpenBao ?</string>
 </resources>
