@@ -95,8 +95,7 @@ fun NoteCard(
                     )
 
                     IconButton(
-                        onClick = onTogglePin,
-                        modifier = Modifier.size(28.dp)
+                        onClick = onTogglePin
                     ) {
                         Icon(
                             imageVector = if (note.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
@@ -107,8 +106,7 @@ fun NoteCard(
                     }
 
                     IconButton(
-                        onClick = onDeleteNote,
-                        modifier = Modifier.size(28.dp)
+                        onClick = onDeleteNote
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
@@ -157,8 +155,7 @@ fun NoteCard(
                     IconButton(
                         onClick = {
                             if (isPlayingThis) onPauseAudio() else onPlayAudio(audioPath)
-                        },
-                        modifier = Modifier.size(32.dp)
+                        }
                     ) {
                         Icon(
                             imageVector = if (isPlayingThis) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
