@@ -82,12 +82,7 @@
     <string name="agent_env">Variables &amp; fournisseurs (.env)</string>
     <string name="agent_env_sub">.env du profil · clés d\'API</string>
     <string name="agent_section_guard">Garde</string>
-    <string name="agent_guard_pending">À valider &amp; actions</string>
-    <string name="agent_guard_pending_sub">Mémoire et actions en attente de la garde</string>
-    <string name="agent_guard_profiles">Profils mémoire</string>
-    <string name="agent_guard_profiles_sub">Zones de lecture et d\'écriture par profil</string>
-    <string name="agent_guard_mandates">Mandats</string>
-    <string name="agent_guard_mandates_sub">Sites et dossiers confiés pour une durée</string>
+    <string name="guard_row_sub">À valider · Actions · Profils · Mandats</string>
     <string name="agent_section_maintenance">Maintenance</string>
     <string name="agent_restart">Redémarrer l\'agent %1$s</string>
     <string name="agent_restart_sub">Passerelle : recharge secrets et configuration</string>
@@ -117,6 +112,47 @@
     <string name="workspaces_path_required">Saisissez un chemin</string>
     <string name="workspaces_path_absolute">Le chemin doit commencer par /</string>
     <string name="workspaces_add_confirm">Ajouter</string>
+
+    <!-- Mémoire & garde -->
+    <string name="guard_title">Mémoire &amp; garde</string>
+    <string name="guard_tab_pending">À valider</string>
+    <string name="guard_tab_actions">Actions</string>
+    <string name="guard_tab_profiles">Profils</string>
+    <string name="guard_tab_mandates">Mandats</string>
+    <string name="guard_explain_pending">Ce que les agents veulent retenir attend votre confirmation avant d\'entrer en mémoire.</string>
+    <string name="guard_explain_actions">Ce que la garde a retenu : un agent veut agir hors de ce qui lui est permis.</string>
+    <string name="guard_explain_profiles">Un profil mémoire fixe les zones (domaines de mémoire) qu\'un agent peut lire et écrire.</string>
+    <string name="guard_explain_mandates">Un mandat confie à un profil une tâche précise, sur des sites et dossiers donnés, jusqu\'à une date.</string>
+    <string name="guard_error">Service mémoire.</string>
+    <string name="guard_empty_pending">Aucun souvenir à valider</string>
+    <string name="guard_empty_actions">Aucune action en attente</string>
+    <string name="guard_empty_profiles">Aucun profil mémoire</string>
+    <string name="guard_empty_mandates">Aucun mandat en cours</string>
+    <string name="guard_empty_mandates_ended">Aucun mandat terminé</string>
+    <string name="guard_new_profile">Nouveau profil mémoire</string>
+    <string name="guard_new_mandate">Nouveau mandat</string>
+    <string name="guard_profile_active">actif</string>
+    <string name="guard_profile_revoked">révoqué</string>
+    <string name="guard_gate_high">Garde : élevée</string>
+    <string name="guard_gate_normal">Garde : normale</string>
+    <string name="guard_revoked_zones">Lecture : %1$s · Écriture : %2$s</string>
+    <string name="guard_zone">Zone</string>
+    <string name="guard_read">Lecture</string>
+    <string name="guard_write">Écriture</string>
+    <string name="guard_read_zone">Lecture %1$s</string>
+    <string name="guard_write_zone">Écriture %1$s</string>
+    <string name="guard_revoke">Révoquer</string>
+    <string name="guard_revoke_ellipsis">Révoquer…</string>
+    <string name="guard_revoke_profile">Révoquer le profil…</string>
+    <string name="guard_revoke_profile_title">Révoquer « %1$s » ?</string>
+    <string name="guard_revoke_profile_message">Son jeton cessera de fonctionner. Cette action ne peut pas être annulée depuis l\'app.</string>
+    <string name="guard_mandates_active">En cours · %1$d</string>
+    <string name="guard_mandates_ended">Terminés · %1$d</string>
+    <string name="guard_mandate_until">jusqu\'au %1$s</string>
+    <string name="guard_mandate_revoked">révoqué</string>
+    <string name="guard_mandate_expired">expiré</string>
+    <string name="guard_revoke_mandate_title">Révoquer ce mandat ?</string>
+    <string name="guard_revoke_mandate_message">« %1$s » (profil %2$s) cessera tout de suite. Le profil redemandera votre accord.</string>
 
     <!-- Profile switcher -->
     <string name="profiles_sheet_subtitle">Persona, modèle et configuration de l\'agent</string>

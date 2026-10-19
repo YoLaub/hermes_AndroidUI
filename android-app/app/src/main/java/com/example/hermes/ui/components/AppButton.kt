@@ -2,6 +2,8 @@ package com.example.hermes.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -41,8 +43,9 @@ fun AppButton(
     disabledReason: String? = null,
 ) {
     val clickable = enabled && !loading
-    Column(modifier) {
-        val inner = Modifier.defaultMinSize(minHeight = 48.dp)
+    // The column takes the caller's width (e.g. fillMaxWidth) and the button fills it; by default both wrap the label.
+    Column(modifier.width(IntrinsicSize.Max)) {
+        val inner = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
         val padding = PaddingValues(horizontal = if (variant == ButtonVariant.Text) 16.dp else 20.dp)
         val content: @Composable () -> Unit = {
             if (loading) {

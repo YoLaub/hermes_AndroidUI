@@ -18,6 +18,9 @@ import kotlinx.serialization.Serializable
 @Serializable data class SkillDetailRoute(val name: String) : NavKey
 @Serializable data object MemoryRoute : NavKey
 @Serializable data object WorkspacesRoute : NavKey
+@Serializable data object GuardRoute : NavKey
+@Serializable data object NewMemoryProfileRoute : NavKey
+@Serializable data object NewMandateRoute : NavKey
 
 fun rootOf(tab: Tab): NavKey = when (tab) {
     Tab.Chat -> ChatRoute

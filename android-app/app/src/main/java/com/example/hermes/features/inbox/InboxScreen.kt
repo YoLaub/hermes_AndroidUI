@@ -220,7 +220,7 @@ private fun ToolCard(approval: ApprovalPayload, context: String?, onRespond: (Bo
 }
 
 @Composable
-private fun ActionCard(action: MemoryAction, enabled: Boolean, onReject: () -> Unit, onApprove: () -> Unit) {
+internal fun ActionCard(action: MemoryAction, enabled: Boolean, onReject: () -> Unit, onApprove: () -> Unit) {
     AppCard(variant = CardVariant.Decision) {
         CardMeta(
             stringResource(R.string.inbox_kind_action, actionKindLabel(action.kind)),
@@ -242,7 +242,7 @@ private fun ActionCard(action: MemoryAction, enabled: Boolean, onReject: () -> U
 }
 
 @Composable
-private fun MemoryCard(item: MemoryValidation, enabled: Boolean, onDecide: (Boolean) -> Unit) {
+internal fun MemoryCard(item: MemoryValidation, enabled: Boolean, onDecide: (Boolean) -> Unit) {
     AppCard(variant = CardVariant.Decision) {
         CardMeta(
             stringResource(R.string.inbox_kind_memory),
@@ -292,7 +292,7 @@ private fun SkeletonCard() {
 
 /** A second look before the owner lets an agent act: who asks, what for, and the exact request. */
 @Composable
-private fun ApproveActionDialog(action: MemoryAction, onApprove: () -> Unit, onCancel: () -> Unit) {
+internal fun ApproveActionDialog(action: MemoryAction, onApprove: () -> Unit, onCancel: () -> Unit) {
     ConfirmDialog(
         title = stringResource(R.string.inbox_approve_title),
         confirmLabel = stringResource(R.string.inbox_approve_action),

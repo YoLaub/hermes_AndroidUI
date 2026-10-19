@@ -15,14 +15,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,9 +66,7 @@ fun AgentScreen(
     onOpenMemory: () -> Unit,
     onOpenWorkspaces: () -> Unit,
     onOpenEnv: () -> Unit,
-    onOpenValidations: () -> Unit,
-    onOpenMemoryProfiles: () -> Unit,
-    onOpenMandates: () -> Unit,
+    onOpenGuard: () -> Unit,
     onRestartGateway: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -131,17 +127,14 @@ fun AgentScreen(
                 ListRow(stringResource(R.string.agent_env), subtitle = stringResource(R.string.agent_env_sub), icon = Icons.Outlined.Key, onClick = onOpenEnv)
             }
 
-            // Three rows until « Mémoire & garde » gathers them in one screen.
             SectionCard(stringResource(R.string.agent_section_guard)) {
                 ListRow(
-                    stringResource(R.string.agent_guard_pending),
-                    subtitle = stringResource(R.string.agent_guard_pending_sub),
-                    icon = Icons.Outlined.TaskAlt,
+                    stringResource(R.string.guard_title),
+                    subtitle = stringResource(R.string.guard_row_sub),
+                    icon = Icons.Outlined.Shield,
                     badge = state.guardPending,
-                    onClick = onOpenValidations,
+                    onClick = onOpenGuard,
                 )
-                ListRow(stringResource(R.string.agent_guard_profiles), subtitle = stringResource(R.string.agent_guard_profiles_sub), icon = Icons.Outlined.VerifiedUser, onClick = onOpenMemoryProfiles)
-                ListRow(stringResource(R.string.agent_guard_mandates), subtitle = stringResource(R.string.agent_guard_mandates_sub), icon = Icons.Outlined.Badge, onClick = onOpenMandates)
             }
 
             SectionCard(stringResource(R.string.agent_section_maintenance)) {

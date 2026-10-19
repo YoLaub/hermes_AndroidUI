@@ -32,6 +32,12 @@ import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.agent.AgentScreen
 import com.example.hermes.features.agent.AgentState
+import com.example.hermes.features.guard.GuardActions
+import com.example.hermes.features.guard.GuardScreen
+import com.example.hermes.features.guard.GuardState
+import com.example.hermes.features.guard.GuardTab
+import com.example.hermes.features.guard.NewMandateScreen
+import com.example.hermes.features.guard.NewMemoryProfileScreen
 import com.example.hermes.features.agent.MemoryScreen
 import com.example.hermes.features.agent.SkillDetailScreen
 import com.example.hermes.features.agent.SkillsScreen
@@ -226,17 +232,11 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                                 vm.chat.loadProviders()
                                 tools.profileEnvDialog = true
                             },
-                            onOpenValidations = {
+                            onOpenGuard = {
                                 refreshInbox()
-                                tools.validationsDialog = true
-                            },
-                            onOpenMemoryProfiles = {
                                 vm.chat.loadMemoryProfiles()
-                                tools.memoryProfilesDialog = true
-                            },
-                            onOpenMandates = {
                                 vm.chat.loadMemoryMandates()
-                                tools.mandatesDialog = true
+                                go(nav.push(GuardRoute))
                             },
                             onRestartGateway = { vm.chat.restartGateway() },
                             onOpenSettings = {
@@ -315,6 +315,68 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onBack = { nav.back()?.let(::go) },
                         )
                     }
+                    entry<GuardRoute> {
+                        GuardScreen(
+                            state = GuardState(
+                                memory = chat.memoryValidations,
+                                actions = chat.memoryActions,
+                                pendingLoading = chat.isValidationsLoading,
+                                pendingError = chat.validationsError,
+                                profiles = chat.memoryProfiles,
+                                profilesLoading = chat.isProfilesLoading,
+                                profilesError = chat.profilesError,
+                                mandates = chat.memoryMandates,
+                                mandatesLoading = chat.isMandatesLoading,
+                                mandatesError = chat.mandatesError,
+                                hasOwnerToken = chat.hasMemoryOwnerToken,
+                            ),
+                            actions = GuardActions(
+                                onRefresh = { t ->
+                                    when (t) {
+                                        GuardTab.Pending, GuardTab.Actions -> refreshInbox()
+                                        GuardTab.Profiles -> vm.chat.loadMemoryProfiles()
+                                        GuardTab.Mandates -> vm.chat.loadMemoryMandates()
+                                    }
+                                },
+                                onDecideMemory = { id, confirm -> vm.chat.decideMemoryValidation(id, confirm) },
+                                onDecideAction = { id, approve -> vm.chat.decideMemoryAction(id, approve) },
+                                onSaveGrants = { name, read, write -> vm.chat.setMemoryProfileGrants(name, read, write) },
+                                onRevokeProfile = { vm.chat.revokeMemoryProfile(it) },
+                                onNewProfile = { go(nav.push(NewMemoryProfileRoute)) },
+                                onRevokeMandate = { vm.chat.revokeMemoryMandate(it) },
+                                onNewMandate = { go(nav.push(NewMandateRoute)) },
+                                onChangeToken = { go(nav.push(SettingsRoute)) },
+                                onBack = { nav.back()?.let(::go) },
+                            ),
+                        )
+                    }
+                    entry<NewMemoryProfileRoute> {
+                        NewMemoryProfileScreen(
+                            isLoading = chat.isProfilesLoading,
+                            error = chat.profilesError,
+                            created = chat.createdProfile,
+                            onCreate = { name, read, write -> vm.chat.createMemoryProfile(name, read, write) },
+                            onTokenSeen = {
+                                vm.chat.dismissCreatedProfileToken()
+                                nav.back()?.let(::go)
+                            },
+                            onBack = {
+                                vm.chat.dismissCreatedProfileToken()
+                                nav.back()?.let(::go)
+                            },
+                        )
+                    }
+                    entry<NewMandateRoute> {
+                        NewMandateScreen(
+                            profiles = chat.memoryProfiles,
+                            isLoading = chat.isMandatesLoading,
+                            error = chat.mandatesError,
+                            onCreate = { profile, label, hosts, folders, expiresAt ->
+                                vm.chat.createMemoryMandate(profile, label, hosts, folders, expiresAt) { nav.back()?.let(::go) }
+                            },
+                            onBack = { nav.back()?.let(::go) },
+                        )
+                    }
                     entry<SettingsRoute> {
                         SettingsScreen(
                             serverUrl = chat.serverUrl,
@@ -356,6 +418,5 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         viewModel = vm.chat,
         tools = tools,
         snackbarHostState = snackbarHostState,
-        onOpenSettings = { go(nav.open(Tab.Agent, SettingsRoute)) },
     )
 }

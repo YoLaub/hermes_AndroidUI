@@ -23,9 +23,6 @@ class AgentToolsState {
     var createProfileDialog by mutableStateOf(false)
     var profileEnvDialog by mutableStateOf(false)
     var openBaoDialog by mutableStateOf(false)
-    var validationsDialog by mutableStateOf(false)
-    var memoryProfilesDialog by mutableStateOf(false)
-    var mandatesDialog by mutableStateOf(false)
 }
 
 @Composable
@@ -41,7 +38,6 @@ fun AgentToolsHost(
     viewModel: ChatViewModel,
     tools: AgentToolsState,
     snackbarHostState: SnackbarHostState,
-    onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -200,62 +196,6 @@ fun AgentToolsHost(
             },
             isRestartingGateway = state.isRestartingGateway,
             onDismiss = { tools.openBaoDialog = false }
-        )
-    }
-
-    if (tools.memoryProfilesDialog) {
-        MemoryProfilesDialog(
-            profiles = state.memoryProfiles,
-            created = state.createdProfile,
-            isLoading = state.isProfilesLoading,
-            error = state.profilesError,
-            hasToken = state.hasMemoryOwnerToken,
-            onRefresh = { viewModel.loadMemoryProfiles() },
-            onCreate = { name, read, write -> viewModel.createMemoryProfile(name, read, write) },
-            onSaveGrants = { name, read, write -> viewModel.setMemoryProfileGrants(name, read, write) },
-            onRevoke = { viewModel.revokeMemoryProfile(it) },
-            onDismissCreated = { viewModel.dismissCreatedProfileToken() },
-            onDismiss = {
-                viewModel.dismissCreatedProfileToken()
-                tools.memoryProfilesDialog = false
-            }
-        )
-    }
-
-    if (tools.mandatesDialog) {
-        MemoryMandatesDialog(
-            mandates = state.memoryMandates,
-            profiles = state.memoryProfiles,
-            isLoading = state.isMandatesLoading,
-            error = state.mandatesError,
-            hasToken = state.hasMemoryOwnerToken,
-            onRefresh = { viewModel.loadMemoryMandates() },
-            onCreate = { profile, label, hosts, folders, expiresAt, onDone ->
-                viewModel.createMemoryMandate(profile, label, hosts, folders, expiresAt, onDone)
-            },
-            onRevoke = { viewModel.revokeMemoryMandate(it) },
-            onDismiss = { tools.mandatesDialog = false }
-        )
-    }
-
-    if (tools.validationsDialog) {
-        MemoryValidationsDialog(
-            items = state.memoryValidations,
-            actions = state.memoryActions,
-            isLoading = state.isValidationsLoading,
-            error = state.validationsError,
-            hasToken = state.hasMemoryOwnerToken,
-            onChangeToken = {
-                tools.validationsDialog = false
-                onOpenSettings()
-            },
-            onRefresh = {
-                viewModel.loadMemoryValidations()
-                viewModel.loadMemoryActions()
-            },
-            onDecideAction = { id, approve -> viewModel.decideMemoryAction(id, approve) },
-            onDecide = { id, confirm -> viewModel.decideMemoryValidation(id, confirm) },
-            onDismiss = { tools.validationsDialog = false }
         )
     }
 
