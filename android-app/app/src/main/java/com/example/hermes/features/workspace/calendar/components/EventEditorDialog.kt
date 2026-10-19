@@ -18,6 +18,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.EventStatus
+import com.example.hermes.features.workspace.eventFormError
 import com.example.hermes.core.model.OWNER_NAME
 import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
@@ -238,7 +239,11 @@ fun EventEditorDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Action Buttons
+                // Action Buttons: off with the reason shown, never a silent no-op.
+                val formError = eventFormError(title, startTime, endTime)
+                formError?.let {
+                    Text(it.message, style = MaterialTheme.typography.bodySmall, color = HermesWarning, modifier = Modifier.padding(bottom = 8.dp))
+                }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) {
                         Text("Annuler", color = HermesTextMuted)
@@ -258,6 +263,7 @@ fun EventEditorDialog(
                                 location
                             )
                         },
+                        enabled = formError == null,
                         colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
                         shape = RoundedCornerShape(12.dp)
                     ) {

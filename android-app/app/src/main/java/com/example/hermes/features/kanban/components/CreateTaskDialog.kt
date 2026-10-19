@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.AppButton
 
 @Composable
 fun CreateTaskDialog(
@@ -27,7 +28,7 @@ fun CreateTaskDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Nouvelle tâche Kanban",
+                text = "Nouvelle tâche",
                 style = MaterialTheme.typography.titleMedium,
                 color = HermesTextPrimary
             )
@@ -120,19 +121,13 @@ fun CreateTaskDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (title.isNotBlank()) {
-                        onCreate(title, body.ifBlank { null }, status, priority, assignee.ifBlank { null })
-                    }
-                },
+            AppButton(
+                "Créer",
+                onClick = { onCreate(title.trim(), body.ifBlank { null }, status, priority, assignee.ifBlank { null }) },
                 enabled = title.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Créer")
-            }
+                icon = Icons.Default.Add,
+                disabledReason = "Donnez un titre à la tâche"
+            )
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {

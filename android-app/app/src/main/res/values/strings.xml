@@ -184,6 +184,21 @@
     <string name="profiles_delete_title">Supprimer le profil %1$s ?</string>
     <string name="profiles_delete_message">Sa configuration, sa mémoire et ses compétences sont supprimées du serveur.</string>
 
+    <!-- New profile -->
+    <string name="new_profile_identity">Identité</string>
+    <string name="new_profile_name">Identifiant du profil</string>
+    <string name="new_profile_name_help">Minuscules, chiffres, - et _ ; il nomme le dossier du profil</string>
+    <string name="new_profile_name_format">Minuscules, chiffres, - et _ uniquement, sans commencer par - ou _</string>
+    <string name="new_profile_name_taken">Ce profil existe déjà</string>
+    <string name="new_profile_name_required">Saisissez un identifiant</string>
+    <string name="new_profile_start">Point de départ</string>
+    <string name="new_profile_start_help">Partir de la configuration du profil par défaut, ou d\'un autre profil.</string>
+    <string name="new_profile_model">Modèle et clé</string>
+    <string name="new_profile_model_field">Modèle par défaut (facultatif)</string>
+    <string name="new_profile_key">Clé d\'API (facultatif)</string>
+    <string name="new_profile_key_help">Enregistrée dans le .env du nouveau profil</string>
+    <string name="new_profile_create">Créer le profil</string>
+
     <!-- Settings -->
     <string name="settings_connections">Connexions</string>
     <string name="settings_server">Serveur Hermes</string>

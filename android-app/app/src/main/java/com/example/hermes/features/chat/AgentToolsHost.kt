@@ -20,7 +20,6 @@ import kotlinx.coroutines.launch
 /** Which agent tool (sheet or dialog) is open. Shared by every tab that can open one. */
 class AgentToolsState {
     var profilesSheet by mutableStateOf(false)
-    var createProfileDialog by mutableStateOf(false)
 }
 
 @Composable
@@ -36,6 +35,7 @@ fun AgentToolsHost(
     viewModel: ChatViewModel,
     tools: AgentToolsState,
     snackbarHostState: SnackbarHostState,
+    onNewProfile: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -55,7 +55,7 @@ fun AgentToolsHost(
                 },
                 onCreate = {
                     tools.profilesSheet = false
-                    tools.createProfileDialog = true
+                    onNewProfile()
                 },
                 onDelete = { name ->
                     viewModel.deleteProfile(name) { success, err ->
@@ -69,24 +69,6 @@ fun AgentToolsHost(
                 },
             )
         }
-    }
-
-    // Create Profile Dialog
-    if (tools.createProfileDialog) {
-        CreateProfileDialog(
-            existingProfiles = state.profiles,
-            onDismiss = { tools.createProfileDialog = false },
-            onCreate = { name, cloneFrom, model, provider, apiKey ->
-                viewModel.createProfile(name, cloneFrom, model, provider, apiKey) { success, err ->
-                    if (success) {
-                        tools.createProfileDialog = false
-                        scope.launch { snackbarHostState.showSnackbar("Profil \"$name\" créé et activé !") }
-                    } else {
-                        scope.launch { snackbarHostState.showSnackbar("Erreur : ${err ?: "Échec de création"}") }
-                    }
-                }
-            }
-        )
     }
 
 }

@@ -33,6 +33,7 @@ import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.agent.AgentScreen
 import com.example.hermes.features.agent.AgentState
+import com.example.hermes.features.agent.NewProfileScreen
 import com.example.hermes.features.profiles.OpenBaoVaultScreen
 import com.example.hermes.features.profiles.ProfileEnvScreen
 import kotlinx.coroutines.launch
@@ -531,6 +532,29 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onDismiss = { nav.back()?.let(::go) }
                         )
                     }
+                    entry<NewProfileRoute> {
+                        var submitting by remember { mutableStateOf(false) }
+                        var error by remember { mutableStateOf<String?>(null) }
+                        NewProfileScreen(
+                            existing = chat.profiles,
+                            isSubmitting = submitting,
+                            error = error,
+                            onCreate = { name, cloneFrom, model, provider, apiKey ->
+                                submitting = true
+                                error = null
+                                vm.chat.createProfile(name, cloneFrom, model, provider, apiKey) { success, err ->
+                                    submitting = false
+                                    if (success) {
+                                        nav.back()?.let(::go)
+                                        scope.launch { snackbarHostState.showSnackbar("Profil « $name » créé et activé") }
+                                    } else {
+                                        error = err ?: "Échec de création"
+                                    }
+                                }
+                            },
+                            onBack = { nav.back()?.let(::go) },
+                        )
+                    }
                     entry<SettingsRoute> {
                         SettingsScreen(
                             serverUrl = chat.serverUrl,
@@ -599,5 +623,6 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         viewModel = vm.chat,
         tools = tools,
         snackbarHostState = snackbarHostState,
+        onNewProfile = { go(nav.open(Tab.Agent, NewProfileRoute)) },
     )
 }

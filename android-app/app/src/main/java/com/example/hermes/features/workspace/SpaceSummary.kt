@@ -24,3 +24,21 @@ fun agendaSummary(events: List<CalendarEvent>, today: LocalDate = LocalDate.now(
     val todays = events.filter { it.dateEpochDay == today.toEpochDay() }.sortedBy { it.startTime }
     return AgendaSummary(todays.size, todays.firstOrNull()?.let { "${it.startTime} ${it.title}" })
 }
+
+enum class EventFormError(val message: String) {
+    Title("Donnez un titre au créneau"),
+    TimeFormat("Heures au format HH:mm, ex. 09:30"),
+    EndBeforeStart("La fin doit suivre le début"),
+}
+
+private val HH_MM = Regex("^([01]?\\d|2[0-3]):([0-5]\\d)$")
+
+private fun minutesOf(time: String): Int? = HH_MM.find(time.trim())?.let { it.groupValues[1].toInt() * 60 + it.groupValues[2].toInt() }
+
+/** Why a slot cannot be saved: no title, an unreadable time, or an end not after the start. */
+fun eventFormError(title: String, start: String, end: String): EventFormError? {
+    if (title.isBlank()) return EventFormError.Title
+    val s = minutesOf(start) ?: return EventFormError.TimeFormat
+    val e = minutesOf(end) ?: return EventFormError.TimeFormat
+    return if (e <= s) EventFormError.EndBeforeStart else null
+}
