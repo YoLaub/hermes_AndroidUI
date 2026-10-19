@@ -208,7 +208,7 @@ fun EventEditorDialog(
                                         EventStatus.COMPLETED -> "Terminé"
                                         EventStatus.CANCELLED -> "Annulé"
                                     },
-                                    fontSize = 11.sp
+                                    fontSize = 12.sp
                                 )
                             },
                             modifier = Modifier.height(32.dp)

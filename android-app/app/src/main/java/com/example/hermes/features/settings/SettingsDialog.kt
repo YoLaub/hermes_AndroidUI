@@ -175,7 +175,7 @@ fun SettingsDialog(
                                             ) {
                                                 Text(
                                                     text = if (yoloEnabled) "ACTIF" else "DÉSACTIVÉ",
-                                                    fontSize = 10.sp,
+                                                    fontSize = 12.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (yoloEnabled) Color.Black else HermesTextMuted,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -318,7 +318,7 @@ fun SettingsDialog(
                                     text = "Session active : ${sessionId.take(12)}...",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp
+                                        fontSize = 12.sp
                                     ),
                                     color = HermesTextMuted
                                 )
@@ -488,7 +488,7 @@ private fun SettingsActionItem(
                     ) {
                         Text(
                             text = badge,
-                            fontSize = 9.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = HermesTextMuted,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)

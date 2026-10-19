@@ -2,35 +2,70 @@ package com.example.hermes.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Hermes Dark Palette (Sleek Onyx / Slate & Electric Accents)
-val OnyxDarkBackground = Color(0xFF0D1117)
-val OnyxDarkSurface = Color(0xFF161B22)
-val OnyxDarkSurfaceVariant = Color(0xFF21262D)
-val OnyxBorder = Color(0xFF30363D)
+/** Design tokens of the UX redesign (design&refonte/design/tokens.json). */
+object HermesColors {
+    val Background = Color(0xFF0D1117)
+    val Surface = Color(0xFF161B22)
+    val SurfaceVariant = Color(0xFF21262D)
+    val Outline = Color(0xFF30363D)
+    val OutlineStrong = Color(0xFF484F58)
+    val OnSurface = Color(0xFFE6EDF3)
+    val OnSurfaceVariant = Color(0xFF9DA7B3)
+    val Meta = Color(0xFF8B949E)
+    val Disabled = Color(0xFF6E7681)
+    val Primary = Color(0xFF58A6FF)
+    val OnPrimary = Color(0xFF0D1117)
+    val PrimaryContainer = Color(0xFF0C2D4F)
+    val OnPrimaryContainer = Color(0xFFA5D6FF)
+    val Success = Color(0xFF3FB950)
+    val SuccessContainer = Color(0xFF0F2E1A)
+    val OnSuccessContainer = Color(0xFF7EE787)
+    val Tertiary = Color(0xFFBC8CFF)
+    val TertiaryContainer = Color(0xFF2A1B47)
+    val Warning = Color(0xFFD29922)
+    val WarningContainer = Color(0xFF3A2A0B)
+    val OnWarningContainer = Color(0xFFF2CC60)
+    val Danger = Color(0xFFF85149)
+    val DangerContainer = Color(0xFF3D1418)
+    val OnDangerContainer = Color(0xFFFFA198)
+    val DangerFill = Color(0xFFB62324) // destructive button, white text
+    val Code = Color(0xFFA5D6FF)
+    val AvatarPalette = listOf(
+        Color(0xFF58A6FF), Color(0xFF39C5CF), Color(0xFF3FB950), Color(0xFFD29922),
+        Color(0xFFFF9B5C), Color(0xFFF778BA), Color(0xFFBC8CFF), Color(0xFF9DA7B3),
+    )
+}
 
-val HermesPrimary = Color(0xFF58A6FF)
-val HermesPrimaryContainer = Color(0xFF1F385C)
-val HermesOnPrimaryContainer = Color(0xFFC8E1FF)
+// Legacy names still used by the screens, mapped onto the new tokens.
+val OnyxDarkBackground = HermesColors.Background
+val OnyxDarkSurface = HermesColors.Surface
+val OnyxDarkSurfaceVariant = HermesColors.SurfaceVariant
+val OnyxBorder = HermesColors.Outline
 
-val HermesSecondary = Color(0xFF7EE787)
-val HermesSecondaryContainer = Color(0xFF133820)
-val HermesOnSecondaryContainer = Color(0xFFAFF5B4)
-val HermesSuccess = HermesSecondary
+val HermesPrimary = HermesColors.Primary
+val HermesPrimaryContainer = HermesColors.PrimaryContainer
+val HermesOnPrimaryContainer = HermesColors.OnPrimaryContainer
 
-val HermesTertiary = Color(0xFFD2A8FF)
-val HermesTertiaryContainer = Color(0xFF3B2757)
+val HermesSecondary = HermesColors.OnSuccessContainer
+val HermesSecondaryContainer = HermesColors.SuccessContainer
+val HermesOnSecondaryContainer = HermesColors.OnSuccessContainer
+val HermesSuccess = HermesColors.Success
 
-val HermesError = Color(0xFFF85149)
-val HermesErrorContainer = Color(0xFF4C1D1B)
+val HermesTertiary = HermesColors.Tertiary
+val HermesTertiaryContainer = HermesColors.TertiaryContainer
 
-val HermesWarning = Color(0xFFF0883E)
-val HermesWarningContainer = Color(0xFF4C2A12)
+val HermesError = HermesColors.Danger
+val HermesErrorContainer = HermesColors.DangerContainer
 
-val HermesTextPrimary = Color(0xFFF0F6FC)
-val HermesTextSecondary = Color(0xFF8B949E)
-val HermesTextMuted = Color(0xFF6E7681)
+val HermesWarning = HermesColors.Warning
+val HermesWarningContainer = HermesColors.WarningContainer
+
+val HermesTextPrimary = HermesColors.OnSurface
+val HermesTextSecondary = HermesColors.OnSurfaceVariant
+// Was #6E7681, under AA on the background; metadata now uses the `meta` token.
+val HermesTextMuted = HermesColors.Meta
 
 val HermesToolBackground = Color(0xFF1A1F29)
 val HermesCodeBackground = Color(0xFF0F141C)
-val HermesUserBubble = Color(0xFF1F385C)
-val HermesAssistantBubble = Color(0xFF161B22)
+val HermesUserBubble = HermesColors.PrimaryContainer
+val HermesAssistantBubble = HermesColors.Surface

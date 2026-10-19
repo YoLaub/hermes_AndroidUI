@@ -103,7 +103,7 @@ fun ReasoningCard(
                         text = reasoning,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             lineHeight = 16.sp
                         ),
                         color = HermesTextSecondary

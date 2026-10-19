@@ -227,7 +227,7 @@ fun NoteCard(
                                 text = "#$tag",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = HermesPrimary,
-                                fontSize = 11.sp
+                                fontSize = 12.sp
                             )
                         }
                     }

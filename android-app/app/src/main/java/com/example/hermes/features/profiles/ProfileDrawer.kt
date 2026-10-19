@@ -171,7 +171,7 @@ fun ProfileDrawerContent(
                                         ) {
                                             Text(
                                                 text = "défaut",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                                 color = HermesTextMuted,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
@@ -251,7 +251,7 @@ fun ProfileDrawerContent(
                     ) {
                         Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Skills", fontSize = 11.sp)
+                        Text("Skills", fontSize = 12.sp)
                     }
 
                     // Memory Button
@@ -267,7 +267,7 @@ fun ProfileDrawerContent(
                     ) {
                         Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Mémoire", fontSize = 11.sp)
+                        Text("Mémoire", fontSize = 12.sp)
                     }
                 }
 
@@ -288,7 +288,7 @@ fun ProfileDrawerContent(
                     ) {
                         Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dossiers", fontSize = 11.sp)
+                        Text("Dossiers", fontSize = 12.sp)
                     }
 
                     // Env Variables Button
@@ -304,7 +304,7 @@ fun ProfileDrawerContent(
                     ) {
                         Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Variables .env", fontSize = 11.sp)
+                        Text("Variables .env", fontSize = 12.sp)
                     }
                 }
 

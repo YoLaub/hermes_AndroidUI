@@ -140,7 +140,7 @@ fun KanbanTaskDetailSheet(
                     FilterChip(
                         selected = isSelected,
                         onClick = { editedStatus = st },
-                        label = { Text(kanbanStatusLabel(st), fontSize = 11.sp) },
+                        label = { Text(kanbanStatusLabel(st), fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = stColor.copy(alpha = 0.25f),
                             selectedLabelColor = stColor
@@ -173,7 +173,7 @@ fun KanbanTaskDetailSheet(
                     FilterChip(
                         selected = isSelected,
                         onClick = { editedPriority = prio },
-                        label = { Text(label, fontSize = 11.sp) },
+                        label = { Text(label, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = HermesPrimary.copy(alpha = 0.2f),
                             selectedLabelColor = HermesPrimary

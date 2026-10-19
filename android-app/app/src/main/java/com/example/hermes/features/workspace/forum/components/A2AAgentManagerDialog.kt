@@ -265,7 +265,7 @@ fun A2AAgentManagerDialog(
                                             text = agent.endpointUrl,
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                                             color = HermesSecondary,
-                                            fontSize = 10.sp
+                                            fontSize = 12.sp
                                         )
 
                                         if (agent.description.isNotBlank()) {
@@ -273,7 +273,7 @@ fun A2AAgentManagerDialog(
                                                 text = agent.description,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = HermesTextMuted,
-                                                fontSize = 11.sp
+                                                fontSize = 12.sp
                                             )
                                         }
                                     }

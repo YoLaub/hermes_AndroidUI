@@ -490,7 +490,7 @@ private fun AuditLogRow(log: AuditLogEntry) {
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.sp
                     )
                 }
             }

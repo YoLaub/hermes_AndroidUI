@@ -107,7 +107,7 @@ fun EventCard(
                             EventStatus.COMPLETED -> HermesTextMuted
                             EventStatus.CANCELLED -> HermesError
                         },
-                        fontSize = 11.sp
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -183,7 +183,7 @@ fun EventCard(
                                     text = profile,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isUser) HermesPrimary else HermesTertiary,
-                                    fontSize = 10.sp
+                                    fontSize = 12.sp
                                 )
                             }
                         }

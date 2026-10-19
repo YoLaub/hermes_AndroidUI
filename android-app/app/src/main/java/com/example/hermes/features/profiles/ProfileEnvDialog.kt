@@ -241,7 +241,7 @@ fun ProfileEnvDialog(
                                         text = "Mode officiel Hermes WebUI : le serveur officiel gère les clés des providers IA (OpenAI, Anthropic, Gemini, Groq...). Les variables de services, comptes ou MCP doivent être définies dans la section 'environment' du docker-compose.yml.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFFFEF08A),
-                                        fontSize = 11.sp
+                                        fontSize = 12.sp
                                     )
                                 }
                             }
@@ -340,7 +340,7 @@ fun ProfileEnvDialog(
                                                             fontFamily = FontFamily.Monospace
                                                         ),
                                                         color = HermesTextSecondary,
-                                                        fontSize = 11.sp
+                                                        fontSize = 12.sp
                                                     )
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Icon(
@@ -487,7 +487,7 @@ fun ProfileEnvDialog(
                                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                 modifier = Modifier.height(30.dp)
                                             ) {
-                                                Text(if (provider.hasKey) "Modifier" else "Ajouter", fontSize = 11.sp)
+                                                Text(if (provider.hasKey) "Modifier" else "Ajouter", fontSize = 12.sp)
                                             }
                                         }
                                     }
@@ -569,7 +569,7 @@ fun ProfileEnvDialog(
                                         inputKey = suggestion.uppercase()
                                         submitError = null
                                     },
-                                    label = { Text(suggestion, fontSize = 10.sp) },
+                                    label = { Text(suggestion, fontSize = 12.sp) },
                                     colors = SuggestionChipDefaults.suggestionChipColors(
                                         containerColor = OnyxDarkBackground,
                                         labelColor = HermesPrimary
@@ -672,7 +672,7 @@ fun ProfileEnvDialog(
                                     text = submitError ?: "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFFFCA5A5),
-                                    fontSize = 11.sp
+                                    fontSize = 12.sp
                                 )
                             }
                         }
@@ -812,7 +812,7 @@ fun ProfileEnvDialog(
                                     text = providerError ?: "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFFFCA5A5),
-                                    fontSize = 11.sp
+                                    fontSize = 12.sp
                                 )
                             }
                         }

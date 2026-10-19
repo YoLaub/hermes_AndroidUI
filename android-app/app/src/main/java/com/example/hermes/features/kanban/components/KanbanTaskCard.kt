@@ -128,7 +128,7 @@ fun KanbanTaskCard(
                         ) {
                             Text(
                                 text = prioText,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                 color = prioColor,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -153,7 +153,7 @@ fun KanbanTaskCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = assignee,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                 color = HermesTextPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -220,7 +220,7 @@ fun KanbanTaskCard(
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.height(28.dp)
                             ) {
-                                Text("À faire", fontSize = 11.sp)
+                                Text("À faire", fontSize = 12.sp)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(12.dp))
                             }
@@ -236,7 +236,7 @@ fun KanbanTaskCard(
                                     contentColor = Color(0xFFFBBF24)
                                 )
                             ) {
-                                Text("Prêt", fontSize = 11.sp)
+                                Text("Prêt", fontSize = 12.sp)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp))
                             }
@@ -274,7 +274,7 @@ fun KanbanTaskCard(
                                     contentColor = Color(0xFF10B981)
                                 )
                             ) {
-                                Text("Débloquer", fontSize = 11.sp)
+                                Text("Débloquer", fontSize = 12.sp)
                             }
                         }
                         "done" -> {

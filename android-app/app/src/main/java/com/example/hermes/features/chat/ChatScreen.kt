@@ -181,7 +181,7 @@ fun ChatScreen(
                                 ) {
                                     Text(
                                         text = state.activeProfile.take(1).uppercase(),
-                                        fontSize = 10.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.Black
                                     )
@@ -203,7 +203,7 @@ fun ChatScreen(
                                 Text(
                                     text = "YOLO",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = 12.sp
                                 )
                             },
                             leadingIcon = {

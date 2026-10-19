@@ -180,7 +180,7 @@ private fun ActionCard(action: MemoryAction, enabled: Boolean, onApprove: () -> 
             }
             Spacer(Modifier.height(6.dp))
             // Plain Text only: the target is what the agent asked for, possibly shaped by a web page.
-            Text("Ce que l'agent demande (non fiable) :", fontSize = 11.sp)
+            Text("Ce que l'agent demande (non fiable) :", fontSize = 12.sp)
             Text(
                 action.label,
                 fontFamily = FontFamily.Monospace,
@@ -192,7 +192,7 @@ private fun ActionCard(action: MemoryAction, enabled: Boolean, onApprove: () -> 
             SelectionContainer {
                 Text(
                     "N° ${shortId(action.id)} • ${formatRequestedAt(action.requestedAt)}\n${action.id}",
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
@@ -224,7 +224,7 @@ private fun ApproveActionDialog(action: MemoryAction, onApprove: () -> Unit, onC
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("N° ${shortId(action.id)}", fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Text("N° ${shortId(action.id)}", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
             }
         },
         confirmButton = { Button(onClick = onApprove) { Text("Approuver") } },

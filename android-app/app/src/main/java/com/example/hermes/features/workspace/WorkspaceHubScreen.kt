@@ -108,7 +108,7 @@ fun WorkspaceHubScreen(
                         label = {
                             Text(
                                 text = tab.title,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = if (isSelected) HermesPrimary else HermesTextMuted,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )

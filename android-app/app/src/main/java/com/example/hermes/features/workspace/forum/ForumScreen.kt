@@ -141,7 +141,7 @@ fun ForumScreen(
                                     text = p.name.take(1),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isA2A) HermesSecondary else HermesTertiary,
-                                    fontSize = 10.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }

@@ -111,7 +111,7 @@ fun ForumMessageItem(
                             isA2A -> HermesSecondary
                             else -> HermesTextMuted
                         },
-                        fontSize = 10.sp
+                        fontSize = 12.sp
                     )
                 }
 
@@ -172,7 +172,7 @@ fun ForumMessageItem(
                                 text = endpoint,
                                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                                 color = HermesSecondary,
-                                fontSize = 10.sp
+                                fontSize = 12.sp
                             )
                         }
                     }

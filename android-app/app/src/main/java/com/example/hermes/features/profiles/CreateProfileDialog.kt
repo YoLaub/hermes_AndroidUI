@@ -54,7 +54,7 @@ fun CreateProfileDialog(
                         Text(
                             text = if (name.isNotBlank() && !isNameValid) "Lettres minuscules, chiffres, tirets uniquement"
                             else "Identifiant unique du profil",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = if (name.isNotBlank() && !isNameValid) HermesWarning else HermesTextMuted
                         )
                     },
@@ -83,7 +83,7 @@ fun CreateProfileDialog(
                         FilterChip(
                             selected = isSelected,
                             onClick = { selectedCloneFrom = p.name },
-                            label = { Text(p.name, fontSize = 11.sp) },
+                            label = { Text(p.name, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = HermesPrimary.copy(alpha = 0.2f),
                                 selectedLabelColor = HermesPrimary

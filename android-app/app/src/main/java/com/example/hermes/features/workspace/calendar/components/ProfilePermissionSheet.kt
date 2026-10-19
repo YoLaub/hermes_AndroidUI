@@ -148,7 +148,7 @@ fun ProfilePermissionSheet(
                                             text = if (isUser) "Utilisateur" else "Agent",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = HermesTextMuted,
-                                            fontSize = 10.sp
+                                            fontSize = 12.sp
                                         )
                                     }
                                 }
@@ -172,7 +172,7 @@ fun ProfilePermissionSheet(
                                                         CalendarPermissionLevel.READ_WRITE -> "Lecture & Écriture"
                                                         CalendarPermissionLevel.READ_ONLY -> "Lecture seule"
                                                     },
-                                                    fontSize = 11.sp
+                                                    fontSize = 12.sp
                                                 )
                                             },
                                             colors = FilterChipDefaults.filterChipColors(

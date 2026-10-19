@@ -153,13 +153,13 @@ private fun MandateCard(mandate: MemoryMandate, now: Long, enabled: Boolean, onR
             if (mandate.hosts.isNotEmpty()) {
                 Text("Sites", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    mandate.hosts.forEach { AssistChip(onClick = {}, enabled = false, label = { Text(it, fontSize = 11.sp) }) }
+                    mandate.hosts.forEach { AssistChip(onClick = {}, enabled = false, label = { Text(it, fontSize = 12.sp) }) }
                 }
             }
             if (mandate.folders.isNotEmpty()) {
                 Text("Dossiers", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    mandate.folders.forEach { AssistChip(onClick = {}, enabled = false, label = { Text(it, fontSize = 11.sp) }) }
+                    mandate.folders.forEach { AssistChip(onClick = {}, enabled = false, label = { Text(it, fontSize = 12.sp) }) }
                 }
             }
             if (active) {
@@ -213,7 +213,7 @@ private fun NewMandateCard(
                         selected = profile == p.name,
                         onClick = { profile = p.name },
                         enabled = enabled,
-                        label = { Text(p.name, fontSize = 11.sp) }
+                        label = { Text(p.name, fontSize = 12.sp) }
                     )
                 }
             }
@@ -241,9 +241,9 @@ private fun NewMandateCard(
                 OutlinedButton(onClick = { addHost(false) }, enabled = enabled && hostInput.isNotBlank()) { Text("Ce site", fontSize = 12.sp) }
                 OutlinedButton(onClick = { addHost(true) }, enabled = enabled && hostInput.isNotBlank()) { Text("Ses sous-domaines", fontSize = 12.sp) }
             }
-            Text("« *.site.org » couvre les sous-domaines, pas site.org lui-même : ajoute les deux si besoin.", fontSize = 11.sp)
+            Text("« *.site.org » couvre les sous-domaines, pas site.org lui-même : ajoute les deux si besoin.", fontSize = 12.sp)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                hosts.forEach { h -> InputChip(selected = true, onClick = { hosts = hosts - h }, label = { Text(h, fontSize = 11.sp) }, trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Retirer $h", modifier = Modifier.size(14.dp)) }) }
+                hosts.forEach { h -> InputChip(selected = true, onClick = { hosts = hosts - h }, label = { Text(h, fontSize = 12.sp) }, trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Retirer $h", modifier = Modifier.size(14.dp)) }) }
             }
 
             Text("Dossiers", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -265,13 +265,13 @@ private fun NewMandateCard(
                 enabled = enabled && folderInput.isNotBlank()
             ) { Text("Ajouter le dossier", fontSize = 12.sp) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                folders.forEach { f -> InputChip(selected = true, onClick = { folders = folders - f }, label = { Text(f, fontSize = 11.sp) }, trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Retirer $f", modifier = Modifier.size(14.dp)) }) }
+                folders.forEach { f -> InputChip(selected = true, onClick = { folders = folders - f }, label = { Text(f, fontSize = 12.sp) }, trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Retirer $f", modifier = Modifier.size(14.dp)) }) }
             }
 
             Text("Durée (30 jours au plus)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 MANDATE_DURATIONS.forEach { d ->
-                    FilterChip(selected = duration == d, onClick = { duration = d }, enabled = enabled, label = { Text(d.label, fontSize = 11.sp) })
+                    FilterChip(selected = duration == d, onClick = { duration = d }, enabled = enabled, label = { Text(d.label, fontSize = 12.sp) })
                 }
             }
 

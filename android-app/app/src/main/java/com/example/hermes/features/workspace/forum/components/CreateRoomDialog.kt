@@ -191,7 +191,7 @@ fun CreateRoomDialog(
                                         )
                                     }
                                 },
-                                label = { Text("📡 ${a2a.name} (${a2a.endpointUrl})", fontSize = 11.sp) },
+                                label = { Text("📡 ${a2a.name} (${a2a.endpointUrl})", fontSize = 12.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = HermesSecondaryContainer,
                                     selectedLabelColor = HermesSecondary

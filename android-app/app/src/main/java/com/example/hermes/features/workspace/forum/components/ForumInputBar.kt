@@ -53,7 +53,7 @@ fun ForumInputBar(
                     text = "$typingAgentName est en train de répondre...",
                     style = MaterialTheme.typography.labelSmall,
                     color = HermesTertiary,
-                    fontSize = 11.sp
+                    fontSize = 12.sp
                 )
             }
         }
@@ -80,7 +80,7 @@ fun ForumInputBar(
                             text = "@${p.name}",
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isA2A) HermesSecondary else HermesTertiary,
-                            fontSize = 11.sp
+                            fontSize = 12.sp
                         )
                     }
                 }

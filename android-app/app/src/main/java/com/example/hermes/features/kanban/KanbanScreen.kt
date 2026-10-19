@@ -285,7 +285,7 @@ fun KanbanScreen(
                                 ) {
                                     Text(
                                         text = "$count",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                         color = if (isSelected) colColor else HermesTextMuted,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )

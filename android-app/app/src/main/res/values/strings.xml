@@ -1,4 +1,29 @@
 <resources>
     <string name="app_name">Hermes</string>
     <string name="accessibility_service_description">Permet au profil Hermes autorisé de lire et d\'interagir avec l\'application sélectionnée lorsque vous activez une session de contrôle mobile explicite.</string>
+
+    <!-- Common -->
+    <string name="action_back">Retour</string>
+    <string name="action_cancel">Annuler</string>
+    <string name="action_retry">Réessayer</string>
+    <string name="action_close">Fermer</string>
+    <string name="action_more">Plus d\'options</string>
+    <string name="loading">Chargement…</string>
+
+    <!-- Server errors -->
+    <string name="error_network">Serveur injoignable</string>
+    <string name="error_unauthorized">Authentification refusée</string>
+    <string name="error_forbidden">Accès interdit</string>
+    <string name="error_not_found">Introuvable</string>
+    <string name="error_rejected">Requête refusée par le serveur</string>
+    <string name="error_upstream">Service en amont indisponible</string>
+    <string name="error_server">Erreur du serveur</string>
+    <string name="error_other">Erreur</string>
+    <string name="error_raw_label">Message du serveur</string>
+
+    <!-- Untrusted text -->
+    <string name="untrusted_target_label">Cible déclarée par l\'agent · non vérifiée</string>
+
+    <!-- Read-only chip -->
+    <string name="terminal_only">Terminal uniquement</string>
 </resources>

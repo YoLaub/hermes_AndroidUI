@@ -143,7 +143,7 @@ fun SessionsDrawerContent(
                         val extra = if (!showAllProfiles && otherProfileCount > 0) " (+$otherProfileCount)" else ""
                         Text(
                             text = if (showAllProfiles) "Tous profils" else "Profil actif$extra",
-                            fontSize = 11.sp
+                            fontSize = 12.sp
                         )
                     },
                     leadingIcon = {
@@ -202,7 +202,7 @@ fun SessionsDrawerContent(
                         onClick = onClearSearch,
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text("Réinitialiser", fontSize = 11.sp, color = HermesPrimary)
+                        Text("Réinitialiser", fontSize = 12.sp, color = HermesPrimary)
                     }
                 }
             }

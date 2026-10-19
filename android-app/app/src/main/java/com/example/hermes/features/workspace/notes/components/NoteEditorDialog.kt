@@ -191,7 +191,7 @@ fun NoteEditorDialog(
                             InputChip(
                                 selected = false,
                                 onClick = { tags = tags.filter { it != t } },
-                                label = { Text("#$t", fontSize = 11.sp) },
+                                label = { Text("#$t", fontSize = 12.sp) },
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Close,

@@ -133,7 +133,7 @@ fun ToolCallCard(
                     text = argsStr.take(120),
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp
+                        fontSize = 12.sp
                     ),
                     color = HermesTextMuted,
                     maxLines = 1,
@@ -163,7 +163,7 @@ fun ToolCallCard(
                             text = args.toString(),
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp
+                                fontSize = 12.sp
                             ),
                             color = HermesPrimary
                         )
@@ -180,7 +180,7 @@ fun ToolCallCard(
                             text = output.take(500),
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp
+                                fontSize = 12.sp
                             ),
                             color = if (toolCall.isError) HermesError else HermesTextPrimary
                         )

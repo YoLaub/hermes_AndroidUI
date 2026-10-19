@@ -130,14 +130,14 @@ private fun ZoneEditor(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             // Given from the terminal only: shown, never a toggle.
             ADMIN_ONLY_ZONES.filter { it in held }.forEach { zone ->
-                AssistChip(onClick = {}, enabled = false, label = { Text("$zone (terminal)", fontSize = 11.sp) })
+                AssistChip(onClick = {}, enabled = false, label = { Text("$zone (terminal)", fontSize = 12.sp) })
             }
             TOGGLE_ZONES.forEach { zone ->
                 FilterChip(
                     selected = zone in selected,
                     onClick = { onToggle(zone) },
                     enabled = enabled,
-                    label = { Text(zone, fontSize = 11.sp) }
+                    label = { Text(zone, fontSize = 12.sp) }
                 )
             }
         }
@@ -170,7 +170,7 @@ private fun ProfileCard(
                 AssistChip(
                     onClick = {},
                     enabled = false,
-                    label = { Text("Niveau de garde : ${if (level == "high") "élevé" else "normal"} (terminal)", fontSize = 11.sp) }
+                    label = { Text("Niveau de garde : ${if (level == "high") "élevé" else "normal"} (terminal)", fontSize = 12.sp) }
                 )
             }
             if (revoked) {
@@ -216,7 +216,7 @@ private fun NewProfileCard(enabled: Boolean, onCreate: (String, List<String>, Li
             // No grant at all is a valid profile.
             ZoneEditor("Lecture", emptyList(), read, { read = read.toggled(it) }, enabled)
             ZoneEditor("Écriture", emptyList(), write, { write = write.toggled(it) }, enabled)
-            Text("secrets et finance ne se donnent que depuis le terminal.", fontSize = 11.sp)
+            Text("secrets et finance ne se donnent que depuis le terminal.", fontSize = 12.sp)
             Button(
                 onClick = { onCreate(name, grantsToSend(emptyList(), read), grantsToSend(emptyList(), write)) },
                 enabled = enabled && nameOk

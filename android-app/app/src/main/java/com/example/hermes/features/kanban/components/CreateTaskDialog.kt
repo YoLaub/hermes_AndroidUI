@@ -79,7 +79,7 @@ fun CreateTaskDialog(
                         FilterChip(
                             selected = isSelected,
                             onClick = { status = st },
-                            label = { Text(kanbanStatusLabel(st), fontSize = 10.sp) },
+                            label = { Text(kanbanStatusLabel(st), fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = kanbanStatusColor(st).copy(alpha = 0.25f),
                                 selectedLabelColor = kanbanStatusColor(st)
@@ -98,7 +98,7 @@ fun CreateTaskDialog(
                         FilterChip(
                             selected = priority == prio,
                             onClick = { priority = prio },
-                            label = { Text(label, fontSize = 11.sp) }
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
