@@ -1,5 +1,6 @@
 package com.example.hermes.features.workspace.notes
 
+import com.example.hermes.core.model.OWNER_NAME
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hermes.core.audio.AudioPlayerManager
@@ -113,7 +114,7 @@ class NotesViewModel(
         val newNote = AgentNote(
             title = "🎙️ Note vocale (${java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date())})",
             content = content.ifBlank { "*(Enregistrement audio sans transcription)*" },
-            author = "Yoann",
+            author = OWNER_NAME,
             authorRole = "user",
             tags = listOf("Audio", "Vocal"),
             audioFilePath = st.audioFilePath,
@@ -135,7 +136,7 @@ class NotesViewModel(
         val note = AgentNote(
             title = "",
             content = "",
-            author = "Yoann",
+            author = OWNER_NAME,
             authorRole = "user",
             tags = emptyList()
         )
@@ -150,14 +151,15 @@ class NotesViewModel(
         _uiState.update { it.copy(isEditingNote = false, activeEditingNote = null) }
     }
 
-    fun saveEditingNote(title: String, content: String, author: String, tags: List<String>) {
+    fun saveEditingNote(title: String, content: String, author: String, authorRole: String, tags: List<String>) {
         val current = _uiState.value.activeEditingNote ?: return
         if (title.isBlank() && content.isBlank()) return
 
         val updated = current.copy(
             title = title.ifBlank { "Sans titre" },
             content = content,
-            author = author.ifBlank { "Yoann" },
+            author = author.ifBlank { OWNER_NAME },
+            authorRole = if (author.isBlank()) "user" else authorRole,
             tags = tags
         )
 

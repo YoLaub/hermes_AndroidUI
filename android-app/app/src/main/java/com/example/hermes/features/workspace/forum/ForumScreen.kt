@@ -24,10 +24,12 @@ import com.example.hermes.features.workspace.forum.components.CreateRoomDialog
 import com.example.hermes.features.workspace.forum.components.ForumInputBar
 import com.example.hermes.features.workspace.forum.components.ForumMessageItem
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.Persona
 
 @Composable
 fun ForumScreen(
     viewModel: ForumViewModel,
+    personas: List<Persona> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -176,7 +178,7 @@ fun ForumScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Posez une question ou mentionnez un agent (@Mario, @Gaston, @A2A) pour démarrer la discussion de groupe.",
+                            text = "Posez une question ou mentionnez un agent (@nom, @A2A) pour démarrer la discussion de groupe.",
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -216,6 +218,7 @@ fun ForumScreen(
         if (state.isCreateRoomOpen) {
             CreateRoomDialog(
                 a2aAgents = state.a2aAgents,
+                personas = personas,
                 onCreate = { name, topic, icon, participants, isA2A ->
                     viewModel.createRoom(name, topic, icon, participants, isA2A)
                 },

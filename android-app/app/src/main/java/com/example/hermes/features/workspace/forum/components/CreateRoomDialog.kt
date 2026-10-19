@@ -19,11 +19,15 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.A2AExternalAgent
 import com.example.hermes.core.model.ForumParticipant
 import com.example.hermes.core.model.ParticipantType
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun CreateRoomDialog(
     a2aAgents: List<A2AExternalAgent>,
+    personas: List<Persona>,
     onCreate: (
         name: String,
         topic: String,
@@ -38,17 +42,16 @@ fun CreateRoomDialog(
     var selectedIcon by remember { mutableStateOf("🏛️") }
     var isA2AEnabled by remember { mutableStateOf(true) }
 
-    val internalCandidates = listOf(
-        ForumParticipant(name = "Mario", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Commercial & Growth"),
-        ForumParticipant(name = "Gaston", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Tech & CRM"),
-        ForumParticipant(name = "Hermes", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Orchestrateur")
-    )
+    // Agents from the profile list; the subtitle is their model.
+    val internalCandidates = personas.map {
+        ForumParticipant(name = it.name, type = ParticipantType.INTERNAL_AGENT, roleTitle = it.model ?: "Agent")
+    }
 
     var selectedParticipants by remember {
-        mutableStateOf(listOf(
-            ForumParticipant(name = "Yoann", type = ParticipantType.USER, roleTitle = "Pilote"),
-            internalCandidates[0] // Mario by default
-        ))
+        mutableStateOf(
+            listOf(ForumParticipant(name = OWNER_NAME, type = ParticipantType.USER, roleTitle = "Pilote")) +
+                internalCandidates.take(1)
+        )
     }
 
     val iconOptions = listOf("🏛️", "🚀", "💡", "🛠️", "🎯", "📊", "🤖", "🌐")
@@ -145,7 +148,7 @@ fun CreateRoomDialog(
                 // Internal Agents Selector
                 Text(text = "Inviter des agents internes :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     internalCandidates.forEach { candidate ->
                         val isSelected = selectedParticipants.any { it.name == candidate.name }
                         FilterChip(

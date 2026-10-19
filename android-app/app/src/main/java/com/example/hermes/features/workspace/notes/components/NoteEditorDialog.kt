@@ -20,12 +20,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.AgentNote
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.core.model.isOwnerName
+import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditorDialog(
     note: AgentNote,
-    onSave: (title: String, content: String, author: String, tags: List<String>) -> Unit,
+    personas: List<Persona>,
+    onSave: (title: String, content: String, author: String, authorRole: String, tags: List<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
     var title by remember { mutableStateOf(note.title) }
@@ -34,7 +39,8 @@ fun NoteEditorDialog(
     var tagInput by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf(note.tags) }
 
-    val authorOptions = listOf("Yoann", "Mario", "Gaston", "Hermes")
+    // The owner first, then the agents from the profile list.
+    val authorOptions = listOf(OWNER_NAME) + personas.map { it.name }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -85,18 +91,15 @@ fun NoteEditorDialog(
                     color = HermesTextSecondary
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     authorOptions.forEach { opt ->
                         FilterChip(
-                            selected = author == opt,
+                            selected = author == opt || (opt == OWNER_NAME && isOwnerName(author)),
                             onClick = { author = opt },
                             label = { Text(opt, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = if (opt == "Yoann") HermesPrimaryContainer else HermesTertiaryContainer,
-                                selectedLabelColor = if (opt == "Yoann") HermesPrimary else HermesTertiary
+                                selectedContainerColor = if (opt == OWNER_NAME) HermesPrimaryContainer else HermesTertiaryContainer,
+                                selectedLabelColor = if (opt == OWNER_NAME) HermesPrimary else HermesTertiary
                             ),
                             modifier = Modifier.height(32.dp)
                         )
@@ -220,7 +223,7 @@ fun NoteEditorDialog(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { onSave(title, content, author, tags) },
+                        onClick = { onSave(title, content, author, if (isOwnerName(author)) "user" else "agent", tags) },
                         colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
                         shape = RoundedCornerShape(12.dp)
                     ) {

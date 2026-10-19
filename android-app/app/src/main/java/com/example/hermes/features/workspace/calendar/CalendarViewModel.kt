@@ -79,8 +79,8 @@ class CalendarViewModel(
             dateEpochDay = date.toEpochDay(),
             startTime = "09:00",
             endTime = "10:00",
-            organizer = "Yoann",
-            assignedProfiles = listOf("Yoann")
+            organizer = OWNER_NAME,
+            assignedProfiles = listOf(OWNER_NAME)
         )
         _uiState.update { it.copy(isEventEditorOpen = true, activeEditingEvent = newEvent) }
     }
@@ -170,6 +170,18 @@ class CalendarViewModel(
         }
     }
 
+    /** Lists every agent of the profile list in the access sheet; a newcomer starts read-only. */
+    fun syncAgents(agentNames: List<String>) {
+        val current = _uiState.value.permissions
+        val missing = agentNames.filter { name -> current.none { it.profileName.equals(name, ignoreCase = true) } }
+        if (missing.isEmpty()) return
+        val updated = current + missing.map { ProfileCalendarPermission(it, "agent", CalendarPermissionLevel.READ_ONLY, "#BC8CFF") }
+        viewModelScope.launch {
+            repository.updatePermissions(updated)
+            _uiState.update { it.copy(permissions = updated) }
+        }
+    }
+
     fun clearNotice() {
         _uiState.update { it.copy(messageNotice = null) }
     }
@@ -182,14 +194,14 @@ class CalendarViewModel(
         // 1. Group events by date for the month calendar view
         val monthEventsMap = current.events
             .filter { ev ->
-                filterProfile == null || ev.organizer == filterProfile || ev.assignedProfiles.contains(filterProfile)
+                filterProfile == null || matchesPerson(ev.organizer, filterProfile) || ev.assignedProfiles.any { matchesPerson(it, filterProfile) }
             }
             .groupBy { LocalDate.ofEpochDay(it.dateEpochDay) }
 
         // 2. Filter events for the currently selected date
         val forDate = current.events.filter { ev ->
             ev.dateEpochDay == selectedDateEpoch &&
-                    (filterProfile == null || ev.organizer == filterProfile || ev.assignedProfiles.contains(filterProfile))
+                    (filterProfile == null || matchesPerson(ev.organizer, filterProfile) || ev.assignedProfiles.any { matchesPerson(it, filterProfile) })
         }.sortedBy { it.startTime }
 
         _uiState.update {

@@ -59,6 +59,16 @@
     <string name="chat_delete_conversation_title">Supprimer la conversation ?</string>
     <string name="chat_delete_conversation_message">« %1$s » et ses messages seront supprimés du serveur.</string>
     <string name="chat_agent_settings">Réglages de l\'agent</string>
+    <string name="chat_empty_title">Que puis-je faire pour vous ?</string>
+    <plurals name="chat_skill_count">
+        <item quantity="one">%d compétence</item>
+        <item quantity="other">%d compétences</item>
+    </plurals>
+    <string name="chat_suggestion_architecture">Expliquer l\'architecture de ce serveur</string>
+    <string name="chat_suggestion_files">Inspecter les fichiers et la structure du projet</string>
+    <string name="chat_suggestion_git">Lancer git status et résumer les changements</string>
+    <string name="chat_input_placeholder">Écrire à %1$s…</string>
+    <string name="chat_input_answering">%1$s répond…</string>
 
     <!-- Space -->
     <string name="space_tasks">Tâches</string>

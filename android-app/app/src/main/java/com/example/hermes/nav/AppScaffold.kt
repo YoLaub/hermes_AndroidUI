@@ -48,6 +48,7 @@ import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
 import com.example.hermes.theme.HermesColors
 import com.example.hermes.ui.components.SessionBanner
+import com.example.hermes.ui.components.personasOf
 import com.example.hermes.ui.components.StopControlDialog
 
 class AppViewModels(
@@ -174,6 +175,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                                 notesViewModel = vm.notes,
                                 calendarViewModel = vm.calendar,
                                 forumViewModel = vm.forum,
+                                personas = personasOf(chat.profiles),
                                 onOpenTasks = {
                                     vm.kanban.loadData()
                                     go(nav.push(KanbanRoute))

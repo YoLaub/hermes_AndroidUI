@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.EventStatus
+import com.example.hermes.core.model.isOwnerName
 import com.example.hermes.theme.*
 
 @Composable
@@ -164,7 +165,7 @@ fun EventCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     event.assignedProfiles.forEach { profile ->
-                        val isUser = profile == "Yoann"
+                        val isUser = isOwnerName(profile)
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))

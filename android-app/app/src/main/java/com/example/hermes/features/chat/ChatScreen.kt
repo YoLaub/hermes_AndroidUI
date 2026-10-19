@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.ChatMessage
+import com.example.hermes.core.model.ProfileInfo
+import com.example.hermes.ui.components.personaOf
 import com.example.hermes.features.chat.components.*
 import com.example.hermes.features.sessions.SessionsDrawerContent
 import com.example.hermes.theme.*
@@ -139,6 +141,7 @@ fun ChatScreen(
             bottomBar = {
                 ChatInputField(
                     inputText = state.inputText,
+                    profileName = profileDisplayName(state.activeProfile),
                     onInputTextChanged = { viewModel.onInputTextChanged(it) },
                     onSendMessage = { viewModel.sendMessage() },
                     onCancelStream = { viewModel.cancelStream() },
@@ -218,75 +221,12 @@ fun ChatScreen(
 
                 // Messages List
                 if (state.messages.isEmpty() && !state.isStreaming && !state.isLoading) {
-                    // Empty State Hero
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(HermesPrimaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SmartToy,
-                                    contentDescription = null,
-                                    tint = HermesPrimary,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "How can Hermes help you today?",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = HermesTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Running as profile '${state.activeProfile}'",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = HermesSecondary
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Suggestion chips
-                            val suggestions = listOf(
-                                "Inspect project files and structure",
-                                "Run git status and summarize changes",
-                                "Explain the architecture of this server"
-                            )
-                            suggestions.forEach { prompt ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clickable {
-                                            viewModel.onInputTextChanged(prompt)
-                                        },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = CardDefaults.cardColors(containerColor = OnyxDarkSurfaceVariant),
-                                    border = CardDefaults.outlinedCardBorder().copy(
-                                        brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
-                                    )
-                                ) {
-                                    Text(
-                                        text = prompt,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = HermesTextPrimary,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    val activeInfo = state.profiles.firstOrNull { it.name == state.activeProfile }
+                    ChatEmptyState(
+                        persona = personaOf(activeInfo ?: ProfileInfo(name = state.activeProfile)),
+                        skillCount = activeInfo?.skillCount ?: 0,
+                        onSuggestion = { viewModel.onInputTextChanged(it) },
+                    )
                 } else {
                     LazyColumn(
                         state = listState,

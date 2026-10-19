@@ -94,7 +94,7 @@ class ForumViewModel(
 
         val userMessage = ForumMessage(
             roomId = currentRoom.id,
-            senderName = "Yoann",
+            senderName = OWNER_NAME,
             senderType = ParticipantType.USER,
             content = currentText,
             mentionedAgents = mentioned
@@ -158,12 +158,7 @@ class ForumViewModel(
                 "📡 **[A2A Protocol Event]** Réponse reçue de l'agent distant `${participant.name}` via endpoint `${participant.a2aEndpointUrl ?: "https://a2a-node.internal"}` :\n\nJ'ai analysé la demande *\"$query\"*. Les signaux de données ont été mis à disposition du salon `${room.name}`."
             }
             ParticipantType.INTERNAL_AGENT -> {
-                when (participant.name.lowercase()) {
-                    "mario" -> "Bien reçu @Yoann. Concernant la prospection & growth, je structure les cibles prioritaires et j'ajoute les cartes Kanban dédiées."
-                    "gaston" -> "Compris pour l'infrastructure & CRM. Je vérifie les pipelines de synchronisation et je valide les autorisations d'écriture."
-                    "hermes" -> "Orchestration validée. Les sous-agents ont synchronisé leurs contextes avec le hub commun."
-                    else -> "Message bien pris en compte par ${participant.name}. Je poursuis le traitement collaboratif dans le salon."
-                }
+                "Message bien pris en compte par ${participant.name}. Je poursuis le traitement collaboratif dans le salon."
             }
             else -> "Reçu."
         }

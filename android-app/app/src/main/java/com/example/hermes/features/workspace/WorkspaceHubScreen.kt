@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.example.hermes.R
+import com.example.hermes.ui.components.Persona
 import com.example.hermes.features.workspace.calendar.CalendarScreen
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.forum.ForumScreen
@@ -37,6 +38,7 @@ fun WorkspaceHubScreen(
     notesViewModel: NotesViewModel,
     calendarViewModel: CalendarViewModel,
     forumViewModel: ForumViewModel,
+    personas: List<Persona> = emptyList(),
     onOpenTasks: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -118,13 +120,13 @@ fun WorkspaceHubScreen(
                 }
                 when (selectedTab) {
                     WorkspaceTab.NOTES -> {
-                        NotesScreen(viewModel = notesViewModel)
+                        NotesScreen(viewModel = notesViewModel, personas = personas)
                     }
                     WorkspaceTab.CALENDAR -> {
-                        CalendarScreen(viewModel = calendarViewModel)
+                        CalendarScreen(viewModel = calendarViewModel, personas = personas)
                     }
                     WorkspaceTab.FORUM -> {
-                        ForumScreen(viewModel = forumViewModel)
+                        ForumScreen(viewModel = forumViewModel, personas = personas)
                     }
                 }
             }

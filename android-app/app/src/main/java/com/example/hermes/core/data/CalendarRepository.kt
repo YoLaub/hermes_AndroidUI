@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.CalendarPermissionLevel
 import com.example.hermes.core.model.EventStatus
+import com.example.hermes.core.model.OWNER_NAME
 import com.example.hermes.core.model.ProfileCalendarPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,11 +83,9 @@ class CalendarRepository(private val context: Context) {
         savePermissionsToFile(perms)
     }
 
+    // Agents are added from the profile list (CalendarViewModel.syncAgents).
     private fun defaultPermissions(): List<ProfileCalendarPermission> = listOf(
-        ProfileCalendarPermission("Yoann", "user", CalendarPermissionLevel.ADMIN, "#58A6FF"),
-        ProfileCalendarPermission("Mario", "agent", CalendarPermissionLevel.READ_WRITE, "#7EE787"),
-        ProfileCalendarPermission("Gaston", "agent", CalendarPermissionLevel.READ_WRITE, "#D2A8FF"),
-        ProfileCalendarPermission("Hermes", "agent", CalendarPermissionLevel.READ_ONLY, "#F0883E")
+        ProfileCalendarPermission(OWNER_NAME, "user", CalendarPermissionLevel.ADMIN, "#58A6FF")
     )
 
     private fun defaultEvents(todayEpochDay: Long): List<CalendarEvent> = listOf(

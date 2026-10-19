@@ -1,5 +1,7 @@
 package com.example.hermes.features.chat.components
 
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -37,6 +39,7 @@ import com.example.hermes.theme.*
 @Composable
 fun ChatInputField(
     inputText: String,
+    profileName: String,
     onInputTextChanged: (String) -> Unit,
     onSendMessage: () -> Unit,
     onCancelStream: () -> Unit,
@@ -208,7 +211,8 @@ fun ChatInputField(
                     onValueChange = onInputTextChanged,
                     placeholder = {
                         Text(
-                            text = if (isStreaming) "Agent is responding..." else "Message Hermes...",
+                            text = if (isStreaming) stringResource(R.string.chat_input_answering, profileName)
+                            else stringResource(R.string.chat_input_placeholder, profileName),
                             color = HermesTextMuted
                         )
                     },

@@ -27,10 +27,12 @@ import com.example.hermes.features.workspace.notes.components.DictaphoneModal
 import com.example.hermes.features.workspace.notes.components.NoteCard
 import com.example.hermes.features.workspace.notes.components.NoteEditorDialog
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.Persona
 
 @Composable
 fun NotesScreen(
     viewModel: NotesViewModel,
+    personas: List<Persona> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -241,8 +243,9 @@ fun NotesScreen(
         if (state.isEditingNote && state.activeEditingNote != null) {
             NoteEditorDialog(
                 note = state.activeEditingNote!!,
-                onSave = { title, content, author, tags ->
-                    viewModel.saveEditingNote(title, content, author, tags)
+                personas = personas,
+                onSave = { title, content, author, role, tags ->
+                    viewModel.saveEditingNote(title, content, author, role, tags)
                 },
                 onDismiss = { viewModel.closeNoteEditor() }
             )

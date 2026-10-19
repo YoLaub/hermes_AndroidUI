@@ -34,8 +34,8 @@ data class CalendarEvent(
     val dateEpochDay: Long, // LocalDate.toEpochDay()
     val startTime: String, // e.g. "09:30"
     val endTime: String, // e.g. "10:30"
-    val organizer: String = "Yoann", // Who created / owns it
-    val assignedProfiles: List<String> = listOf("Yoann"), // Involved agents/users
+    val organizer: String = OWNER_NAME, // Who created / owns it
+    val assignedProfiles: List<String> = listOf(OWNER_NAME), // Involved agents/users
     val status: EventStatus = EventStatus.CONFIRMED,
     val locationOrLink: String = "",
     val isAllDay: Boolean = false,

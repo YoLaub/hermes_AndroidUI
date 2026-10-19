@@ -18,12 +18,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.EventStatus
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
 import java.time.LocalDate
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun EventEditorDialog(
     event: CalendarEvent,
+    personas: List<Persona>,
     onSave: (
         title: String,
         description: String,
@@ -46,7 +50,7 @@ fun EventEditorDialog(
     var assignedProfiles by remember { mutableStateOf(event.assignedProfiles) }
     var status by remember { mutableStateOf(event.status) }
 
-    val availableProfiles = listOf("Yoann", "Mario", "Gaston", "Hermes")
+    val availableProfiles = listOf(OWNER_NAME) + personas.map { it.name }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -148,15 +152,15 @@ fun EventEditorDialog(
                 // Organizer
                 Text(text = "Organisateur / Porteur :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     availableProfiles.forEach { p ->
                         FilterChip(
                             selected = organizer == p,
                             onClick = { organizer = p },
                             label = { Text(p, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = if (p == "Yoann") HermesPrimaryContainer else HermesTertiaryContainer,
-                                selectedLabelColor = if (p == "Yoann") HermesPrimary else HermesTertiary
+                                selectedContainerColor = if (p == OWNER_NAME) HermesPrimaryContainer else HermesTertiaryContainer,
+                                selectedLabelColor = if (p == OWNER_NAME) HermesPrimary else HermesTertiary
                             ),
                             modifier = Modifier.height(32.dp)
                         )
@@ -168,7 +172,7 @@ fun EventEditorDialog(
                 // Participants / Assigned Profiles
                 Text(text = "Participants / Agents impliqués :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     availableProfiles.forEach { p ->
                         val isAssigned = assignedProfiles.contains(p)
                         FilterChip(

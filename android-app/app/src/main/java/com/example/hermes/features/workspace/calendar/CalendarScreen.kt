@@ -20,23 +20,26 @@ import com.example.hermes.features.workspace.calendar.components.EventEditorDial
 import com.example.hermes.features.workspace.calendar.components.MonthCalendarView
 import com.example.hermes.features.workspace.calendar.components.ProfilePermissionSheet
 import com.example.hermes.theme.*
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.ui.components.Persona
 import java.time.format.DateTimeFormatter
 import java.util.*
 
 @Composable
 fun CalendarScreen(
     viewModel: CalendarViewModel,
+    personas: List<Persona> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    val profileFilters = listOf(
+    // Agents come from the profile list; the access sheet lists each of them.
+    LaunchedEffect(personas) { viewModel.syncAgents(personas.map { it.name }) }
+
+    val profileFilters = listOf<Pair<String?, String>>(
         null to "🌐 Vue Globale",
-        "Yoann" to "👤 Mon Agenda",
-        "Mario" to "🤖 Mario",
-        "Gaston" to "🤖 Gaston",
-        "Hermes" to "🤖 Hermes"
-    )
+        OWNER_NAME to "👤 Mon Agenda"
+    ) + personas.map { it.name to "🤖 ${it.name}" }
 
     val frenchDateFormatter = remember {
         DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH)
@@ -194,6 +197,7 @@ fun CalendarScreen(
         if (state.isEventEditorOpen && state.activeEditingEvent != null) {
             EventEditorDialog(
                 event = state.activeEditingEvent!!,
+                personas = personas,
                 onSave = { title, desc, date, start, end, org, assigned, st, loc ->
                     viewModel.saveEvent(title, desc, date, start, end, org, assigned, st, loc)
                 },
