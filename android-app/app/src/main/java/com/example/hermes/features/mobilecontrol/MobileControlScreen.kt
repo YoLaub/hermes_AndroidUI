@@ -1,5 +1,7 @@
 package com.example.hermes.features.mobilecontrol
 
+import com.example.hermes.ui.components.StopControlDialog
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +46,7 @@ fun MobileControlScreen(
     var showStartSessionDialog by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
     var showAddAppDialog by remember { mutableStateOf(false) }
+    var showStopDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -170,7 +173,7 @@ fun MobileControlScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Button(
-                                onClick = { viewModel.stopSession() },
+                                onClick = { showStopDialog = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = HermesError),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -406,6 +409,16 @@ fun MobileControlScreen(
     }
 
     // ── Dialogs ─────────────────────────────────────────────────────────────
+
+    if (showStopDialog) {
+        StopControlDialog(
+            onConfirm = {
+                showStopDialog = false
+                viewModel.stopSession()
+            },
+            onDismiss = { showStopDialog = false }
+        )
+    }
 
     if (showStartSessionDialog) {
         StartSessionDialog(

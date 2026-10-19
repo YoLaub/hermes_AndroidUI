@@ -63,4 +63,10 @@
 
     <!-- Space -->
     <string name="space_tasks">Tâches</string>
+    <!-- Control session -->
+    <string name="session_banner_text">L\'agent contrôle ce téléphone · %1$s</string>
+    <string name="session_banner_open">Ouvrir le contrôle du téléphone</string>
+    <string name="session_stop">Arrêter</string>
+    <string name="session_stop_title">Arrêter le contrôle ?</string>
+    <string name="session_stop_message">L\'agent ne pourra plus agir sur ce téléphone. Vous pourrez démarrer une nouvelle session.</string>
 </resources>
