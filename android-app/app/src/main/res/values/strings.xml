@@ -451,4 +451,40 @@
     <string name="control_autoriser_une_application">Autoriser une application</string>
     <string name="control_nom_d_affichage_ex_linkedin">Nom d\'affichage (ex: LinkedIn)</string>
     <string name="control_nom_du_package_ex_com">Nom du package (ex: com.linkedin.android)</string>
+    <!-- Tasks -->
+    <string name="kanban_created_minutes_ago">Créée il y a %1$d min</string>
+    <string name="kanban_created_hours_ago">Créée il y a %1$d h</string>
+    <string name="kanban_default" translatable="false">default</string>
+    <string name="kanban_taches">%1$s tâches</string>
+    <string name="kanban_lancer">Lancer</string>
+    <string name="kanban_rafraichir">Rafraîchir</string>
+    <string name="kanban_filtrer_les_taches">Filtrer les tâches...</string>
+    <string name="kanban_aucune_tache_dans">Aucune tâche dans \"%1$s\"</string>
+    <string name="kanban_ajouter_ici">Ajouter ici</string>
+    <string name="kanban_task">Tâche</string>
+    <string name="kanban_tache">Tâche #%1$s</string>
+    <string name="kanban_archiver">Archiver</string>
+    <string name="kanban_titre">Titre</string>
+    <string name="kanban_description_contexte">Description / Contexte</string>
+    <string name="kanban_statut">Statut</string>
+    <string name="kanban_priorite">Priorité</string>
+    <string name="kanban_assigne_a_agent_ou_profil">Assigné à (agent ou profil)</string>
+    <string name="kanban_debloquer_la_tache">Débloquer la tâche</string>
+    <string name="kanban_marquer_comme_bloque">Marquer comme bloqué</string>
+    <string name="kanban_enregistrer_les_modifications">Enregistrer les modifications</string>
+    <string name="kanban_bloquer_la_tache">Bloquer la tâche</string>
+    <string name="kanban_indiquez_la_raison_du_blocage">Indiquez la raison du blocage (l\'agent en tiendra compte) :</string>
+    <string name="kanban_bloquer">Bloquer</string>
+    <string name="kanban_archiver_cette_tache">Archiver cette tâche ?</string>
+    <string name="kanban_quitte_le_tableau_elle_reste">« %1$s » quitte le tableau. Elle reste dans les archives du serveur.</string>
+    <string name="kanban_a_faire">À faire</string>
+    <string name="kanban_pret">Prêt</string>
+    <string name="kanban_en_attente_dispatch">En attente dispatch</string>
+    <string name="kanban_agent_actif">Agent actif</string>
+    <string name="kanban_debloquer">Débloquer</string>
+    <string name="kanban_titre_de_la_tache">Titre de la tâche *</string>
+    <string name="kanban_details_instructions">Détails / Instructions</string>
+    <string name="kanban_colonne_initiale">Colonne initiale :</string>
+    <string name="kanban_priorite_2">Priorité :</string>
+    <string name="kanban_assigne_a_optionnel">Assigné à (optionnel)</string>
 </resources>

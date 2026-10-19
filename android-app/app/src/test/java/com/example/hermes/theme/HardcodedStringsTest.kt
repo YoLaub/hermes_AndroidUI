@@ -10,6 +10,10 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
+        "features/kanban/components/CreateTaskDialog.kt",
+        "features/kanban/components/KanbanTaskCard.kt",
+        "features/kanban/components/KanbanTaskDetailScreen.kt",
+        "features/kanban/KanbanScreen.kt",
         "features/mobilecontrol/MobileControlScreen.kt",
         "features/profiles/MemoryProfileParts.kt",
         "features/profiles/ProfileEnvScreen.kt",
@@ -21,12 +25,17 @@ class HardcodedStringsTest {
             """title\s*=\s*|subtitle\s*=\s*|message\s*=\s*|confirmLabel\s*=\s*)"((?:[^"\\]|\\.)*[A-Za-zÀ-ÿ](?:[^"\\]|\\.)*)""""
     )
 
+    private val template = Regex("""\$\{[^}]*\}|\$[A-Za-z_][\w.]*""")
+
+    /** "$count" or "#${id}" only formats values; there is nothing to translate. */
+    private fun hasWords(literal: String) = template.replace(literal, "").any { it.isLetter() }
+
     @Test
     fun `extracted screens have no literal UI text`() {
         val offenders = extracted.flatMap { path ->
             val file = File("src/main/java/com/example/hermes/$path")
             val source = file.readText()
-            literalUiText.findAll(source).map { match ->
+            literalUiText.findAll(source).filter { hasWords(it.groupValues[1]) }.map { match ->
                 "${file.name}:${source.take(match.range.first).count { it == '\n' } + 1} « ${match.groupValues[1]} »"
             }.toList()
         }

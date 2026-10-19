@@ -19,6 +19,8 @@ import com.example.hermes.core.model.KanbanTask
 import com.example.hermes.theme.*
 import com.example.hermes.ui.components.ConfirmDialog
 import com.example.hermes.ui.components.ScreenHeader
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +46,7 @@ fun KanbanTaskDetailScreen(
 
     // Full screen (Espace › Tâches › Tâche); system back pops it.
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Tâche", subtitle = "#${task.id.take(8)} · $boardName", onBack = onDismiss)
+        ScreenHeader(stringResource(R.string.kanban_task), subtitle = "#${task.id.take(8)} · $boardName", onBack = onDismiss)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -62,14 +64,14 @@ fun KanbanTaskDetailScreen(
             ) {
                 Column {
                     Text(
-                        text = "Tâche #${task.id.take(8)}",
+                        text = stringResource(R.string.kanban_tache, task.id.take(8)),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )
                     task.ageSeconds?.let { sec ->
                         val mins = (sec / 60).toInt()
                         Text(
-                            text = "Créée il y a ${if (mins < 60) "$mins min" else "${mins / 60} h"}",
+                            text = if (mins < 60) stringResource(R.string.kanban_created_minutes_ago, mins) else stringResource(R.string.kanban_created_hours_ago, mins / 60),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextMuted
                         )
@@ -79,7 +81,7 @@ fun KanbanTaskDetailScreen(
                 IconButton(onClick = { confirmArchive = true }) {
                     Icon(
                         Icons.Default.Archive,
-                        contentDescription = "Archiver",
+                        contentDescription = stringResource(R.string.kanban_archiver),
                         tint = HermesWarning
                     )
                 }
@@ -91,7 +93,7 @@ fun KanbanTaskDetailScreen(
             OutlinedTextField(
                 value = editedTitle,
                 onValueChange = { editedTitle = it },
-                label = { Text("Titre") },
+                label = { Text(stringResource(R.string.kanban_titre)) },
                 singleLine = false,
                 maxLines = 3,
                 modifier = Modifier.fillMaxWidth(),
@@ -110,7 +112,7 @@ fun KanbanTaskDetailScreen(
             OutlinedTextField(
                 value = editedBody,
                 onValueChange = { editedBody = it },
-                label = { Text("Description / Contexte") },
+                label = { Text(stringResource(R.string.kanban_description_contexte)) },
                 minLines = 3,
                 maxLines = 6,
                 modifier = Modifier.fillMaxWidth(),
@@ -127,7 +129,7 @@ fun KanbanTaskDetailScreen(
 
             // Status Selector Chips
             Text(
-                text = "Statut",
+                text = stringResource(R.string.kanban_statut),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = HermesTextPrimary
             )
@@ -156,7 +158,7 @@ fun KanbanTaskDetailScreen(
 
             // Priority Selector
             Text(
-                text = "Priorité",
+                text = stringResource(R.string.kanban_priorite),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = HermesTextPrimary
             )
@@ -191,7 +193,7 @@ fun KanbanTaskDetailScreen(
             OutlinedTextField(
                 value = editedAssignee,
                 onValueChange = { editedAssignee = it },
-                label = { Text("Assigné à (agent ou profil)") },
+                label = { Text(stringResource(R.string.kanban_assigne_a_agent_ou_profil)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
@@ -215,7 +217,7 @@ fun KanbanTaskDetailScreen(
                 ) {
                     Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Débloquer la tâche")
+                    Text(stringResource(R.string.kanban_debloquer_la_tache))
                 }
             } else if (task.status != "done" && task.status != "archived") {
                 OutlinedButton(
@@ -226,7 +228,7 @@ fun KanbanTaskDetailScreen(
                 ) {
                     Icon(Icons.Default.Block, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Marquer comme bloqué")
+                    Text(stringResource(R.string.kanban_marquer_comme_bloque))
                 }
             }
 
@@ -250,7 +252,7 @@ fun KanbanTaskDetailScreen(
             ) {
                 Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Enregistrer les modifications")
+                Text(stringResource(R.string.kanban_enregistrer_les_modifications))
             }
         }
     }
@@ -259,11 +261,11 @@ fun KanbanTaskDetailScreen(
     if (showBlockDialog) {
         AlertDialog(
             onDismissRequest = { showBlockDialog = false },
-            title = { Text("Bloquer la tâche") },
+            title = { Text(stringResource(R.string.kanban_bloquer_la_tache)) },
             text = {
                 Column {
                     Text(
-                        text = "Indiquez la raison du blocage (l'agent en tiendra compte) :",
+                        text = stringResource(R.string.kanban_indiquez_la_raison_du_blocage),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextMuted
                     )
@@ -285,12 +287,12 @@ fun KanbanTaskDetailScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF43F5E))
                 ) {
-                    Text("Bloquer")
+                    Text(stringResource(R.string.kanban_bloquer))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBlockDialog = false }) {
-                    Text("Annuler")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -298,9 +300,9 @@ fun KanbanTaskDetailScreen(
 
     if (confirmArchive) {
         ConfirmDialog(
-            title = "Archiver cette tâche ?",
-            message = "« ${task.title} » quitte le tableau. Elle reste dans les archives du serveur.",
-            confirmLabel = "Archiver",
+            title = stringResource(R.string.kanban_archiver_cette_tache),
+            message = stringResource(R.string.kanban_quitte_le_tableau_elle_reste, task.title),
+            confirmLabel = stringResource(R.string.kanban_archiver),
             destructive = true,
             onConfirm = {
                 confirmArchive = false

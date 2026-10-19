@@ -80,7 +80,7 @@ fun KanbanScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Tâches",
+                            text = stringResource(R.string.space_tasks),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = HermesTextPrimary
                         )
@@ -119,7 +119,7 @@ fun KanbanScreen(
                             ) {
                                 if (state.boards.isEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text("default", color = HermesTextPrimary) },
+                                        text = { Text(stringResource(R.string.kanban_default), color = HermesTextPrimary) },
                                         onClick = {
                                             viewModel.switchBoard("default")
                                             showBoardDropdown = false
@@ -141,7 +141,7 @@ fun KanbanScreen(
                                                     )
                                                     Spacer(modifier = Modifier.width(12.dp))
                                                     Text(
-                                                        text = "${b.total} tâches",
+                                                        text = stringResource(R.string.kanban_taches, b.total),
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = HermesTextMuted
                                                     )
@@ -162,7 +162,7 @@ fun KanbanScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour",
+                            contentDescription = stringResource(R.string.action_back),
                             tint = HermesTextPrimary
                         )
                     }
@@ -189,14 +189,14 @@ fun KanbanScreen(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Lancer", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.kanban_lancer), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     // Refresh
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Rafraîchir",
+                            contentDescription = stringResource(R.string.kanban_rafraichir),
                             tint = HermesTextMuted
                         )
                     }
@@ -223,14 +223,14 @@ fun KanbanScreen(
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Filtrer les tâches...", fontSize = 13.sp) },
+                placeholder = { Text(stringResource(R.string.kanban_filtrer_les_taches), fontSize = 13.sp) },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = HermesTextMuted, modifier = Modifier.size(18.dp))
                 },
                 trailingIcon = {
                     if (state.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = HermesTextMuted, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.auth_clear), tint = HermesTextMuted, modifier = Modifier.size(16.dp))
                         }
                     }
                 },
@@ -333,7 +333,7 @@ fun KanbanScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Aucune tâche dans \"${kanbanStatusLabel(col.name)}\"",
+                                text = stringResource(R.string.kanban_aucune_tache_dans, kanbanStatusLabel(col.name)),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = HermesTextMuted
                             )
@@ -344,7 +344,7 @@ fun KanbanScreen(
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Ajouter ici")
+                                Text(stringResource(R.string.kanban_ajouter_ici))
                             }
                         }
                     }
@@ -375,7 +375,7 @@ fun KanbanScreen(
             title = if (ready == 0) "Aucune tâche prête" else "Lancer $ready tâche(s) prête(s) ?",
             message = if (ready == 0) "Seules les tâches de la colonne « Prêt » sont confiées aux agents. Lancer quand même ?"
             else "Les agents assignés commencent à travailler sur ces tâches du tableau ${state.currentBoard}.",
-            confirmLabel = "Lancer",
+            confirmLabel = stringResource(R.string.kanban_lancer),
             onConfirm = {
                 confirmLaunch = false
                 viewModel.dispatch()

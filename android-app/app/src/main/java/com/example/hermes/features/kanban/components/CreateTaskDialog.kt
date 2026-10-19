@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.theme.*
 import com.example.hermes.ui.components.AppButton
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun CreateTaskDialog(
@@ -28,7 +30,7 @@ fun CreateTaskDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Nouvelle tâche",
+                text = stringResource(R.string.space_new_task),
                 style = MaterialTheme.typography.titleMedium,
                 color = HermesTextPrimary
             )
@@ -41,7 +43,7 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titre de la tâche *") },
+                    label = { Text(stringResource(R.string.kanban_titre_de_la_tache)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -56,7 +58,7 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = body,
                     onValueChange = { body = it },
-                    label = { Text("Détails / Instructions") },
+                    label = { Text(stringResource(R.string.kanban_details_instructions)) },
                     minLines = 2,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
@@ -70,7 +72,7 @@ fun CreateTaskDialog(
                 )
 
                 // Status Chips
-                Text("Colonne initiale :", fontSize = 12.sp, color = HermesTextMuted)
+                Text(stringResource(R.string.kanban_colonne_initiale), fontSize = 12.sp, color = HermesTextMuted)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -90,7 +92,7 @@ fun CreateTaskDialog(
                 }
 
                 // Priority
-                Text("Priorité :", fontSize = 12.sp, color = HermesTextMuted)
+                Text(stringResource(R.string.kanban_priorite_2), fontSize = 12.sp, color = HermesTextMuted)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -107,7 +109,7 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = assignee,
                     onValueChange = { assignee = it },
-                    label = { Text("Assigné à (optionnel)") },
+                    label = { Text(stringResource(R.string.kanban_assigne_a_optionnel)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -131,7 +133,7 @@ fun CreateTaskDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Annuler")
+                Text(stringResource(R.string.action_cancel))
             }
         },
         containerColor = OnyxDarkSurface
