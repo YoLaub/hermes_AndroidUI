@@ -179,3 +179,8 @@ fun ChatTopBar(
         )
     }
 }
+
+enum class YoloTap { AskToEnable, Disable }
+
+/** Enabling auto-approval goes through a confirmation; disabling it never waits. */
+fun yoloTap(enabled: Boolean): YoloTap = if (enabled) YoloTap.Disable else YoloTap.AskToEnable

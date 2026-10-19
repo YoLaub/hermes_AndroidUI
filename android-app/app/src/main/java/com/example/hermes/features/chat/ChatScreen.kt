@@ -23,6 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.ChatMessage
 import com.example.hermes.core.model.ProfileInfo
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.ui.components.AlertBanner
+import com.example.hermes.ui.components.AlertTone
+import com.example.hermes.ui.components.ConfirmDialog
 import com.example.hermes.ui.components.personaOf
 import com.example.hermes.features.chat.components.*
 import com.example.hermes.features.sessions.SessionsDrawerContent
@@ -43,6 +48,8 @@ fun ChatScreen(
     val listState = rememberLazyListState()
 
     val sessionsDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    // What to run once the user confirms enabling auto-approval (shield, or "YOLO" on an approval card).
+    var pendingYoloEnable by remember { mutableStateOf<(() -> Unit)?>(null) }
 
 
     // Detect if user is currently near the bottom of the conversation
@@ -132,7 +139,12 @@ fun ChatScreen(
                     canDeleteSession = state.sessionId != null,
                     onOpenDrawer = { scope.launch { sessionsDrawerState.open() } },
                     onOpenProfiles = { tools.profilesSheet = true },
-                    onToggleYolo = { viewModel.toggleYolo() },
+                    onToggleYolo = {
+                        when (yoloTap(state.yoloEnabled)) {
+                            YoloTap.Disable -> viewModel.toggleYolo()
+                            YoloTap.AskToEnable -> pendingYoloEnable = { viewModel.toggleYolo() }
+                        }
+                    },
                     onNewSession = { viewModel.createNewSession() },
                     onDeleteSession = { state.sessionId?.let { viewModel.deleteSession(it) } },
                     onOpenAgentSettings = onOpenAgent,
@@ -165,6 +177,18 @@ fun ChatScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
+                // Stays while auto-approval is on, with a one-tap way out.
+                if (state.yoloEnabled) {
+                    AlertBanner(
+                        title = stringResource(R.string.yolo_banner_title),
+                        text = stringResource(R.string.yolo_banner_text),
+                        tone = AlertTone.Warning,
+                        actionLabel = stringResource(R.string.yolo_disable),
+                        onAction = { viewModel.toggleYolo() },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
                 // Warning / Compressing inline notice
                 AnimatedVisibility(visible = state.compressingNotice != null || state.warningNotice != null) {
                     val notice = state.compressingNotice ?: state.warningNotice ?: ""
@@ -275,7 +299,7 @@ fun ChatScreen(
                                 ApprovalCard(
                                     approval = appr,
                                     onRespond = { approved -> viewModel.respondApproval(approved) },
-                                    onApproveAndYolo = { viewModel.enableYoloAndApprove(appr.id) }
+                                    onApproveAndYolo = { pendingYoloEnable = { viewModel.enableYoloAndApprove(appr.id) } }
                                 )
                             }
                         }
@@ -294,5 +318,19 @@ fun ChatScreen(
             }
         }
 
+    }
+
+    pendingYoloEnable?.let { enable ->
+        ConfirmDialog(
+            title = stringResource(R.string.yolo_confirm_title),
+            message = stringResource(R.string.yolo_confirm_message),
+            confirmLabel = stringResource(R.string.yolo_confirm),
+            destructive = true,
+            onConfirm = {
+                pendingYoloEnable = null
+                enable()
+            },
+            onDismiss = { pendingYoloEnable = null }
+        )
     }
 }

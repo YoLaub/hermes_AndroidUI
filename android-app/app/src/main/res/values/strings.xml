@@ -228,6 +228,13 @@
     <string name="settings_about">À propos</string>
     <string name="settings_version">Hermes Android · client WebUI v0.51</string>
 
+    <string name="yolo_banner_title">Auto-approbation (YOLO) active.</string>
+    <string name="yolo_banner_text">Les outils s\'exécutent sans vous demander.</string>
+    <string name="yolo_disable">Désactiver</string>
+    <string name="yolo_confirm_title">Activer l\'auto-approbation ?</string>
+    <string name="yolo_confirm_message">Dans cette conversation, l\'agent lancera ses outils (commandes, fichiers, web) sans vous demander, jusqu\'à ce que vous la désactiviez.</string>
+    <string name="yolo_confirm">Activer</string>
+
     <!-- Space -->
     <string name="space_tasks">Tâches</string>
     <!-- Control session -->
