@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.features.kanban.components.*
 import com.example.hermes.theme.*
+import com.example.hermes.core.model.KanbanTask
+import com.example.hermes.features.workspace.readyCount
+import com.example.hermes.ui.components.ConfirmDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,9 +37,11 @@ import kotlinx.coroutines.launch
 fun KanbanScreen(
     viewModel: KanbanViewModel,
     onNavigateBack: () -> Unit,
+    onOpenTask: (KanbanTask) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
+    var confirmLaunch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -72,7 +77,7 @@ fun KanbanScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Kanban",
+                            text = "Tâches",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = HermesTextPrimary
                         )
@@ -162,7 +167,7 @@ fun KanbanScreen(
                 actions = {
                     // Dispatch agent action
                     FilledTonalButton(
-                        onClick = { viewModel.dispatch() },
+                        onClick = { confirmLaunch = true },
                         enabled = !state.isDispatching,
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -181,7 +186,7 @@ fun KanbanScreen(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dispatch", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Lancer", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     // Refresh
@@ -353,7 +358,7 @@ fun KanbanScreen(
                         items(filteredTasks, key = { it.id }) { task ->
                             KanbanTaskCard(
                                 task = task,
-                                onClick = { viewModel.selectTask(task) },
+                                onClick = { onOpenTask(task) },
                                 onQuickMove = { nextStatus ->
                                     viewModel.moveTask(task.id, nextStatus)
                                 }
@@ -365,23 +370,18 @@ fun KanbanScreen(
         }
     }
 
-    // Task details modal bottom sheet
-    state.selectedTask?.let { task ->
-        KanbanTaskDetailSheet(
-            task = task,
-            onDismiss = { viewModel.selectTask(null) },
-            onSave = { title, body, status, priority, assignee ->
-                viewModel.updateTask(task.id, title, body, status, priority, assignee)
+    if (confirmLaunch) {
+        val ready = readyCount(state.columns)
+        ConfirmDialog(
+            title = if (ready == 0) "Aucune tâche prête" else "Lancer $ready tâche(s) prête(s) ?",
+            message = if (ready == 0) "Seules les tâches de la colonne « Prêt » sont confiées aux agents. Lancer quand même ?"
+            else "Les agents assignés commencent à travailler sur ces tâches du tableau ${state.currentBoard}.",
+            confirmLabel = "Lancer",
+            onConfirm = {
+                confirmLaunch = false
+                viewModel.dispatch()
             },
-            onBlock = { reason ->
-                viewModel.blockTask(task.id, reason)
-            },
-            onUnblock = {
-                viewModel.unblockTask(task.id)
-            },
-            onArchive = {
-                viewModel.archiveTask(task.id)
-            }
+            onDismiss = { confirmLaunch = false }
         )
     }
 

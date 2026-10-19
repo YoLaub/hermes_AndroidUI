@@ -63,6 +63,17 @@ import com.example.hermes.features.kanban.KanbanViewModel
 import com.example.hermes.features.mobilecontrol.MobileControlScreen
 import com.example.hermes.features.mobilecontrol.MobileControlViewModel
 import com.example.hermes.features.workspace.WorkspaceHubScreen
+import com.example.hermes.features.workspace.SpaceHubState
+import com.example.hermes.features.workspace.SpaceSectionScreen
+import com.example.hermes.features.workspace.agendaSummary
+import com.example.hermes.features.workspace.notesSummary
+import com.example.hermes.features.workspace.tasksSummary
+import com.example.hermes.features.workspace.notes.NotesScreen
+import com.example.hermes.features.workspace.calendar.CalendarScreen
+import com.example.hermes.features.workspace.forum.ForumScreen
+import com.example.hermes.features.kanban.components.KanbanTaskDetailScreen
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
@@ -116,6 +127,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         if (tab == Tab.Agent) vm.chat.loadWorkspaces()
         if (tab == Tab.Control) vm.mobileControl.refreshProfiles()
         if (tab == Tab.Space && !spaceLoaded) {
+            vm.kanban.loadData()
             vm.notes.loadNotes()
             vm.calendar.loadCalendarData()
             vm.forum.loadData()
@@ -196,18 +208,49 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             )
                         }
                         entry<SpaceRoute> {
-                            WorkspaceHubScreen(
-                                notesViewModel = vm.notes,
-                                calendarViewModel = vm.calendar,
-                                forumViewModel = vm.forum,
-                                personas = personasOf(chat.profiles),
-                                onOpenTasks = {
-                                    vm.kanban.loadData()
-                                    go(nav.push(KanbanRoute))
-                                },
-                            )
+                        val kanban by vm.kanban.uiState.collectAsState()
+                        val notes by vm.notes.uiState.collectAsState()
+                        val calendar by vm.calendar.uiState.collectAsState()
+                        WorkspaceHubScreen(
+                            state = SpaceHubState(
+                                tasks = tasksSummary(kanban.columns),
+                                board = kanban.currentBoard,
+                                notes = notesSummary(notes.notes),
+                                agenda = agendaSummary(calendar.events),
+                            ),
+                            onOpenTasks = {
+                                vm.kanban.loadData()
+                                go(nav.push(KanbanRoute))
+                            },
+                            onOpenNotes = { go(nav.push(NotesRoute)) },
+                            onOpenAgenda = { go(nav.push(AgendaRoute)) },
+                            onOpenForum = { go(nav.push(ForumRoute)) },
+                            onDictate = {
+                                go(nav.push(NotesRoute))
+                                vm.notes.openDictaphoneModal()
+                            },
+                            onNewTask = {
+                                go(nav.push(KanbanRoute))
+                                vm.kanban.showCreateDialog(true)
+                            },
+                        )
+                    }
+                    entry<NotesRoute> {
+                        SpaceSectionScreen(stringResource(R.string.space_notes), onBack = { nav.back()?.let(::go) }) {
+                            NotesScreen(viewModel = vm.notes, personas = personasOf(chat.profiles))
                         }
-                        entry<ControlRoute> {
+                    }
+                    entry<AgendaRoute> {
+                        SpaceSectionScreen(stringResource(R.string.space_agenda), onBack = { nav.back()?.let(::go) }) {
+                            CalendarScreen(viewModel = vm.calendar, personas = personasOf(chat.profiles))
+                        }
+                    }
+                    entry<ForumRoute> {
+                        SpaceSectionScreen(stringResource(R.string.space_forum), onBack = { nav.back()?.let(::go) }) {
+                            ForumScreen(viewModel = vm.forum, personas = personasOf(chat.profiles))
+                        }
+                    }
+                    entry<ControlRoute> {
                         MobileControlScreen(viewModel = vm.mobileControl, onOpenRelaySettings = { go(nav.open(Tab.Agent, RelaySettingsRoute)) })
                     }
                         entry<AgentRoute> {
@@ -507,8 +550,35 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                         )
                     }
                         entry<KanbanRoute> {
-                            KanbanScreen(viewModel = vm.kanban, onNavigateBack = { nav.back()?.let(::go) })
+                        KanbanScreen(
+                            viewModel = vm.kanban,
+                            onNavigateBack = { nav.back()?.let(::go) },
+                            onOpenTask = { task ->
+                                vm.kanban.selectTask(task)
+                                go(nav.push(KanbanTaskRoute))
+                            },
+                        )
+                    }
+                    entry<KanbanTaskRoute> {
+                        val kanban by vm.kanban.uiState.collectAsState()
+                        val back = {
+                            vm.kanban.selectTask(null)
+                            nav.back()?.let(::go)
                         }
+                        kanban.selectedTask?.let { task ->
+                            KanbanTaskDetailScreen(
+                                task = task,
+                                boardName = kanban.currentBoard,
+                                onDismiss = { back() },
+                                onSave = { title, body, status, priority, assignee ->
+                                    vm.kanban.updateTask(task.id, title, body, status, priority, assignee)
+                                },
+                                onBlock = { reason -> vm.kanban.blockTask(task.id, reason) },
+                                onUnblock = { vm.kanban.unblockTask(task.id) },
+                                onArchive = { vm.kanban.archiveTask(task.id) },
+                            )
+                        }
+                    }
                     },
                 )
             }

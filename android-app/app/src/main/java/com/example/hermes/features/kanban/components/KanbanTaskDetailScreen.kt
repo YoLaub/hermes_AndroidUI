@@ -17,11 +17,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.KanbanTask
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.ConfirmDialog
+import com.example.hermes.ui.components.ScreenHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KanbanTaskDetailSheet(
+fun KanbanTaskDetailScreen(
     task: KanbanTask,
+    boardName: String,
     onDismiss: () -> Unit,
     onSave: (title: String, body: String, status: String, priority: Int, assignee: String?) -> Unit,
     onBlock: (reason: String) -> Unit,
@@ -37,16 +40,16 @@ fun KanbanTaskDetailSheet(
     var showBlockDialog by remember { mutableStateOf(false) }
     var blockReason by remember { mutableStateOf("En attente de ressource") }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var confirmArchive by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = OnyxDarkSurface
-    ) {
+    // Full screen (Espace › Tâches › Tâche); system back pops it.
+    Column(Modifier.fillMaxSize()) {
+        ScreenHeader("Tâche", subtitle = "#${task.id.take(8)} · $boardName", onBack = onDismiss)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
+                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
                 .verticalScroll(rememberScrollState())
@@ -73,7 +76,7 @@ fun KanbanTaskDetailSheet(
                     }
                 }
 
-                IconButton(onClick = onArchive) {
+                IconButton(onClick = { confirmArchive = true }) {
                     Icon(
                         Icons.Default.Archive,
                         contentDescription = "Archiver",
@@ -290,6 +293,21 @@ fun KanbanTaskDetailSheet(
                     Text("Annuler")
                 }
             }
+        )
+    }
+
+    if (confirmArchive) {
+        ConfirmDialog(
+            title = "Archiver cette tâche ?",
+            message = "« ${task.title} » quitte le tableau. Elle reste dans les archives du serveur.",
+            confirmLabel = "Archiver",
+            destructive = true,
+            onConfirm = {
+                confirmArchive = false
+                onArchive()
+                onDismiss()
+            },
+            onDismiss = { confirmArchive = false }
         )
     }
 }

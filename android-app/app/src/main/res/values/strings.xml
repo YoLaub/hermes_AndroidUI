@@ -237,6 +237,20 @@
 
     <!-- Space -->
     <string name="space_tasks">Tâches</string>
+    <string name="space_subtitle">Zone commune, partagée avec vos agents</string>
+    <string name="space_tasks_blocked">%1$d bloquée(s)</string>
+    <string name="space_tasks_running">%1$d en cours</string>
+    <string name="space_tasks_board">Tableau %1$s</string>
+    <string name="space_notes">Notes</string>
+    <string name="space_notes_pinned">Épinglée : %1$s</string>
+    <string name="space_notes_none_pinned">Notes, recherche, tags et dictaphone</string>
+    <string name="space_agenda">Agenda</string>
+    <string name="space_agenda_none">Aucun créneau aujourd\'hui</string>
+    <string name="space_agenda_today">Aujourd\'hui : %1$d créneau(x) · %2$s</string>
+    <string name="space_forum">Forum</string>
+    <string name="space_forum_sub">Salons multi-agents · agents externes (A2A)</string>
+    <string name="space_dictate">Dicter une note</string>
+    <string name="space_new_task">Nouvelle tâche</string>
     <!-- Control session -->
     <string name="session_banner_text">L\'agent contrôle ce téléphone · %1$s</string>
     <string name="session_banner_open">Ouvrir le contrôle du téléphone</string>
