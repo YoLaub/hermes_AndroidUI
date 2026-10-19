@@ -73,9 +73,11 @@ fun AppNavigationBar(
             NavigationBarItem(
                 selected = selected,
                 onClick = { onSelect(tab) },
+                // The item carries the spoken label (the icon's own semantics are cleared by
+                // NavigationBarItem); the visible label is hidden from TalkBack to avoid reading it twice.
+                modifier = Modifier.semantics { contentDescription = spoken },
                 icon = {
-                    // The icon carries the spoken label; the visible label is hidden from TalkBack.
-                    Box(Modifier.semantics { contentDescription = spoken }) {
+                    Box {
                         Icon(iconOf(tab), contentDescription = null)
                         if (tab == Tab.Inbox && inboxCount > 0) {
                             CountBadge(inboxCount, Modifier.align(Alignment.TopStart).offset(x = 14.dp, y = (-8).dp))
