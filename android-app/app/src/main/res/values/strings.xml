@@ -41,12 +41,6 @@
     </plurals>
     <string name="nav_control_live_a11y">Contrôle du téléphone, session en cours</string>
 
-    <!-- Provisional tab contents (until the dedicated screens land) -->
-    <string name="agent_change_profile">Changer de profil</string>
-    <string name="agent_profile_tools">Outils du profil</string>
-    <string name="agent_profile_tools_sub">Compétences, mémoire, dossiers, variables, garde, passerelle</string>
-    <string name="agent_settings">Réglages</string>
-    <string name="agent_settings_sub">Serveur, compétences, mémoire, espaces de travail</string>
     <!-- Chat top bar -->
     <string name="chat_conversations">Conversations</string>
     <string name="chat_new_conversation">Nouvelle conversation</string>
@@ -69,6 +63,63 @@
     <string name="chat_suggestion_git">Lancer git status et résumer les changements</string>
     <string name="chat_input_placeholder">Écrire à %1$s…</string>
     <string name="chat_input_answering">%1$s répond…</string>
+
+    <!-- Agent -->
+    <string name="agent_change_profile">Changer de profil</string>
+    <string name="agent_settings">Réglages</string>
+    <string name="agent_change">Changer</string>
+    <string name="agent_default_model">Modèle par défaut</string>
+    <string name="agent_gateway_online">Passerelle en ligne</string>
+    <string name="agent_gateway_offline">Passerelle arrêtée</string>
+    <string name="agent_section_config">Configuration du profil</string>
+    <string name="agent_skills">Compétences (skills)</string>
+    <string name="agent_skills_sub">%1$d skills actifs</string>
+    <string name="agent_memory_soul">Mémoire &amp; âme</string>
+    <string name="agent_workspaces">Espaces de travail</string>
+    <string name="agent_workspaces_active">Actif : %1$s</string>
+    <string name="agent_env">Variables &amp; fournisseurs (.env)</string>
+    <string name="agent_env_sub">.env du profil · clés d\'API</string>
+    <string name="agent_section_guard">Garde</string>
+    <string name="agent_guard_pending">À valider &amp; actions</string>
+    <string name="agent_guard_pending_sub">Mémoire et actions en attente de la garde</string>
+    <string name="agent_guard_profiles">Profils mémoire</string>
+    <string name="agent_guard_profiles_sub">Zones de lecture et d\'écriture par profil</string>
+    <string name="agent_guard_mandates">Mandats</string>
+    <string name="agent_guard_mandates_sub">Sites et dossiers confiés pour une durée</string>
+    <string name="agent_section_maintenance">Maintenance</string>
+    <string name="agent_restart">Redémarrer l\'agent %1$s</string>
+    <string name="agent_restart_sub">Passerelle : recharge secrets et configuration</string>
+    <string name="agent_restarting">Redémarrage en cours…</string>
+    <string name="agent_restart_title">Redémarrer l\'agent %1$s ?</string>
+    <string name="agent_restart_message">La passerelle du profil redémarre : les conversations en cours sont interrompues le temps du redémarrage.</string>
+    <string name="agent_restart_confirm">Redémarrer</string>
+
+    <!-- Profile switcher -->
+    <string name="profiles_sheet_subtitle">Persona, modèle et configuration de l\'agent</string>
+    <string name="profiles_new">Nouveau profil</string>
+    <string name="profiles_active">Actif</string>
+    <string name="profiles_default_tag">par défaut</string>
+    <string name="profiles_control_only">seul profil autorisé au contrôle</string>
+    <string name="profiles_options">Options du profil %1$s</string>
+    <string name="profiles_delete">Supprimer le profil</string>
+    <string name="profiles_delete_title">Supprimer le profil %1$s ?</string>
+    <string name="profiles_delete_message">Sa configuration, sa mémoire et ses compétences sont supprimées du serveur.</string>
+
+    <!-- Settings -->
+    <string name="settings_connections">Connexions</string>
+    <string name="settings_server">Serveur Hermes</string>
+    <string name="settings_session">Session active : %1$s…</string>
+    <string name="settings_secrets">Secrets</string>
+    <string name="settings_openbao">Coffre OpenBao</string>
+    <string name="settings_openbao_sub">Connexion et secrets de l\'instance</string>
+    <string name="settings_session_section">Session</string>
+    <string name="settings_disconnect">Changer de serveur / Se déconnecter</string>
+    <string name="settings_disconnect_sub">Retour à l\'écran de connexion</string>
+    <string name="settings_disconnect_title">Se déconnecter ?</string>
+    <string name="settings_disconnect_message">Vous reviendrez à l\'écran de connexion pour choisir un serveur.</string>
+    <string name="settings_disconnect_confirm">Se déconnecter</string>
+    <string name="settings_about">À propos</string>
+    <string name="settings_version">Hermes Android · client WebUI v0.51</string>
 
     <!-- Space -->
     <string name="space_tasks">Tâches</string>

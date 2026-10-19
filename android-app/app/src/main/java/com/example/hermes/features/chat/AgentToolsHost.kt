@@ -13,8 +13,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.hermes.features.profiles.*
-import com.example.hermes.features.settings.SettingsDialog
-import com.example.hermes.theme.OnyxDarkSurface
+import com.example.hermes.features.agent.ProfileSwitcherSheet
+import com.example.hermes.theme.HermesColors
 import kotlinx.coroutines.launch
 
 /** Which agent tool (sheet or dialog) is open. Shared by every tab that can open one. */
@@ -29,7 +29,6 @@ class AgentToolsState {
     var memoryProfilesDialog by mutableStateOf(false)
     var mandatesDialog by mutableStateOf(false)
     var workspaceDialog by mutableStateOf(false)
-    var settingsDialog by mutableStateOf(false)
 }
 
 @Composable
@@ -45,26 +44,28 @@ fun AgentToolsHost(
     viewModel: ChatViewModel,
     tools: AgentToolsState,
     snackbarHostState: SnackbarHostState,
-    onDisconnect: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
 
-    // Profiles Bottom Sheet
+    // The one profile switcher (Chat's title, Agent › Changer)
     if (tools.profilesSheet) {
         ModalBottomSheet(
             onDismissRequest = { tools.profilesSheet = false },
-            containerColor = OnyxDarkSurface
+            containerColor = HermesColors.Surface
         ) {
-            ProfileDrawerContent(
+            ProfileSwitcherSheet(
                 profiles = state.profiles,
                 activeProfile = state.activeProfile,
-                onSelectProfile = { name -> viewModel.switchProfile(name) },
-                onCreateProfile = {
+                onSelect = { name ->
+                    viewModel.switchProfile(name)
+                    tools.profilesSheet = false
+                },
+                onCreate = {
                     tools.profilesSheet = false
                     tools.createProfileDialog = true
                 },
-                onDeleteProfile = { name ->
+                onDelete = { name ->
                     viewModel.deleteProfile(name) { success, err ->
                         scope.launch {
                             snackbarHostState.showSnackbar(
@@ -74,53 +75,6 @@ fun AgentToolsHost(
                         }
                     }
                 },
-                onOpenSkills = {
-                    tools.profilesSheet = false
-                    viewModel.loadSkills()
-                    tools.skillsDialog = true
-                },
-                onOpenMemory = {
-                    tools.profilesSheet = false
-                    viewModel.loadMemory()
-                    tools.memoryDialog = true
-                },
-                onOpenWorkspaces = {
-                    tools.profilesSheet = false
-                    viewModel.loadWorkspaces()
-                    tools.workspaceDialog = true
-                },
-                onOpenEnv = {
-                    tools.profilesSheet = false
-                    viewModel.loadProviders()
-                    tools.profileEnvDialog = true
-                },
-                onOpenMemoryProfiles = {
-                    tools.profilesSheet = false
-                    viewModel.loadMemoryProfiles()
-                    tools.memoryProfilesDialog = true
-                },
-                onOpenMandates = {
-                    tools.profilesSheet = false
-                    viewModel.loadMemoryMandates()
-                    tools.mandatesDialog = true
-                },
-                onOpenValidations = {
-                    tools.profilesSheet = false
-                    viewModel.loadMemoryValidations()
-                    viewModel.loadMemoryActions()
-                    tools.validationsDialog = true
-                },
-                onOpenOpenbao = {
-                    tools.profilesSheet = false
-                    viewModel.loadOpenbaoSecrets()
-                    tools.openBaoDialog = true
-                },
-                onRestartGateway = {
-                    tools.profilesSheet = false
-                    viewModel.restartGateway()
-                },
-                onDismiss = { tools.profilesSheet = false },
-                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -345,41 +299,6 @@ fun AgentToolsHost(
             onAddWorkspace = { path, name -> viewModel.addWorkspace(path, name) },
             onRemoveWorkspace = { path -> viewModel.removeWorkspace(path) },
             onDismiss = { tools.workspaceDialog = false }
-        )
-    }
-
-    // Settings & Tools Dialog
-    if (tools.settingsDialog) {
-        SettingsDialog(
-            serverUrl = state.serverUrl.ifBlank { "Hermes Server" },
-            activeProfile = state.activeProfile,
-            sessionId = state.sessionId,
-            yoloEnabled = state.yoloEnabled,
-            onToggleYolo = { viewModel.toggleYolo() },
-            onOpenSkills = {
-                tools.settingsDialog = false
-                viewModel.loadSkills()
-                tools.skillsDialog = true
-            },
-            onOpenMemory = {
-                tools.settingsDialog = false
-                viewModel.loadMemory()
-                tools.memoryDialog = true
-            },
-            onOpenWorkspaces = {
-                tools.settingsDialog = false
-                viewModel.loadWorkspaces()
-                tools.workspaceDialog = true
-            },
-            onOpenProfiles = {
-                tools.settingsDialog = false
-                tools.profilesSheet = true
-            },
-            onDisconnect = {
-                tools.settingsDialog = false
-                onDisconnect()
-            },
-            onDismiss = { tools.settingsDialog = false }
         )
     }
 }

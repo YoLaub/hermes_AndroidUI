@@ -30,6 +30,10 @@ import androidx.navigation3.ui.NavDisplay
 import com.example.hermes.features.chat.AgentToolsHost
 import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
+import com.example.hermes.features.agent.AgentScreen
+import com.example.hermes.features.agent.AgentState
+import com.example.hermes.features.settings.SettingsScreen
+import com.example.hermes.core.model.ProfileInfo
 import com.example.hermes.features.chat.chatSessionTitle
 import com.example.hermes.features.chat.profileDisplayName
 import com.example.hermes.features.inbox.InboxScreen
@@ -89,6 +93,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
 
     fun onSelect(tab: Tab) {
         if (tab == Tab.Inbox) refreshInbox()
+        if (tab == Tab.Agent) vm.chat.loadWorkspaces()
         if (tab == Tab.Space && !spaceLoaded) {
             vm.notes.loadNotes()
             vm.calendar.loadCalendarData()
@@ -183,7 +188,61 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             )
                         }
                         entry<ControlRoute> { MobileControlScreen(viewModel = vm.mobileControl) }
-                        entry<AgentRoute> { ProvisionalAgentScreen(tools) }
+                        entry<AgentRoute> {
+                        val active = chat.profiles.firstOrNull { it.name == chat.activeProfile } ?: ProfileInfo(name = chat.activeProfile)
+                        AgentScreen(
+                            state = AgentState(
+                                profile = active,
+                                activeWorkspace = chat.workspaces.firstOrNull { it.path == chat.activeWorkspace }?.name
+                                    ?: chat.activeWorkspace,
+                                guardPending = chat.memoryValidations.size + chat.memoryActions.size,
+                                isRestartingGateway = chat.isRestartingGateway,
+                            ),
+                            onChangeProfile = { tools.profilesSheet = true },
+                            onOpenSkills = {
+                                vm.chat.loadSkills()
+                                tools.skillsDialog = true
+                            },
+                            onOpenMemory = {
+                                vm.chat.loadMemory()
+                                tools.memoryDialog = true
+                            },
+                            onOpenWorkspaces = {
+                                vm.chat.loadWorkspaces()
+                                tools.workspaceDialog = true
+                            },
+                            onOpenEnv = {
+                                vm.chat.loadProviders()
+                                tools.profileEnvDialog = true
+                            },
+                            onOpenValidations = {
+                                refreshInbox()
+                                tools.validationsDialog = true
+                            },
+                            onOpenMemoryProfiles = {
+                                vm.chat.loadMemoryProfiles()
+                                tools.memoryProfilesDialog = true
+                            },
+                            onOpenMandates = {
+                                vm.chat.loadMemoryMandates()
+                                tools.mandatesDialog = true
+                            },
+                            onRestartGateway = { vm.chat.restartGateway() },
+                            onOpenSettings = { go(nav.push(SettingsRoute)) },
+                        )
+                    }
+                    entry<SettingsRoute> {
+                        SettingsScreen(
+                            serverUrl = chat.serverUrl,
+                            sessionId = chat.sessionId,
+                            onBack = { nav.back()?.let(::go) },
+                            onOpenOpenBao = {
+                                vm.chat.loadOpenbaoSecrets()
+                                tools.openBaoDialog = true
+                            },
+                            onDisconnect = onDisconnect,
+                        )
+                    }
                         entry<KanbanRoute> {
                             KanbanScreen(viewModel = vm.kanban, onNavigateBack = { nav.back()?.let(::go) })
                         }
@@ -207,6 +266,5 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         viewModel = vm.chat,
         tools = tools,
         snackbarHostState = snackbarHostState,
-        onDisconnect = onDisconnect,
     )
 }
