@@ -15,6 +15,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,13 @@ import androidx.navigation3.ui.NavDisplay
 import com.example.hermes.features.chat.AgentToolsHost
 import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
+import com.example.hermes.features.chat.chatSessionTitle
+import com.example.hermes.features.chat.profileDisplayName
+import com.example.hermes.features.inbox.InboxScreen
+import com.example.hermes.features.inbox.InboxState
+import com.example.hermes.features.inbox.inboxCounts
+import com.example.hermes.features.inbox.shortTime
+import java.time.Instant
 import com.example.hermes.features.chat.rememberAgentToolsState
 import com.example.hermes.features.kanban.KanbanScreen
 import com.example.hermes.features.kanban.KanbanViewModel
@@ -63,6 +71,14 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
     }
 
     val control by vm.mobileControl.uiState.collectAsState()
+    val chat by vm.chat.uiState.collectAsState()
+    val inboxCount = inboxCounts(chat.pendingApproval, chat.memoryActions, chat.memoryValidations).total
+    fun refreshInbox() {
+        vm.chat.loadMemoryValidations()
+        vm.chat.loadMemoryActions()
+    }
+    // The badge needs the counts before the tab is ever opened.
+    LaunchedEffect(Unit) { refreshInbox() }
     var confirmStop by remember { mutableStateOf(false) }
 
     val tools = rememberAgentToolsState()
@@ -70,6 +86,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
     var spaceLoaded by remember { mutableStateOf(false) }
 
     fun onSelect(tab: Tab) {
+        if (tab == Tab.Inbox) refreshInbox()
         if (tab == Tab.Space && !spaceLoaded) {
             vm.notes.loadNotes()
             vm.calendar.loadCalendarData()
@@ -91,7 +108,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (!WindowInsets.isImeVisible) {
-                AppNavigationBar(current = nav.current, onSelect = ::onSelect, controlLive = control.activeSession != null)
+                AppNavigationBar(current = nav.current, onSelect = ::onSelect, inboxCount = inboxCount, controlLive = control.activeSession != null)
             }
         },
     ) { padding ->
@@ -119,7 +136,30 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                                 onOpenAgent = { onSelect(Tab.Agent) },
                             )
                         }
-                        entry<InboxRoute> { ProvisionalInboxScreen(vm.chat, tools) }
+                        entry<InboxRoute> {
+                            InboxScreen(
+                                state = InboxState(
+                                    approval = chat.pendingApproval,
+                                    approvalContext = listOfNotNull(
+                                        profileDisplayName(chat.activeProfile),
+                                        chatSessionTitle(chat.sessions, chat.sessionId),
+                                    ).joinToString(" · "),
+                                    actions = chat.memoryActions,
+                                    memory = chat.memoryValidations,
+                                    memoryLoading = chat.isValidationsLoading,
+                                    memoryError = chat.validationsError,
+                                    hasOwnerToken = chat.hasMemoryOwnerToken,
+                                    checkedAt = chat.memoryCheckedAt?.let { shortTime(Instant.ofEpochMilli(it).toString()) },
+                                ),
+                                onRefresh = ::refreshInbox,
+                                onRespondTool = { vm.chat.respondApproval(it) },
+                                onOpenConversation = { onSelect(Tab.Chat) },
+                                onDecideAction = { id, approve -> vm.chat.decideMemoryAction(id, approve) },
+                                onDecideMemory = { id, confirm -> vm.chat.decideMemoryValidation(id, confirm) },
+                                // The token field moves to Réglages; until then it lives in this dialog.
+                                onChangeToken = { tools.validationsDialog = true },
+                            )
+                        }
                         entry<SpaceRoute> {
                             WorkspaceHubScreen(
                                 notesViewModel = vm.notes,

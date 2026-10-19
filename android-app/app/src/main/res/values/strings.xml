@@ -10,6 +10,7 @@
     <string name="action_more">Plus d\'options</string>
     <string name="loading">Chargement…</string>
     <string name="action_delete">Supprimer</string>
+    <string name="action_refresh">Actualiser</string>
 
     <!-- Server errors -->
     <string name="error_network">Serveur injoignable</string>
@@ -41,8 +42,6 @@
     <string name="nav_control_live_a11y">Contrôle du téléphone, session en cours</string>
 
     <!-- Provisional tab contents (until the dedicated screens land) -->
-    <string name="inbox_memory_and_actions">Mémoire à valider et actions</string>
-    <string name="inbox_memory_and_actions_sub">Éléments de mémoire et actions de la garde en attente</string>
     <string name="agent_change_profile">Changer de profil</string>
     <string name="agent_profile_tools">Outils du profil</string>
     <string name="agent_profile_tools_sub">Compétences, mémoire, dossiers, variables, garde, passerelle</string>
@@ -69,4 +68,38 @@
     <string name="session_stop">Arrêter</string>
     <string name="session_stop_title">Arrêter le contrôle ?</string>
     <string name="session_stop_message">L\'agent ne pourra plus agir sur ce téléphone. Vous pourrez démarrer une nouvelle session.</string>
+    <!-- Inbox (À traiter) -->
+    <string name="inbox_filter_all">Tout</string>
+    <string name="inbox_filter_tools">Outils</string>
+    <string name="inbox_filter_actions">Actions</string>
+    <string name="inbox_filter_memory">Mémoire</string>
+    <string name="inbox_kind_tool">Outil du chat</string>
+    <string name="inbox_kind_action">Action · %1$s</string>
+    <string name="inbox_kind_memory">Mémoire</string>
+    <string name="inbox_zone">zone %1$s</string>
+    <string name="inbox_reason">Motif : %1$s</string>
+    <string name="inbox_memory_origin">Origine : %1$s · Source : %2$s</string>
+    <string name="inbox_open_conversation">Ouvrir la conversation</string>
+    <string name="inbox_refuse">Refuser</string>
+    <string name="inbox_allow">Autoriser</string>
+    <string name="inbox_reject">Rejeter</string>
+    <string name="inbox_confirm">Confirmer</string>
+    <string name="inbox_approve_ellipsis">Approuver…</string>
+    <string name="inbox_approve_title">Approuver cette action ?</string>
+    <string name="inbox_approve_action">Approuver l\'action</string>
+    <string name="inbox_approve_final">L\'agent exécutera l\'action retenue. Cette décision est définitive.</string>
+    <string name="inbox_recap_profile">Profil</string>
+    <string name="inbox_recap_kind">Type</string>
+    <string name="inbox_recap_reason">Motif</string>
+    <string name="inbox_recap_ref">Réf.</string>
+    <string name="inbox_empty_title">Rien à traiter</string>
+    <string name="inbox_empty_text">Aucun outil, aucune action ni aucun souvenir n\'attend votre décision.</string>
+    <string name="inbox_empty_filter_title">Rien dans ce filtre</string>
+    <string name="inbox_empty_filter_text">D\'autres éléments attendent dans « Tout ».</string>
+    <string name="inbox_checked_at">Vérifié à %1$s</string>
+    <string name="inbox_loading">Chargement des outils, actions et souvenirs…</string>
+    <string name="inbox_memory_unavailable">Mémoire et actions indisponibles.</string>
+    <string name="inbox_no_token">Le jeton propriétaire n\'est pas encore saisi.</string>
+    <string name="inbox_change_token">Changer le jeton</string>
+    <string name="inbox_tools_still_available">Les approbations d\'outils restent disponibles.</string>
 </resources>

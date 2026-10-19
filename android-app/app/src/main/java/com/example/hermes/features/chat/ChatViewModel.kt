@@ -50,6 +50,8 @@ data class ChatUiState(
     val mandatesError: String? = null,
     val isValidationsLoading: Boolean = false,
     val validationsError: String? = null,
+    /** When the memory list last loaded (epoch ms), for "Vérifié à". */
+    val memoryCheckedAt: Long? = null,
     val hasMemoryOwnerToken: Boolean = false,
     val workspaces: List<WorkspaceInfo> = emptyList(),
     val activeWorkspace: String? = null,
@@ -983,7 +985,7 @@ class ChatViewModel(
             _uiState.update { it.copy(isValidationsLoading = true) }
             val res = repository.getMemoryValidations()
             _uiState.update {
-                if (res.isSuccess) it.copy(memoryValidations = res.getOrThrow().items, isValidationsLoading = false)
+                if (res.isSuccess) it.copy(memoryValidations = res.getOrThrow().items, isValidationsLoading = false, memoryCheckedAt = System.currentTimeMillis())
                 else it.copy(isValidationsLoading = false, validationsError = validationErrorMessage(res.exceptionOrNull()!!))
             }
         }

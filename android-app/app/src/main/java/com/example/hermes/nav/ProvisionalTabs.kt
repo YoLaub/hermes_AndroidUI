@@ -3,7 +3,6 @@ package com.example.hermes.nav
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SwapHoriz
@@ -12,28 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.example.hermes.R
 import com.example.hermes.features.chat.AgentToolsState
-import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.ui.components.ListRow
 import com.example.hermes.ui.components.ScreenHeader
 
-// Stand-ins that open the existing sheets and dialogs. The Inbox and Agent screens replace them.
-
-@Composable
-fun ProvisionalInboxScreen(viewModel: ChatViewModel, tools: AgentToolsState) {
-    Column(Modifier.fillMaxSize()) {
-        ScreenHeader(stringResource(R.string.nav_inbox))
-        ListRow(
-            title = stringResource(R.string.inbox_memory_and_actions),
-            subtitle = stringResource(R.string.inbox_memory_and_actions_sub),
-            icon = Icons.Outlined.Inventory2,
-            onClick = {
-                viewModel.loadMemoryValidations()
-                viewModel.loadMemoryActions()
-                tools.validationsDialog = true
-            },
-        )
-    }
-}
+// Stand-in that opens the existing sheets and dialogs until the Agent screen replaces it.
 
 @Composable
 fun ProvisionalAgentScreen(tools: AgentToolsState) {
