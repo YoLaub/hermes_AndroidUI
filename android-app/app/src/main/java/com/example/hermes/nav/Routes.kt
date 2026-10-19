@@ -17,6 +17,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object AgendaRoute : NavKey
 @Serializable data object ForumRoute : NavKey
 @Serializable data object SettingsRoute : NavKey
+@Serializable data object AvatarsRoute : NavKey
 @Serializable data object RelaySettingsRoute : NavKey
 @Serializable data object SkillsRoute : NavKey
 @Serializable data class SkillDetailRoute(val name: String) : NavKey

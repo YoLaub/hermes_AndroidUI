@@ -1,6 +1,7 @@
 package com.example.hermes
 
 import android.content.Context
+import com.example.hermes.core.data.AvatarStore
 import com.example.hermes.core.data.CalendarRepository
 import com.example.hermes.core.data.ForumRepository
 import com.example.hermes.core.data.HermesPreferences
@@ -20,5 +21,6 @@ class AppContainer(val appContext: Context) {
     val notesRepository: NotesRepository by lazy { NotesRepository(appContext) }
     val calendarRepository: CalendarRepository by lazy { CalendarRepository(appContext) }
     val forumRepository: ForumRepository by lazy { ForumRepository(appContext) }
+    val avatarStore: AvatarStore by lazy { AvatarStore(appContext) }
     val mobileControlManager: MobileControlManager by lazy { MobileControlManager(appContext, preferences) }
 }

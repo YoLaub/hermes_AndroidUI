@@ -48,6 +48,11 @@ import com.example.hermes.features.agent.SkillDetailScreen
 import com.example.hermes.features.agent.SkillsScreen
 import com.example.hermes.features.agent.WorkspacesScreen
 import com.example.hermes.features.settings.SettingsScreen
+import com.example.hermes.features.settings.AvatarScreen
+import com.example.hermes.core.data.AvatarStore
+import com.example.hermes.ui.components.Avatars
+import com.example.hermes.ui.components.LocalAvatars
+import androidx.compose.runtime.CompositionLocalProvider
 import com.example.hermes.features.settings.RelaySettingsScreen
 import com.example.hermes.features.settings.openBaoStatus
 import com.example.hermes.core.model.ProfileInfo
@@ -95,7 +100,17 @@ class AppViewModels(
 /** The signed-in app: five tabs, one back stack each, the agent sheets and dialogs above them. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
+fun AppScaffold(vm: AppViewModels, avatarStore: AvatarStore, onDisconnect: () -> Unit) {
+    val avatarSpecs by avatarStore.avatars.collectAsState(initial = emptyMap())
+    val avatarDir = remember { avatarStore.imageFile("x").parentFile }
+    CompositionLocalProvider(LocalAvatars provides Avatars(avatarSpecs, avatarDir)) {
+        AppScaffoldContent(vm, avatarStore, onDisconnect)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AppScaffoldContent(vm: AppViewModels, avatarStore: AvatarStore, onDisconnect: () -> Unit) {
     // Only the tab survives recreation; each stack restarts at its root.
     var savedTab by rememberSaveable { mutableStateOf(Tab.Chat) }
     var nav by remember { mutableStateOf(TabNavigator.start(::rootOf).select(savedTab)) }
@@ -555,6 +570,21 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onBack = { nav.back()?.let(::go) },
                         )
                     }
+                    entry<AvatarsRoute> {
+                        AvatarScreen(
+                            personas = personasOf(chat.profiles),
+                            specs = LocalAvatars.current.specs,
+                            onSave = { id, spec ->
+                                scope.launch {
+                                    avatarStore.save(id, spec)
+                                    snackbarHostState.showSnackbar("Avatar enregistré")
+                                }
+                            },
+                            onImportImage = { id, uri, onDone -> scope.launch { onDone(avatarStore.importImage(id, uri)) } },
+                            onReset = { id -> scope.launch { avatarStore.reset(id) } },
+                            onBack = { nav.back()?.let(::go) },
+                        )
+                    }
                     entry<SettingsRoute> {
                         SettingsScreen(
                             serverUrl = chat.serverUrl,
@@ -565,6 +595,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             hasOwnerToken = chat.hasMemoryOwnerToken,
                             onBack = { nav.back()?.let(::go) },
                             onOpenRelay = { go(nav.push(RelaySettingsRoute)) },
+                            onOpenAvatars = { go(nav.push(AvatarsRoute)) },
                             onSaveOwnerToken = { vm.chat.saveMemoryOwnerToken(it) },
                             onOpenOpenBao = {
                                 vm.chat.loadOpenbaoSecrets()

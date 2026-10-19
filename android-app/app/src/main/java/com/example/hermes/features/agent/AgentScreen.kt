@@ -49,6 +49,7 @@ import com.example.hermes.ui.components.SectionCard
 import com.example.hermes.ui.components.StatusChip
 import com.example.hermes.ui.components.StatusTone
 import com.example.hermes.ui.components.personaOf
+import com.example.hermes.ui.components.AgentAvatar
 
 data class AgentState(
     val profile: ProfileInfo,
@@ -96,9 +97,7 @@ fun AgentScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Box(Modifier.size(56.dp).background(HermesColors.Primary, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(persona.initials, color = HermesColors.OnPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                }
+                AgentAvatar(persona, 56.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(persona.name, style = MaterialTheme.typography.titleLarge)
                     Text(state.profile.model ?: stringResource(R.string.agent_default_model), style = MaterialTheme.typography.bodySmall, color = HermesColors.Code)

@@ -70,6 +70,7 @@ fun MainNavigation() {
     } else {
         AppScaffold(
             vm = AppViewModels(chatViewModel, kanbanViewModel, notesViewModel, calendarViewModel, forumViewModel, mobileControlViewModel),
+            avatarStore = container.avatarStore,
             onDisconnect = { connected = false },
         )
     }

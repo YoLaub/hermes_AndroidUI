@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material.icons.outlined.PhonelinkRing
 import com.example.hermes.ui.components.AppButton
 import com.example.hermes.ui.components.ButtonVariant
@@ -50,6 +51,7 @@ fun SettingsScreen(
     hasOwnerToken: Boolean,
     onBack: () -> Unit,
     onOpenRelay: () -> Unit,
+    onOpenAvatars: () -> Unit,
     onOpenOpenBao: () -> Unit,
     onSaveOwnerToken: (String) -> Unit,
     onDisconnect: () -> Unit,
@@ -104,6 +106,14 @@ fun SettingsScreen(
                 )
             }
             Text(stringResource(R.string.settings_profile_keys_hint), style = MaterialTheme.typography.bodySmall, color = HermesColors.Meta)
+            SectionCard(stringResource(R.string.settings_appearance)) {
+                ListRow(
+                    stringResource(R.string.avatars_title),
+                    subtitle = stringResource(R.string.avatars_row_sub),
+                    icon = Icons.Outlined.Face,
+                    onClick = onOpenAvatars,
+                )
+            }
             SectionCard(stringResource(R.string.settings_session_section)) {
                 ListRow(
                     stringResource(R.string.settings_disconnect),

@@ -45,6 +45,7 @@ import com.example.hermes.core.model.ProfileInfo
 import com.example.hermes.theme.HermesColors
 import com.example.hermes.ui.components.ConfirmDialog
 import com.example.hermes.ui.components.personaOf
+import com.example.hermes.ui.components.AgentAvatar
 
 /**
  * The one profile switcher (from Chat's title and from Agent › Changer). The active profile is
@@ -124,17 +125,7 @@ private fun ProfileRow(profile: ProfileInfo, active: Boolean, deletable: Boolean
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(
-            Modifier
-                .size(40.dp)
-                .then(
-                    if (active) Modifier.background(HermesColors.Primary, CircleShape)
-                    else Modifier.background(HermesColors.SurfaceVariant, CircleShape).border(1.dp, HermesColors.Outline, CircleShape)
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(persona.initials, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (active) HermesColors.OnPrimary else HermesColors.OnSurface)
-        }
+        AgentAvatar(persona, 40.dp)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(persona.name, style = MaterialTheme.typography.titleMedium)

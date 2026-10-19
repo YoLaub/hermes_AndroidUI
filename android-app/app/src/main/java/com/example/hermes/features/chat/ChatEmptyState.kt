@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.R
 import com.example.hermes.theme.HermesColors
+import com.example.hermes.ui.components.AgentAvatar
 import com.example.hermes.ui.components.Persona
 
 /** Empty conversation: the active profile's avatar and name, its model, and three starters. */
@@ -47,9 +48,7 @@ fun ChatEmptyState(persona: Persona, skillCount: Int, onSuggestion: (String) -> 
         verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
     ) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(56.dp).background(HermesColors.Primary, CircleShape), contentAlignment = Alignment.Center) {
-                Text(persona.initials, color = HermesColors.OnPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
+            AgentAvatar(persona, 56.dp)
             Text(stringResource(R.string.chat_empty_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Text(
                 listOfNotNull(

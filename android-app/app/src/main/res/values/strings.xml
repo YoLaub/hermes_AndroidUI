@@ -240,6 +240,20 @@
     <string name="relay_unpair">Dissocier l\'appareil</string>
     <string name="relay_unpair_title">Dissocier ce téléphone ?</string>
     <string name="relay_unpair_message">Le relais oublie ce téléphone : le contrôle mobile ne marchera plus jusqu\'à un nouvel appairage avec un nouveau code.</string>
+    <string name="settings_appearance">Apparence</string>
+    <string name="avatars_title">Avatars des agents</string>
+    <string name="avatars_row_sub">Image, initiales et couleur par profil</string>
+    <string name="avatars_preview">Aperçu dans l\'app</string>
+    <string name="avatars_initials_tab">Initiales &amp; couleur</string>
+    <string name="avatars_image_tab">Image</string>
+    <string name="avatars_initials">Initiales</string>
+    <string name="avatars_initials_help">1 à 2 caractères · par défaut, les deux premières lettres du nom</string>
+    <string name="avatars_color">Couleur</string>
+    <string name="avatars_color_help">Teintes de la palette, toutes lisibles avec un texte sombre (AA).</string>
+    <string name="avatars_pick_image">Choisir une image…</string>
+    <string name="avatars_image_help">Sélecteur de photos Android ; l\'image est recadrée au centre en carré et réduite à 256 × 256, affichée en cercle. Les initiales restent la solution de repli si l\'image est introuvable.</string>
+    <string name="avatars_import_failed">Image illisible : choisissez-en une autre.</string>
+    <string name="avatars_default">Par défaut</string>
     <string name="settings_about">À propos</string>
     <string name="settings_version">Hermes Android · client WebUI v0.51</string>
 
