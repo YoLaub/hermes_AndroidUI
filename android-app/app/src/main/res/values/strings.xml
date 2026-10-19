@@ -9,6 +9,7 @@
     <string name="action_close">Fermer</string>
     <string name="action_more">Plus d\'options</string>
     <string name="loading">Chargement…</string>
+    <string name="action_delete">Supprimer</string>
 
     <!-- Server errors -->
     <string name="error_network">Serveur injoignable</string>
@@ -47,4 +48,19 @@
     <string name="agent_profile_tools_sub">Compétences, mémoire, dossiers, variables, garde, passerelle</string>
     <string name="agent_settings">Réglages</string>
     <string name="agent_settings_sub">Serveur, compétences, mémoire, espaces de travail</string>
+    <!-- Chat top bar -->
+    <string name="chat_conversations">Conversations</string>
+    <string name="chat_new_conversation">Nouvelle conversation</string>
+    <string name="chat_change_profile">Changer de profil</string>
+    <string name="chat_profile_ready">%1$s · prêt</string>
+    <string name="chat_profile_answering">%1$s · répond…</string>
+    <string name="chat_yolo_on">Auto-approbation activée</string>
+    <string name="chat_yolo_off">Auto-approbation désactivée</string>
+    <string name="chat_delete_conversation">Supprimer la conversation</string>
+    <string name="chat_delete_conversation_title">Supprimer la conversation ?</string>
+    <string name="chat_delete_conversation_message">« %1$s » et ses messages seront supprimés du serveur.</string>
+    <string name="chat_agent_settings">Réglages de l\'agent</string>
+
+    <!-- Space -->
+    <string name="space_tasks">Tâches</string>
 </resources>

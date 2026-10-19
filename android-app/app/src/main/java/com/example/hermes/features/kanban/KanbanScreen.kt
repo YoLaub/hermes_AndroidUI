@@ -154,7 +154,7 @@ fun KanbanScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour au Chat",
+                            contentDescription = "Retour",
                             tint = HermesTextPrimary
                         )
                     }

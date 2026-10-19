@@ -33,9 +33,7 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     tools: AgentToolsState,
     snackbarHostState: SnackbarHostState,
-    onNavigateToKanban: () -> Unit = {},
-    onNavigateToWorkspace: () -> Unit = {},
-    onNavigateToMobileControl: () -> Unit = {},
+    onOpenAgent: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -124,160 +122,18 @@ fun ChatScreen(
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {},
-                    navigationIcon = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 4.dp)
-                        ) {
-                            IconButton(onClick = { scope.launch { sessionsDrawerState.open() } }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Conversations",
-                                    tint = HermesTextPrimary
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (state.isStreaming) HermesWarning else HermesSecondary)
-                            )
-                        }
-                    },
-                    actions = {
-                        // Profile Switcher Chip / Avatar
-                        AssistChip(
-                            onClick = { tools.profilesSheet = true },
-                            label = {
-                                Text(
-                                    text = state.activeProfile.replaceFirstChar { it.uppercase() },
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(HermesPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = state.activeProfile.take(1).uppercase(),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black
-                                    )
-                                }
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = OnyxDarkSurfaceVariant,
-                                labelColor = HermesTextPrimary
-                            ),
-                            border = BorderStroke(1.dp, OnyxBorder),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-
-                        // YOLO Mode Quick Toggle Pill
-                        AssistChip(
-                            onClick = { viewModel.toggleYolo() },
-                            label = {
-                                Text(
-                                    text = "YOLO",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = if (state.yoloEnabled) Color.Black else HermesPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = if (state.yoloEnabled) HermesPrimary else OnyxDarkSurfaceVariant,
-                                labelColor = if (state.yoloEnabled) Color.Black else HermesTextSecondary
-                            ),
-                            border = BorderStroke(1.dp, if (state.yoloEnabled) HermesPrimary else OnyxBorder),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-
-                        // New Chat
-                        IconButton(
-                            onClick = { viewModel.createNewSession() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AddComment,
-                                contentDescription = "New Chat",
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Kanban Board
-                        IconButton(
-                            onClick = onNavigateToKanban,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ViewKanban,
-                                contentDescription = "Tableau Kanban",
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Zone Commune (Notes & Audio, Calendrier, Forum)
-                        IconButton(
-                            onClick = onNavigateToWorkspace,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Hub,
-                                contentDescription = "Zone Commune (Notes, Audio, Forum)",
-                                tint = HermesTertiary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Contrôle d'applications Android par Hermes
-                        IconButton(
-                            onClick = onNavigateToMobileControl,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhoneAndroid,
-                                contentDescription = "Contrôle par Hermes",
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Settings / Server Config & Tools
-                        IconButton(
-                            onClick = { tools.settingsDialog = true },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Paramètres & Outils",
-                                tint = HermesTextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    },
-                    windowInsets = WindowInsets.statusBars,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = OnyxDarkSurface
-                    )
+                ChatTopBar(
+                    title = chatSessionTitle(state.sessions, state.sessionId),
+                    profileName = profileDisplayName(state.activeProfile),
+                    isStreaming = state.isStreaming,
+                    yoloEnabled = state.yoloEnabled,
+                    canDeleteSession = state.sessionId != null,
+                    onOpenDrawer = { scope.launch { sessionsDrawerState.open() } },
+                    onOpenProfiles = { tools.profilesSheet = true },
+                    onToggleYolo = { viewModel.toggleYolo() },
+                    onNewSession = { viewModel.createNewSession() },
+                    onDeleteSession = { state.sessionId?.let { viewModel.deleteSession(it) } },
+                    onOpenAgentSettings = onOpenAgent,
                 )
             },
             bottomBar = {

@@ -96,13 +96,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             viewModel = vm.chat,
                             tools = tools,
                             snackbarHostState = snackbarHostState,
-                            onNavigateToKanban = {
-                                vm.kanban.loadData()
-                                onSelect(Tab.Space)
-                                go(nav.open(Tab.Space, KanbanRoute))
-                            },
-                            onNavigateToWorkspace = { onSelect(Tab.Space) },
-                            onNavigateToMobileControl = { onSelect(Tab.Control) },
+                            onOpenAgent = { onSelect(Tab.Agent) },
                         )
                     }
                     entry<InboxRoute> { ProvisionalInboxScreen(vm.chat, tools) }
@@ -111,6 +105,10 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             notesViewModel = vm.notes,
                             calendarViewModel = vm.calendar,
                             forumViewModel = vm.forum,
+                            onOpenTasks = {
+                                vm.kanban.loadData()
+                                go(nav.push(KanbanRoute))
+                            },
                         )
                     }
                     entry<ControlRoute> { MobileControlScreen(viewModel = vm.mobileControl) }

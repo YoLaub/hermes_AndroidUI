@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 import com.example.hermes.features.workspace.calendar.CalendarScreen
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.forum.ForumScreen
@@ -35,6 +37,7 @@ fun WorkspaceHubScreen(
     notesViewModel: NotesViewModel,
     calendarViewModel: CalendarViewModel,
     forumViewModel: ForumViewModel,
+    onOpenTasks: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(WorkspaceTab.NOTES) }
@@ -71,6 +74,16 @@ fun WorkspaceHubScreen(
                                 color = HermesTextMuted
                             )
                         }
+                    }
+                },
+                actions = {
+                    // Tâches (Kanban) now lives in Espace; the hub redesign turns this into a card.
+                    IconButton(onClick = onOpenTasks) {
+                        Icon(
+                            imageVector = Icons.Default.ViewKanban,
+                            contentDescription = stringResource(R.string.space_tasks),
+                            tint = HermesPrimary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
