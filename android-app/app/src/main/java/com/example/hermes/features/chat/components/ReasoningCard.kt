@@ -57,7 +57,7 @@ fun ReasoningCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Psychology,
-                        contentDescription = "Thinking",
+                        contentDescription = stringResource(R.string.chat_thinking_2),
                         tint = HermesTertiary,
                         modifier = Modifier.size(16.dp)
                     )

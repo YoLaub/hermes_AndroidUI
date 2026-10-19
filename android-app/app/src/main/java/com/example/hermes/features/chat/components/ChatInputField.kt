@@ -176,7 +176,7 @@ fun ChatInputField(
                                 IconButton(
                                     onClick = { onRemoveAttachment(att) }
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Remove")
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.chat_remove))
                                 }
                             },
                             shape = RoundedCornerShape(8.dp)
@@ -196,7 +196,7 @@ fun ChatInputField(
                 ) {
                     Icon(
                         imageVector = Icons.Default.AttachFile,
-                        contentDescription = "Attach file",
+                        contentDescription = stringResource(R.string.chat_attach_file),
                         tint = HermesTextSecondary
                     )
                 }
@@ -244,7 +244,7 @@ fun ChatInputField(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "Cancel stream",
+                            contentDescription = stringResource(R.string.chat_cancel_stream),
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
@@ -262,7 +262,7 @@ fun ChatInputField(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Send,
-                            contentDescription = "Send message",
+                            contentDescription = stringResource(R.string.chat_send_message),
                             tint = if (canSend) Color.Black else HermesTextMuted,
                             modifier = Modifier.size(20.dp)
                         )

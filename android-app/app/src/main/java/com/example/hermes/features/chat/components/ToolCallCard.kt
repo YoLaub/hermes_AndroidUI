@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.ToolCall
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun ToolCallCard(
@@ -90,7 +92,7 @@ fun ToolCallCard(
                 // Status & Duration
                 if (toolCall.duration != null) {
                     Text(
-                        text = "%.2fs".format(toolCall.duration),
+                        text = stringResource(R.string.chat_tool_duration, toolCall.duration),
                         style = MaterialTheme.typography.labelSmall,
                         color = HermesTextMuted,
                         modifier = Modifier.padding(end = 6.dp)
@@ -100,14 +102,14 @@ fun ToolCallCard(
                 if (toolCall.isError) {
                     Icon(
                         Icons.Default.ErrorOutline,
-                        contentDescription = "Error",
+                        contentDescription = stringResource(R.string.chat_error),
                         tint = HermesError,
                         modifier = Modifier.size(16.dp)
                     )
                 } else if (toolCall.output != null || toolCall.duration != null) {
                     Icon(
                         Icons.Default.CheckCircle,
-                        contentDescription = "Success",
+                        contentDescription = stringResource(R.string.chat_success),
                         tint = HermesSecondary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -155,7 +157,7 @@ fun ToolCallCard(
                 ) {
                     toolCall.args?.let { args ->
                         Text(
-                            text = "Arguments:",
+                            text = stringResource(R.string.chat_arguments),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary
                         )
@@ -172,7 +174,7 @@ fun ToolCallCard(
                     toolCall.output?.let { output ->
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Output:",
+                            text = stringResource(R.string.chat_output),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary
                         )

@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.SessionSummary
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +72,7 @@ fun SessionsDrawerContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Conversations",
+                    text = stringResource(R.string.chat_conversations),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = HermesTextPrimary
                 )
@@ -85,7 +87,7 @@ fun SessionsDrawerContent(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Nouveau")
+                    Text(stringResource(R.string.sessions_nouveau))
                 }
             }
 
@@ -98,7 +100,7 @@ fun SessionsDrawerContent(
                         onClearSearch()
                     }
                 },
-                placeholder = { Text("Rechercher...", fontSize = 13.sp) },
+                placeholder = { Text(stringResource(R.string.sessions_rechercher), fontSize = 13.sp) },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = HermesTextMuted, modifier = Modifier.size(18.dp))
                 },
@@ -110,7 +112,7 @@ fun SessionsDrawerContent(
                                 onClearSearch()
                             }
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = HermesTextMuted, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.auth_clear), tint = HermesTextMuted, modifier = Modifier.size(16.dp))
                         }
                     }
                 },
@@ -175,7 +177,7 @@ fun SessionsDrawerContent(
                     } else {
                         Icon(
                             Icons.Default.Build,
-                            contentDescription = "Récupérer les sessions",
+                            contentDescription = stringResource(R.string.sessions_recuperer_les_sessions),
                             tint = HermesTextMuted,
                             modifier = Modifier.size(16.dp)
                         )
@@ -192,7 +194,7 @@ fun SessionsDrawerContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Résultats serveur (${searchResults.size})",
+                        text = stringResource(R.string.sessions_resultats_serveur, searchResults.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = HermesSecondary
                     )
@@ -200,7 +202,7 @@ fun SessionsDrawerContent(
                         onClick = onClearSearch,
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text("Réinitialiser", fontSize = 12.sp, color = HermesPrimary)
+                        Text(stringResource(R.string.sessions_reinitialiser), fontSize = 12.sp, color = HermesPrimary)
                     }
                 }
             }
@@ -220,7 +222,7 @@ fun SessionsDrawerContent(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Text(
-                            text = "Aucune session trouvée",
+                            text = stringResource(R.string.sessions_aucune_session_trouvee),
                             style = MaterialTheme.typography.bodyMedium,
                             color = HermesTextMuted
                         )
@@ -238,7 +240,7 @@ fun SessionsDrawerContent(
                                     Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                 }
-                                Text("Chercher sur le serveur", fontSize = 12.sp)
+                                Text(stringResource(R.string.sessions_chercher_sur_le_serveur), fontSize = 12.sp)
                             }
                         }
                     }
@@ -293,7 +295,7 @@ fun SessionsDrawerContent(
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "${session.messageCount} msg",
+                                            text = stringResource(R.string.sessions_msg, session.messageCount),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = HermesTextMuted
                                         )
@@ -314,7 +316,7 @@ fun SessionsDrawerContent(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,
-                                        contentDescription = "Supprimer",
+                                        contentDescription = stringResource(R.string.action_delete),
                                         tint = HermesTextMuted,
                                         modifier = Modifier.size(16.dp)
                                     )

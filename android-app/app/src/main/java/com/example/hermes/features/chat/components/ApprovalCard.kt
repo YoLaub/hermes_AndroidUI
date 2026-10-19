@@ -67,7 +67,7 @@ fun ApprovalCard(
                     )
                     approval.tool?.let {
                         Text(
-                            text = "Tool: $it",
+                            text = stringResource(R.string.chat_tool, it),
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextSecondary
                         )
@@ -121,7 +121,7 @@ fun ApprovalCard(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Refuser")
+                    Text(stringResource(R.string.inbox_refuse))
                 }
 
                 if (onApproveAndYolo != null) {
@@ -137,7 +137,7 @@ fun ApprovalCard(
                     ) {
                         Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("YOLO")
+                        Text(stringResource(R.string.chat_yolo))
                     }
                 }
 
@@ -148,7 +148,7 @@ fun ApprovalCard(
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Autoriser")
+                    Text(stringResource(R.string.inbox_allow))
                 }
             }
         }

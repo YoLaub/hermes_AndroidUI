@@ -10,6 +10,13 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
+        "features/chat/components/ReasoningCard.kt",
+        "features/chat/components/ClarifyCard.kt",
+        "features/chat/components/MessageBubble.kt",
+        "features/chat/components/ApprovalCard.kt",
+        "features/chat/components/ChatInputField.kt",
+        "features/chat/components/ToolCallCard.kt",
+        "features/sessions/SessionsDrawer.kt",
         "features/kanban/components/CreateTaskDialog.kt",
         "features/kanban/components/KanbanTaskCard.kt",
         "features/kanban/components/KanbanTaskDetailScreen.kt",

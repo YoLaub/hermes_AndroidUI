@@ -487,4 +487,27 @@
     <string name="kanban_colonne_initiale">Colonne initiale :</string>
     <string name="kanban_priorite_2">Priorité :</string>
     <string name="kanban_assigne_a_optionnel">Assigné à (optionnel)</string>
+    <!-- Sessions and chat -->
+    <string name="chat_thinking_2">Raisonnement</string>
+    <string name="chat_clarification_needed">Précision demandée</string>
+    <string name="chat_user">Vous</string>
+    <string name="chat_tool">Outil : %1$s</string>
+    <string name="chat_yolo" translatable="false">YOLO</string>
+    <string name="chat_remove">Retirer</string>
+    <string name="chat_attach_file">Joindre un fichier</string>
+    <string name="chat_cancel_stream">Arrêter la réponse</string>
+    <string name="chat_send_message">Envoyer le message</string>
+    <string name="chat_error">Erreur</string>
+    <string name="chat_success">Réussi</string>
+    <string name="chat_arguments">Arguments :</string>
+    <string name="chat_tool_duration">%1$.2f s</string>
+    <string name="chat_output">Résultat :</string>
+    <string name="sessions_nouveau">Nouveau</string>
+    <string name="sessions_rechercher">Rechercher...</string>
+    <string name="sessions_recuperer_les_sessions">Récupérer les sessions</string>
+    <string name="sessions_resultats_serveur">Résultats serveur (%1$s)</string>
+    <string name="sessions_reinitialiser">Réinitialiser</string>
+    <string name="sessions_aucune_session_trouvee">Aucune session trouvée</string>
+    <string name="sessions_chercher_sur_le_serveur">Chercher sur le serveur</string>
+    <string name="sessions_msg">%1$s msg</string>
 </resources>
