@@ -40,11 +40,11 @@ import java.util.*
 @Composable
 fun MobileControlScreen(
     viewModel: MobileControlViewModel,
-    onNavigateBack: (() -> Unit)? = null
+    onNavigateBack: (() -> Unit)? = null,
+    onOpenRelaySettings: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     var showStartSessionDialog by remember { mutableStateOf(false) }
-    var showPairingDialog by remember { mutableStateOf(false) }
     var showAddAppDialog by remember { mutableStateOf(false) }
     var showStopDialog by remember { mutableStateOf(false) }
 
@@ -257,10 +257,11 @@ fun MobileControlScreen(
                                     color = if (state.isRelayConnected) HermesSuccess else HermesTextMuted
                                 )
                             }
-                            IconButton(onClick = { showPairingDialog = true }) {
+                            // Address and pairing live in Réglages › Relais mobile.
+                            IconButton(onClick = onOpenRelaySettings) {
                                 Icon(
                                     Icons.Default.Settings,
-                                    contentDescription = "Réglages appairage",
+                                    contentDescription = "Relais mobile et appairage",
                                     tint = HermesPrimary
                                 )
                             }
@@ -437,18 +438,6 @@ fun MobileControlScreen(
                     consents = consents
                 )
             }
-        )
-    }
-
-    if (showPairingDialog) {
-        PairingDialog(
-            currentUrl = state.relayUrl,
-            deviceId = state.deviceId,
-            isPaired = state.isPaired,
-            onDismiss = { showPairingDialog = false },
-            onUpdateUrl = { viewModel.updateRelayUrl(it) },
-            onPair = { code -> viewModel.pairDevice(code) },
-            onUnpair = { viewModel.unpairDevice() }
         )
     }
 
@@ -702,80 +691,6 @@ private fun StartSessionDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Annuler") }
-        }
-    )
-}
-
-@Composable
-private fun PairingDialog(
-    currentUrl: String,
-    deviceId: String,
-    isPaired: Boolean,
-    onDismiss: () -> Unit,
-    onUpdateUrl: (String) -> Unit,
-    onPair: (String) -> Unit,
-    onUnpair: () -> Unit
-) {
-    var urlText by remember { mutableStateOf(currentUrl) }
-    var codeText by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Configuration du Relais") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = urlText,
-                    onValueChange = { urlText = it },
-                    label = { Text("URL du Relais VPS") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    "Identifiant de l'appareil : $deviceId",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = HermesTextSecondary
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                if (isPaired) {
-                    Text("Cet appareil est appairé avec le serveur.", color = HermesSuccess)
-                    Button(
-                        onClick = {
-                            onUnpair()
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = HermesError)
-                    ) {
-                        Text("Dissocier l'appareil")
-                    }
-                } else {
-                    OutlinedTextField(
-                        value = codeText,
-                        onValueChange = { codeText = it },
-                        label = { Text("Code d'appairage à usage unique") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                onUpdateUrl(urlText)
-                if (codeText.isNotBlank()) {
-                    onPair(codeText)
-                }
-                onDismiss()
-            }) {
-                Text("Enregistrer")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Fermer") }
         }
     )
 }

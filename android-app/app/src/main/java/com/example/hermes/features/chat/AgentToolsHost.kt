@@ -41,6 +41,7 @@ fun AgentToolsHost(
     viewModel: ChatViewModel,
     tools: AgentToolsState,
     snackbarHostState: SnackbarHostState,
+    onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -244,7 +245,10 @@ fun AgentToolsHost(
             isLoading = state.isValidationsLoading,
             error = state.validationsError,
             hasToken = state.hasMemoryOwnerToken,
-            onSaveToken = { viewModel.saveMemoryOwnerToken(it) },
+            onChangeToken = {
+                tools.validationsDialog = false
+                onOpenSettings()
+            },
             onRefresh = {
                 viewModel.loadMemoryValidations()
                 viewModel.loadMemoryActions()

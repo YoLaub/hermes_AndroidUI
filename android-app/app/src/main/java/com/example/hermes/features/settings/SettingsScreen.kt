@@ -15,7 +15,13 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.PhonelinkRing
+import com.example.hermes.ui.components.AppButton
+import com.example.hermes.ui.components.ButtonVariant
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,15 +39,23 @@ import com.example.hermes.ui.components.ScreenHeader
 import com.example.hermes.ui.components.SectionCard
 
 /** Réglages: connections and secrets that belong to the instance, not to a profile. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     serverUrl: String,
     sessionId: String?,
+    relayPaired: Boolean,
+    relayConnected: Boolean,
+    openBaoStatus: String,
+    hasOwnerToken: Boolean,
     onBack: () -> Unit,
+    onOpenRelay: () -> Unit,
     onOpenOpenBao: () -> Unit,
+    onSaveOwnerToken: (String) -> Unit,
     onDisconnect: () -> Unit,
 ) {
     var confirmDisconnect by remember { mutableStateOf(false) }
+    var editingToken by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(stringResource(R.string.agent_settings), subtitle = stringResource(R.string.nav_agent), onBack = onBack)
@@ -61,10 +75,35 @@ fun SettingsScreen(
                     ).joinToString("\n"),
                     icon = Icons.Outlined.Dns,
                 )
+                ListRow(
+                    stringResource(R.string.relay_title),
+                    subtitle = stringResource(
+                        when {
+                            relayConnected -> R.string.relay_connected
+                            relayPaired -> R.string.relay_paired_offline
+                            else -> R.string.relay_not_paired
+                        }
+                    ),
+                    icon = Icons.Outlined.PhonelinkRing,
+                    onClick = onOpenRelay,
+                )
             }
             SectionCard(stringResource(R.string.settings_secrets)) {
-                ListRow(stringResource(R.string.settings_openbao), subtitle = stringResource(R.string.settings_openbao_sub), icon = Icons.Outlined.Lock, onClick = onOpenOpenBao)
+                ListRow(stringResource(R.string.settings_openbao), subtitle = openBaoStatus, icon = Icons.Outlined.Lock, onClick = onOpenOpenBao)
+                ListRow(
+                    stringResource(R.string.owner_token),
+                    subtitle = stringResource(if (hasOwnerToken) R.string.owner_token_saved else R.string.owner_token_missing),
+                    icon = Icons.Outlined.Key,
+                    trailing = {
+                        AppButton(
+                            stringResource(if (hasOwnerToken) R.string.owner_token_replace else R.string.owner_token_enter),
+                            onClick = { editingToken = true },
+                            variant = ButtonVariant.Text,
+                        )
+                    },
+                )
             }
+            Text(stringResource(R.string.settings_profile_keys_hint), style = MaterialTheme.typography.bodySmall, color = HermesColors.Meta)
             SectionCard(stringResource(R.string.settings_session_section)) {
                 ListRow(
                     stringResource(R.string.settings_disconnect),
@@ -76,6 +115,15 @@ fun SettingsScreen(
             SectionCard(stringResource(R.string.settings_about)) {
                 ListRow(stringResource(R.string.settings_version), icon = Icons.Outlined.Info)
             }
+        }
+    }
+
+    if (editingToken) {
+        ModalBottomSheet(onDismissRequest = { editingToken = false }, containerColor = HermesColors.Surface) {
+            OwnerTokenSheet(hasToken = hasOwnerToken, onSave = {
+                editingToken = false
+                onSaveOwnerToken(it)
+            })
         }
     }
 

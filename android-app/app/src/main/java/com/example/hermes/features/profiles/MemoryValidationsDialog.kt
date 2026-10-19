@@ -49,15 +49,13 @@ fun MemoryValidationsDialog(
     isLoading: Boolean,
     error: String?,
     hasToken: Boolean,
-    onSaveToken: (String) -> Unit,
+    onChangeToken: () -> Unit,
     onRefresh: () -> Unit,
     onDecide: (eventId: String, confirm: Boolean) -> Unit,
     onDecideAction: (actionId: String, approve: Boolean) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var editingToken by remember(hasToken) { mutableStateOf(!hasToken) }
-    var tokenInput by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) }
     var toApprove by remember { mutableStateOf<MemoryAction?>(null) }
 
@@ -89,26 +87,11 @@ fun MemoryValidationsDialog(
                     }
                 }
 
-                if (editingToken) {
-                    OutlinedTextField(
-                        value = tokenInput,
-                        onValueChange = { tokenInput = it },
-                        label = { Text("Jeton propriétaire") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            onSaveToken(tokenInput)
-                            tokenInput = ""
-                        },
-                        enabled = tokenInput.isNotBlank()
-                    ) { Text("Enregistrer") }
-                } else {
-                    TextButton(onClick = { editingToken = true }) { Text("Changer le jeton") }
+                // The owner token is entered in Réglages, never shown back.
+                if (!hasToken) {
+                    Text("Jeton propriétaire non saisi.", color = HermesTextPrimary)
                 }
+                TextButton(onClick = onChangeToken) { Text(if (hasToken) "Changer le jeton (Réglages)" else "Saisir le jeton (Réglages)") }
 
                 error?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))

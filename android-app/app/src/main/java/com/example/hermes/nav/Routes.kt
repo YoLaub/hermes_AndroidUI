@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 // Pushed screens
 @Serializable data object KanbanRoute : NavKey
 @Serializable data object SettingsRoute : NavKey
+@Serializable data object RelaySettingsRoute : NavKey
 @Serializable data object SkillsRoute : NavKey
 @Serializable data class SkillDetailRoute(val name: String) : NavKey
 @Serializable data object MemoryRoute : NavKey

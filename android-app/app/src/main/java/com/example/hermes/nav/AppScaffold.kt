@@ -37,6 +37,8 @@ import com.example.hermes.features.agent.SkillDetailScreen
 import com.example.hermes.features.agent.SkillsScreen
 import com.example.hermes.features.agent.WorkspacesScreen
 import com.example.hermes.features.settings.SettingsScreen
+import com.example.hermes.features.settings.RelaySettingsScreen
+import com.example.hermes.features.settings.openBaoStatus
 import com.example.hermes.core.model.ProfileInfo
 import com.example.hermes.features.chat.chatSessionTitle
 import com.example.hermes.features.chat.profileDisplayName
@@ -175,8 +177,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                                 onOpenConversation = { onSelect(Tab.Chat) },
                                 onDecideAction = { id, approve -> vm.chat.decideMemoryAction(id, approve) },
                                 onDecideMemory = { id, confirm -> vm.chat.decideMemoryValidation(id, confirm) },
-                                // The token field moves to Réglages; until then it lives in this dialog.
-                                onChangeToken = { tools.validationsDialog = true },
+                                onChangeToken = { go(nav.open(Tab.Agent, SettingsRoute)) },
                             )
                         }
                         entry<SpaceRoute> {
@@ -191,7 +192,9 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                                 },
                             )
                         }
-                        entry<ControlRoute> { MobileControlScreen(viewModel = vm.mobileControl) }
+                        entry<ControlRoute> {
+                        MobileControlScreen(viewModel = vm.mobileControl, onOpenRelaySettings = { go(nav.open(Tab.Agent, RelaySettingsRoute)) })
+                    }
                         entry<AgentRoute> {
                         val active = chat.profiles.firstOrNull { it.name == chat.activeProfile } ?: ProfileInfo(name = chat.activeProfile)
                         AgentScreen(
@@ -232,7 +235,10 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                                 tools.mandatesDialog = true
                             },
                             onRestartGateway = { vm.chat.restartGateway() },
-                            onOpenSettings = { go(nav.push(SettingsRoute)) },
+                            onOpenSettings = {
+                                vm.chat.loadOpenbaoHealth()
+                                go(nav.push(SettingsRoute))
+                            },
                         )
                     }
                     entry<SkillsRoute> {
@@ -286,11 +292,36 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onBack = { nav.back()?.let(::go) },
                         )
                     }
+                    entry<RelaySettingsRoute> {
+                        // Pairing results arrive as notices on the control state.
+                        LaunchedEffect(control.error, control.successMessage) {
+                            (control.error ?: control.successMessage)?.let {
+                                snackbarHostState.showSnackbar(it)
+                                vm.mobileControl.dismissMessage()
+                            }
+                        }
+                        RelaySettingsScreen(
+                            relayUrl = control.relayUrl,
+                            deviceId = control.deviceId,
+                            isPaired = control.isPaired,
+                            isConnected = control.isRelayConnected,
+                            onSaveUrl = { vm.mobileControl.updateRelayUrl(it) },
+                            onPair = { vm.mobileControl.pairDevice(it) },
+                            onUnpair = { vm.mobileControl.unpairDevice() },
+                            onBack = { nav.back()?.let(::go) },
+                        )
+                    }
                     entry<SettingsRoute> {
                         SettingsScreen(
                             serverUrl = chat.serverUrl,
                             sessionId = chat.sessionId,
+                            relayPaired = control.isPaired,
+                            relayConnected = control.isRelayConnected,
+                            openBaoStatus = openBaoStatus(chat.openbaoUrl, chat.openbaoHealth),
+                            hasOwnerToken = chat.hasMemoryOwnerToken,
                             onBack = { nav.back()?.let(::go) },
+                            onOpenRelay = { go(nav.push(RelaySettingsRoute)) },
+                            onSaveOwnerToken = { vm.chat.saveMemoryOwnerToken(it) },
                             onOpenOpenBao = {
                                 vm.chat.loadOpenbaoSecrets()
                                 tools.openBaoDialog = true
@@ -321,5 +352,6 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         viewModel = vm.chat,
         tools = tools,
         snackbarHostState = snackbarHostState,
+        onOpenSettings = { go(nav.open(Tab.Agent, SettingsRoute)) },
     )
 }
