@@ -713,7 +713,8 @@ data class SkillDetailResponse(
     val description: String? = null,
     val content: String = "",
     val path: String? = null,
-    @SerialName("linked_files") val linkedFiles: Map<String, String>? = null
+    /** Files beside SKILL.md, by kind ("references", "templates", "assets", "scripts"). */
+    @SerialName("linked_files") val linkedFiles: Map<String, List<String>>? = null
 )
 
 @Serializable

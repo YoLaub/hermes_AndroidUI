@@ -440,6 +440,14 @@ class ModelsSerializationTest {
         assertTrue(tc!!.output!!.contains("success"))
         assertEquals(1.25, tc.duration ?: 0.0, 0.001)
     }
+
+    @Test
+    fun `a skill's linked files decode as lists per kind`() {
+        // Shape of /api/skills/content (webui-backend _linked_files_for_skill: dict[str, list[str]]).
+        val body = """{"name":"dogfood","description":"QA","content":"# Dogfood","path":"skills/dogfood",
+            "linked_files":{"references":["a.md","b.md"],"scripts":["run.sh"]}}"""
+        val detail = json.decodeFromString<SkillDetailResponse>(body)
+        assertEquals(listOf("a.md", "b.md"), detail.linkedFiles?.get("references"))
+        assertEquals("# Dogfood", detail.content)
+    }
 }
-
-
