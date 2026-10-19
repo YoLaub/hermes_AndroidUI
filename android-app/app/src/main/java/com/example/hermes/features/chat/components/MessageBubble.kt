@@ -161,7 +161,7 @@ fun MessageBubble(
                             ) {
                                 Icon(
                                     imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
-                                    contentDescription = if (isCopied) "Copié" else "Copier le message",
+                                    contentDescription = if (isCopied) stringResource(R.string.memory_copied) else stringResource(R.string.chat_copier_le_message),
                                     tint = if (isCopied) HermesSuccess else HermesTextMuted.copy(alpha = 0.7f),
                                     modifier = Modifier.size(14.dp)
                                 )

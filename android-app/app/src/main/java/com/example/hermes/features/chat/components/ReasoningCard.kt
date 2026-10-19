@@ -84,7 +84,7 @@ fun ReasoningCard(
 
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) stringResource(R.string.chat_collapse) else stringResource(R.string.chat_expand),
                     tint = HermesTextMuted,
                     modifier = Modifier.size(18.dp)
                 )

@@ -164,13 +164,13 @@ fun MobileControlScreen(
                             )
                             Text(
                                 text = stringResource(R.string.control_profil_autorise_john_mode, session.allowedProfile, session.mode.name.lowercase()) +
-                                    (if (session.allowScreenshots) " • Captures autorisées" else "") +
-                                    (if (session.allowCalendar) " • Calendrier autorisé" else "") +
-                                    (if (session.allows(Consent.SMS_READ)) " • SMS autorisés" else "") +
-                                    (if (session.allows(Consent.CALL_LOG_READ)) " • Journal d'appels autorisé" else "") +
-                                    (if (session.allows(Consent.SMS_SEND)) " • Envoi de SMS autorisé" else "") +
-                                    (if (session.allows(Consent.CALL_PLACE)) " • Appels autorisés" else "") +
-                                    (if (session.allows(Consent.CALENDAR_WRITE)) " • Écriture du calendrier autorisée" else ""),
+                                    (if (session.allowScreenshots) stringResource(R.string.control_captures_autorisees) else "") +
+                                    (if (session.allowCalendar) stringResource(R.string.control_calendrier_autorise) else "") +
+                                    (if (session.allows(Consent.SMS_READ)) stringResource(R.string.control_sms_autorises) else "") +
+                                    (if (session.allows(Consent.CALL_LOG_READ)) stringResource(R.string.control_journal_d_appels_autorise) else "") +
+                                    (if (session.allows(Consent.SMS_SEND)) stringResource(R.string.control_envoi_de_sms_autorise) else "") +
+                                    (if (session.allows(Consent.CALL_PLACE)) stringResource(R.string.control_appels_autorises) else "") +
+                                    (if (session.allows(Consent.CALENDAR_WRITE)) stringResource(R.string.control_ecriture_du_calendrier_autorisee) else ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -257,7 +257,7 @@ fun MobileControlScreen(
                                     color = HermesTextPrimary
                                 )
                                 Text(
-                                    if (state.isRelayConnected) "Connecté (${state.relayUrl})" else "Déconnecté (${state.relayUrl})",
+                                    if (state.isRelayConnected) stringResource(R.string.control_connecte, state.relayUrl) else stringResource(R.string.control_deconnecte, state.relayUrl),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.isRelayConnected) HermesSuccess else HermesTextMuted
                                 )
@@ -716,7 +716,7 @@ private fun StartSessionDialog(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
-                                        if (on) "Autorisé pour cette session" else "Refusé",
+                                        if (on) stringResource(R.string.control_autorise_pour_cette_session) else stringResource(R.string.control_refuse),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = if (on) HermesColors.OnSuccessContainer else HermesTextSecondary
                                     )

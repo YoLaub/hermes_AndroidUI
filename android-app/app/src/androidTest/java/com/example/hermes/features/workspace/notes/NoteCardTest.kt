@@ -27,7 +27,7 @@ class NoteCardTest {
     @Test
     fun the_card_actions_have_48dp_touch_targets() {
         show(AgentNote(title = "Courses", content = "Pain", audioFilePath = "/tmp/a.m4a"))
-        listOf("Épingler", "Supprimer", "Play").forEach {
+        listOf("Épingler", "Supprimer", "Lire").forEach {
             assertAccessibleTargetIsAtLeast48dp(it)
         }
     }

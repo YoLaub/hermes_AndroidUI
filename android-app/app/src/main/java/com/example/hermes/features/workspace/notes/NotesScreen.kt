@@ -159,7 +159,7 @@ fun NotesScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (state.searchQuery.isNotBlank() || state.selectedTag != null) "Aucune note correspondante" else "Aucune note pour le moment",
+                            text = if (state.searchQuery.isNotBlank() || state.selectedTag != null) stringResource(R.string.notes_aucune_note_correspondante) else stringResource(R.string.notes_aucune_note_pour_le_moment),
                             style = MaterialTheme.typography.titleMedium,
                             color = HermesTextSecondary
                         )

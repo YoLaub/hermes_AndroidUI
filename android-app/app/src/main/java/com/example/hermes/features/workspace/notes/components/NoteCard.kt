@@ -161,7 +161,7 @@ fun NoteCard(
                     ) {
                         Icon(
                             imageVector = if (isPlayingThis) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                            contentDescription = if (isPlayingThis) "Pause" else "Play",
+                            contentDescription = if (isPlayingThis) stringResource(R.string.notes_pause) else stringResource(R.string.notes_play),
                             tint = HermesPrimary,
                             modifier = Modifier.size(24.dp)
                         )

@@ -372,9 +372,9 @@ fun KanbanScreen(
     if (confirmLaunch) {
         val ready = readyCount(state.columns)
         ConfirmDialog(
-            title = if (ready == 0) "Aucune tâche prête" else "Lancer $ready tâche(s) prête(s) ?",
-            message = if (ready == 0) "Seules les tâches de la colonne « Prêt » sont confiées aux agents. Lancer quand même ?"
-            else "Les agents assignés commencent à travailler sur ces tâches du tableau ${state.currentBoard}.",
+            title = if (ready == 0) stringResource(R.string.kanban_aucune_tache_prete) else stringResource(R.string.kanban_lancer_tache_s_prete_s, ready),
+            message = if (ready == 0) stringResource(R.string.kanban_seules_les_taches_de_la)
+            else stringResource(R.string.kanban_les_agents_assignes_commencent_a, state.currentBoard),
             confirmLabel = stringResource(R.string.kanban_lancer),
             onConfirm = {
                 confirmLaunch = false

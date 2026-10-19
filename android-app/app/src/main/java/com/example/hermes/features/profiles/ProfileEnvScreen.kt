@@ -446,7 +446,7 @@ fun ProfileEnvScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
-                                                    text = if (provider.hasKey) "Clé active (${provider.keySource})" else "Non configuré",
+                                                    text = if (provider.hasKey) stringResource(R.string.env_cle_active, provider.keySource) else stringResource(R.string.env_non_configure),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = if (provider.hasKey) Color(0xFF10B981) else HermesTextMuted
                                                 )
@@ -477,7 +477,7 @@ fun ProfileEnvScreen(
                                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                                 modifier = Modifier.height(30.dp)
                                             ) {
-                                                Text(if (provider.hasKey) "Modifier" else "Ajouter", fontSize = 12.sp)
+                                                Text(if (provider.hasKey) stringResource(R.string.openbao_modifier) else stringResource(R.string.workspaces_add_confirm), fontSize = 12.sp)
                                             }
                                         }
                                     }
@@ -492,7 +492,7 @@ fun ProfileEnvScreen(
 
     pendingDelete?.let { del ->
         ConfirmDialog(
-            title = if (del.isProvider) "Supprimer la clé ${del.label ?: del.key} ?" else "Supprimer ${del.key} ?",
+            title = if (del.isProvider) stringResource(R.string.env_supprimer_la_cle, del.label ?: del.key) else stringResource(R.string.env_supprimer, del.key),
             message = stringResource(R.string.env_la_valeur_est_retiree_du, activeProfile),
             confirmLabel = stringResource(R.string.action_delete),
             destructive = true,
@@ -532,7 +532,7 @@ fun ProfileEnvScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isEditMode) "Modifier $editingVarKey" else "Ajouter une variable (.env)",
+                        text = if (isEditMode) stringResource(R.string.env_modifier, editingVarKey.orEmpty()) else stringResource(R.string.env_ajouter_une_variable_env),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )

@@ -98,10 +98,10 @@ fun EventCard(
                 ) {
                     Text(
                         text = when (event.status) {
-                            EventStatus.CONFIRMED -> "✅ Confirmé"
-                            EventStatus.PENDING_AGENT -> "⏳ En attente"
-                            EventStatus.COMPLETED -> "🏁 Terminé"
-                            EventStatus.CANCELLED -> "❌ Annulé"
+                            EventStatus.CONFIRMED -> stringResource(R.string.agenda_confirme)
+                            EventStatus.PENDING_AGENT -> stringResource(R.string.agenda_en_attente)
+                            EventStatus.COMPLETED -> stringResource(R.string.agenda_termine_2)
+                            EventStatus.CANCELLED -> stringResource(R.string.agenda_annule)
                         },
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = when (event.status) {

@@ -100,7 +100,7 @@ fun DictaphoneModal(
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = if (state.isRecording) "Enregistrement en cours..." else "Prêt pour la dictée",
+                                text = if (state.isRecording) stringResource(R.string.notes_enregistrement_en_cours) else stringResource(R.string.notes_pret_pour_la_dictee),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (state.isRecording) HermesError else HermesTextMuted
                             )
@@ -198,7 +198,7 @@ fun DictaphoneModal(
                         )
                     } else {
                         Text(
-                            text = if (state.isRecording) "Parlez, la transcription apparaît en temps réel..." else "Appuyez sur le micro pour commencer à dicter...",
+                            text = if (state.isRecording) stringResource(R.string.notes_parlez_la_transcription_apparait_en) else stringResource(R.string.notes_appuyez_sur_le_micro_pour),
                             style = MaterialTheme.typography.bodyMedium,
                             color = HermesTextMuted
                         )
@@ -253,7 +253,7 @@ fun DictaphoneModal(
                         ) {
                             Icon(
                                 imageVector = if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                contentDescription = if (state.isRecording) "Stop" else "Enregistrer",
+                                contentDescription = if (state.isRecording) stringResource(R.string.notes_stop) else stringResource(R.string.action_save),
                                 tint = Color.White,
                                 modifier = Modifier.size(32.dp)
                             )

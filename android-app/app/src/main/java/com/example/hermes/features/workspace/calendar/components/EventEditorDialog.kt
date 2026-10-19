@@ -82,7 +82,7 @@ fun EventEditorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (event.title.isBlank()) "Nouvel Événement / RDV" else "Modifier le créneau",
+                        text = if (event.title.isBlank()) stringResource(R.string.agenda_nouvel_evenement_rdv) else stringResource(R.string.agenda_modifier_le_creneau),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )
@@ -210,10 +210,10 @@ fun EventEditorDialog(
                             label = {
                                 Text(
                                     text = when (st) {
-                                        EventStatus.CONFIRMED -> "Confirmé"
-                                        EventStatus.PENDING_AGENT -> "En attente"
-                                        EventStatus.COMPLETED -> "Terminé"
-                                        EventStatus.CANCELLED -> "Annulé"
+                                        EventStatus.CONFIRMED -> stringResource(R.string.agenda_confirme_2)
+                                        EventStatus.PENDING_AGENT -> stringResource(R.string.agenda_en_attente_2)
+                                        EventStatus.COMPLETED -> stringResource(R.string.agenda_termine)
+                                        EventStatus.CANCELLED -> stringResource(R.string.agenda_annule_2)
                                     },
                                     fontSize = 12.sp
                                 )

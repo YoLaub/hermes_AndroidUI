@@ -63,4 +63,27 @@ class HardcodedStringsTest {
         }
         assertTrue("Literal UI text: $offenders", offenders.isEmpty())
     }
+
+    /** A branch value such as `if (on) "Autorisé" else "Refusé"` or `X -> "Terminé"`. */
+    private val branchLiteral = Regex("""(?:if\s*\([^\n]*?\)\s*|else\s+|->\s*)"((?:[^"\\\n]|\\.)*)"""")
+    private val constantLike = Regex("""[A-Z0-9_]*""")
+
+    /** Text a person reads: a capital, an accent or a space, and not a CONSTANT_NAME. */
+    private fun looksDisplayed(literal: String): Boolean {
+        val text = template.replace(literal, "")
+        return hasWords(literal) && !constantLike.matches(text.trim()) &&
+            (text.any { it.isUpperCase() || it.code > 127 } || text.trim().contains(' '))
+    }
+
+    @Test
+    fun `extracted screens have no literal UI text in branches`() {
+        val offenders = extracted.flatMap { path ->
+            val file = File("src/main/java/com/example/hermes/$path")
+            file.readLines().flatMapIndexed { i, line ->
+                branchLiteral.findAll(line).map { it.groupValues[1] }.filter(::looksDisplayed)
+                    .map { "${file.name}:${i + 1} « $it »" }.toList()
+            }
+        }
+        assertTrue("Literal UI text in branches: $offenders", offenders.isEmpty())
+    }
 }

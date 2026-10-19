@@ -71,7 +71,7 @@ fun NoteEditorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (note.title.isBlank() && note.content.isBlank()) "Nouvelle Note" else "Modifier la Note",
+                        text = if (note.title.isBlank() && note.content.isBlank()) stringResource(R.string.notes_nouvelle_note) else stringResource(R.string.notes_modifier_la_note),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )

@@ -143,7 +143,7 @@ fun SessionsDrawerContent(
                     label = {
                         val extra = if (!showAllProfiles && otherProfileCount > 0) " (+$otherProfileCount)" else ""
                         Text(
-                            text = if (showAllProfiles) "Tous profils" else "Profil actif$extra",
+                            text = if (showAllProfiles) stringResource(R.string.sessions_tous_profils) else stringResource(R.string.sessions_profil_actif, extra),
                             fontSize = 12.sp
                         )
                     },

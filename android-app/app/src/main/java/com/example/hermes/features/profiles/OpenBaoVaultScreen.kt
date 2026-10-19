@@ -190,11 +190,11 @@ fun OpenBaoVaultScreen(
                 }
 
                 val statusText = when {
-                    openbaoUrl.isBlank() -> "Non configuré (cliquez sur Paramètres)"
-                    health == null -> "Injoignable ou en attente de test"
-                    health.sealed -> "Scellé (Sealed) - Veuillez le déverrouiller"
-                    health.initialized -> "Déverrouillé & Prêt (OpenBao ${health.version})"
-                    else -> "Non initialisé"
+                    openbaoUrl.isBlank() -> stringResource(R.string.openbao_non_configure_cliquez_sur_parametres)
+                    health == null -> stringResource(R.string.openbao_injoignable_ou_en_attente_de)
+                    health.sealed -> stringResource(R.string.openbao_scelle_sealed_veuillez_le_deverrouiller)
+                    health.initialized -> stringResource(R.string.openbao_deverrouille_pret_openbao, health.version)
+                    else -> stringResource(R.string.openbao_non_initialise)
                 }
 
                 Surface(
@@ -543,7 +543,7 @@ fun OpenBaoVaultScreen(
                                 modifier = Modifier.size(48.dp)
                             )
                             Text(
-                                text = if (searchQuery.isBlank()) "Aucun secret enregistré dans OpenBao" else "Aucun secret correspondant",
+                                text = if (searchQuery.isBlank()) stringResource(R.string.openbao_aucun_secret_enregistre_dans_openbao) else stringResource(R.string.openbao_aucun_secret_correspondant),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = HermesTextSecondary
                             )
@@ -703,7 +703,7 @@ fun OpenBaoVaultScreen(
             onDismissRequest = { if (!isSaving) showAddEditDialog = false },
             title = {
                 Text(
-                    text = if (editingKey != null) "Modifier le secret" else "Nouveau secret",
+                    text = if (editingKey != null) stringResource(R.string.openbao_modifier_le_secret) else stringResource(R.string.openbao_nouveau_secret),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = HermesTextPrimary
                 )

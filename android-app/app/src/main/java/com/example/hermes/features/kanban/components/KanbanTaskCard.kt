@@ -38,13 +38,13 @@ fun kanbanStatusColor(status: String): Color = when (status.lowercase()) {
 
 @Composable
 fun kanbanStatusLabel(status: String): String = when (status.lowercase()) {
-    "triage" -> "Triage"
-    "todo" -> "À faire"
-    "ready" -> "Prêt"
-    "running" -> "En cours"
-    "blocked" -> "Bloqué"
-    "done" -> "Terminé"
-    "archived" -> "Archivé"
+    "triage" -> stringResource(R.string.kanban_triage)
+    "todo" -> stringResource(R.string.kanban_a_faire)
+    "ready" -> stringResource(R.string.kanban_pret)
+    "running" -> stringResource(R.string.kanban_en_cours)
+    "blocked" -> stringResource(R.string.kanban_bloque)
+    "done" -> stringResource(R.string.agenda_termine)
+    "archived" -> stringResource(R.string.kanban_archive)
     else -> status.replaceFirstChar { it.uppercase() }
 }
 

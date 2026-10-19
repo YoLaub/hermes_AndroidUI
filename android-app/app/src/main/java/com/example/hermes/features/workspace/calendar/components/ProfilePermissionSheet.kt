@@ -147,7 +147,7 @@ fun ProfilePermissionSheet(
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(
-                                            text = if (isUser) "Utilisateur" else "Agent",
+                                            text = if (isUser) stringResource(R.string.agenda_utilisateur) else stringResource(R.string.nav_agent),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = HermesTextMuted,
                                             fontSize = 12.sp
@@ -170,9 +170,9 @@ fun ProfilePermissionSheet(
                                             label = {
                                                 Text(
                                                     text = when (level) {
-                                                        CalendarPermissionLevel.ADMIN -> "Admin"
-                                                        CalendarPermissionLevel.READ_WRITE -> "Lecture & Écriture"
-                                                        CalendarPermissionLevel.READ_ONLY -> "Lecture seule"
+                                                        CalendarPermissionLevel.ADMIN -> stringResource(R.string.agenda_admin)
+                                                        CalendarPermissionLevel.READ_WRITE -> stringResource(R.string.agenda_lecture_ecriture)
+                                                        CalendarPermissionLevel.READ_ONLY -> stringResource(R.string.agenda_lecture_seule)
                                                     },
                                                     fontSize = 12.sp
                                                 )
