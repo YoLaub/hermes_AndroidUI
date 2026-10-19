@@ -67,7 +67,7 @@ fun NewProfileScreen(
                     value = name,
                     onValueChange = { name = it.lowercase().trim() },
                     label = { Text(stringResource(R.string.new_profile_name)) },
-                    placeholder = { Text("redacteur") },
+                    placeholder = { Text(stringResource(R.string.agent_redacteur)) },
                     isError = name.isNotEmpty() && nameError != null,
                     supportingText = {
                         Text(
@@ -111,7 +111,7 @@ fun NewProfileScreen(
                         value = model,
                         onValueChange = { model = it },
                         label = { Text(stringResource(R.string.new_profile_model_field)) },
-                        placeholder = { Text("anthropic/claude-sonnet") },
+                        placeholder = { Text(stringResource(R.string.agent_anthropic_claude_sonnet)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )

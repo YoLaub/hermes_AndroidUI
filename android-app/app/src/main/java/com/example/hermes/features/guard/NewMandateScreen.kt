@@ -162,7 +162,7 @@ fun NewMandateScreen(
                 OutlinedTextField(
                     value = hostDraft,
                     onValueChange = { hostDraft = it },
-                    placeholder = { Text("site.org ou *.site.org") },
+                    placeholder = { Text(stringResource(R.string.guard_site_org_ou_site_org)) },
                     isError = hostParse?.error != null,
                     supportingText = { Text(hostParse?.error ?: stringResource(R.string.mandate_sites_help)) },
                     singleLine = true,
@@ -196,7 +196,7 @@ fun NewMandateScreen(
                     OutlinedTextField(
                         value = folderDraft,
                         onValueChange = { folderDraft = it },
-                        placeholder = { Text("/home/john/projet") },
+                        placeholder = { Text(stringResource(R.string.guard_home_john_projet)) },
                         isError = folderParse?.error != null,
                         supportingText = folderParse?.error?.let { { Text(it) } },
                         singleLine = true,

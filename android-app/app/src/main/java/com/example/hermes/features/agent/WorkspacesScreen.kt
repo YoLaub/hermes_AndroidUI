@@ -133,7 +133,7 @@ private fun AddWorkspaceForm(onAdd: (path: String, name: String?) -> Unit) {
             value = path,
             onValueChange = { path = it },
             label = { Text(stringResource(R.string.workspaces_path)) },
-            placeholder = { Text("/workspace/mon-projet") },
+            placeholder = { Text(stringResource(R.string.agent_workspace_mon_projet)) },
             isError = path.isNotEmpty() && error != null,
             supportingText = {
                 if (path.isNotEmpty() && error == WorkspacePathError.NotAbsolute) Text(stringResource(R.string.workspaces_path_absolute))

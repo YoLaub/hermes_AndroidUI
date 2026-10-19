@@ -111,7 +111,7 @@ fun AuthScreen(
                 value = state.serverUrl,
                 onValueChange = { viewModel.onServerUrlChanged(it) },
                 label = { Text(stringResource(R.string.auth_server_url)) },
-                placeholder = { Text("http://192.168.1.x:8000") },
+                placeholder = { Text(stringResource(R.string.auth_http_192_168_1_x)) },
                 leadingIcon = {
                     Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 },
@@ -316,7 +316,7 @@ fun AuthScreen(
                     if (tipsOpen) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "• Coolify / Reverse Proxy : Renseignez directement votre domaine HTTPS (ex: https://hermes.mondomaine.fr).\n" +
+                        stringResource(R.string.auth_coolify_reverse_proxy_renseignez_directement) +
                         "• En local (Docker) : Utilisez http://10.0.2.2:8000 sur émulateur ou l'IP locale Wi-Fi sur mobile.\n" +
                         "• Sécurité : Le mot de passe saisi est automatiquement mémorisé de façon sécurisée sur votre appareil.",
                         style = MaterialTheme.typography.bodySmall,

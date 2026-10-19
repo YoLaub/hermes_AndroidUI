@@ -116,7 +116,7 @@ fun AgentScreen(
                     icon = Icons.Outlined.Widgets,
                     onClick = onOpenSkills,
                 )
-                ListRow(stringResource(R.string.agent_memory_soul), subtitle = "MEMORY.md · USER.md · SOUL.md", icon = Icons.Outlined.Psychology, onClick = onOpenMemory)
+                ListRow(stringResource(R.string.agent_memory_soul), subtitle = stringResource(R.string.agent_memory_md_user_md_soul), icon = Icons.Outlined.Psychology, onClick = onOpenMemory)
                 ListRow(
                     stringResource(R.string.agent_workspaces),
                     subtitle = state.activeWorkspace?.let { stringResource(R.string.agent_workspaces_active, it) },

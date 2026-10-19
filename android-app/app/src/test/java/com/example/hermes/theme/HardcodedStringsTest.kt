@@ -10,6 +10,12 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
+        "features/inbox/InboxScreen.kt",
+        "features/auth/AuthScreen.kt",
+        "features/agent/WorkspacesScreen.kt",
+        "features/agent/AgentScreen.kt",
+        "features/agent/NewProfileScreen.kt",
+        "features/guard/NewMandateScreen.kt",
         "features/chat/components/ReasoningCard.kt",
         "features/chat/components/ClarifyCard.kt",
         "features/chat/components/MessageBubble.kt",

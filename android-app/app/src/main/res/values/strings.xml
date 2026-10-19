@@ -510,4 +510,13 @@
     <string name="sessions_aucune_session_trouvee">Aucune session trouvée</string>
     <string name="sessions_chercher_sur_le_serveur">Chercher sur le serveur</string>
     <string name="sessions_msg">%1$s msg</string>
+    <!-- Guard, agent, sign-in and inbox -->
+    <string name="auth_http_192_168_1_x" translatable="false">http://192.168.1.x:8000</string>
+    <string name="auth_coolify_reverse_proxy_renseignez_directement">• Coolify / Reverse Proxy : Renseignez directement votre domaine HTTPS (ex: https://hermes.mondomaine.fr).\n</string>
+    <string name="agent_workspace_mon_projet" translatable="false">/workspace/mon-projet</string>
+    <string name="agent_memory_md_user_md_soul" translatable="false">MEMORY.md · USER.md · SOUL.md</string>
+    <string name="agent_redacteur" translatable="false">redacteur</string>
+    <string name="agent_anthropic_claude_sonnet" translatable="false">anthropic/claude-sonnet</string>
+    <string name="guard_site_org_ou_site_org" translatable="false">site.org ou *.site.org</string>
+    <string name="guard_home_john_projet" translatable="false">/home/john/projet</string>
 </resources>
