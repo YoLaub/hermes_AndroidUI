@@ -13,6 +13,10 @@ import kotlinx.serialization.Serializable
 // Pushed screens
 @Serializable data object KanbanRoute : NavKey
 @Serializable data object SettingsRoute : NavKey
+@Serializable data object SkillsRoute : NavKey
+@Serializable data class SkillDetailRoute(val name: String) : NavKey
+@Serializable data object MemoryRoute : NavKey
+@Serializable data object WorkspacesRoute : NavKey
 
 fun rootOf(tab: Tab): NavKey = when (tab) {
     Tab.Chat -> ChatRoute

@@ -35,6 +35,8 @@ data class ChatUiState(
     val sessions: List<SessionSummary> = emptyList(),
     val skills: List<SkillSummary> = emptyList(),
     val selectedSkillDetail: SkillDetailResponse? = null,
+    /** Raw error of the last skill detail load (Hermes WebUI, not agent-memory). */
+    val skillDetailError: String? = null,
     val isSkillsLoading: Boolean = false,
     val memoryData: MemoryResponse? = null,
     val isMemoryLoading: Boolean = false,
@@ -954,18 +956,19 @@ class ChatViewModel(
 
     fun loadSkillDetail(name: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSkillsLoading = true) }
+            _uiState.update { it.copy(isSkillsLoading = true, skillDetailError = null) }
             val res = repository.getSkillContent(name)
             if (res.isSuccess) {
                 _uiState.update { it.copy(selectedSkillDetail = res.getOrThrow(), isSkillsLoading = false) }
             } else {
-                _uiState.update { it.copy(isSkillsLoading = false) }
+                val err = res.exceptionOrNull()
+                _uiState.update { it.copy(isSkillsLoading = false, skillDetailError = err?.message ?: err?.javaClass?.simpleName) }
             }
         }
     }
 
     fun clearSkillDetail() {
-        _uiState.update { it.copy(selectedSkillDetail = null) }
+        _uiState.update { it.copy(selectedSkillDetail = null, skillDetailError = null) }
     }
 
     fun deleteSkill(name: String) {

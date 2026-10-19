@@ -11,6 +11,8 @@
     <string name="loading">Chargement…</string>
     <string name="action_delete">Supprimer</string>
     <string name="action_refresh">Actualiser</string>
+    <string name="action_save">Enregistrer</string>
+    <string name="breadcrumb_agent_profile">Agent · %1$s</string>
 
     <!-- Server errors -->
     <string name="error_network">Serveur injoignable</string>
@@ -93,6 +95,28 @@
     <string name="agent_restart_title">Redémarrer l\'agent %1$s ?</string>
     <string name="agent_restart_message">La passerelle du profil redémarre : les conversations en cours sont interrompues le temps du redémarrage.</string>
     <string name="agent_restart_confirm">Redémarrer</string>
+
+    <!-- Agent screens -->
+    <string name="skills_empty">Aucune compétence pour ce profil</string>
+    <string name="skills_empty_file">(Fichier SKILL.md vide)</string>
+    <string name="skills_delete">Supprimer la compétence</string>
+    <string name="skills_delete_title">Supprimer « %1$s » ?</string>
+    <string name="skills_delete_message">La compétence est supprimée du profil sur le serveur.</string>
+    <string name="memory_hint_memory">Notes et mémoire persistante de l\'agent…</string>
+    <string name="memory_hint_user">Préférences de l\'utilisateur…</string>
+    <string name="memory_hint_soul">Personnalité et directives de l\'agent…</string>
+    <string name="workspaces_add">Ajouter un espace de travail</string>
+    <string name="workspaces_empty">Aucun espace de travail</string>
+    <string name="workspaces_active">Actif · %1$s</string>
+    <string name="workspaces_remove">Retirer %1$s</string>
+    <string name="workspaces_remove_title">Retirer « %1$s » ?</string>
+    <string name="workspaces_remove_message">Le dossier n\'est plus proposé à l\'agent. Son contenu n\'est pas supprimé.</string>
+    <string name="workspaces_remove_confirm">Retirer</string>
+    <string name="workspaces_path">Chemin absolu</string>
+    <string name="workspaces_name">Nom affiché (facultatif)</string>
+    <string name="workspaces_path_required">Saisissez un chemin</string>
+    <string name="workspaces_path_absolute">Le chemin doit commencer par /</string>
+    <string name="workspaces_add_confirm">Ajouter</string>
 
     <!-- Profile switcher -->
     <string name="profiles_sheet_subtitle">Persona, modèle et configuration de l\'agent</string>

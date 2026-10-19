@@ -23,12 +23,9 @@ class AgentToolsState {
     var createProfileDialog by mutableStateOf(false)
     var profileEnvDialog by mutableStateOf(false)
     var openBaoDialog by mutableStateOf(false)
-    var skillsDialog by mutableStateOf(false)
-    var memoryDialog by mutableStateOf(false)
     var validationsDialog by mutableStateOf(false)
     var memoryProfilesDialog by mutableStateOf(false)
     var mandatesDialog by mutableStateOf(false)
-    var workspaceDialog by mutableStateOf(false)
 }
 
 @Composable
@@ -205,23 +202,6 @@ fun AgentToolsHost(
         )
     }
 
-    // Skills Dialog
-    if (tools.skillsDialog) {
-        SkillsDialog(
-            profileName = state.activeProfile,
-            skills = state.skills,
-            isLoading = state.isSkillsLoading,
-            selectedSkillDetail = state.selectedSkillDetail,
-            onSelectSkill = { name -> viewModel.loadSkillDetail(name) },
-            onBackToList = { viewModel.clearSkillDetail() },
-            onDeleteSkill = { name -> viewModel.deleteSkill(name) },
-            onDismiss = {
-                tools.skillsDialog = false
-                viewModel.clearSkillDetail()
-            }
-        )
-    }
-
     if (tools.memoryProfilesDialog) {
         MemoryProfilesDialog(
             profiles = state.memoryProfiles,
@@ -275,30 +255,4 @@ fun AgentToolsHost(
         )
     }
 
-    // Memory Dialog
-    if (tools.memoryDialog) {
-        MemoryDialog(
-            profileName = state.activeProfile,
-            memoryData = state.memoryData,
-            isLoading = state.isMemoryLoading,
-            onSaveSection = { section, content -> viewModel.saveMemory(section, content) },
-            onDismiss = { tools.memoryDialog = false }
-        )
-    }
-
-    // Workspaces Dialog
-    if (tools.workspaceDialog) {
-        WorkspaceDialog(
-            workspaces = state.workspaces,
-            activeWorkspace = state.activeWorkspace,
-            isLoading = state.isWorkspacesLoading,
-            onSelectWorkspace = { path ->
-                viewModel.selectWorkspace(path)
-                tools.workspaceDialog = false
-            },
-            onAddWorkspace = { path, name -> viewModel.addWorkspace(path, name) },
-            onRemoveWorkspace = { path -> viewModel.removeWorkspace(path) },
-            onDismiss = { tools.workspaceDialog = false }
-        )
-    }
 }

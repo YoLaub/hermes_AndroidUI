@@ -32,6 +32,10 @@ import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.agent.AgentScreen
 import com.example.hermes.features.agent.AgentState
+import com.example.hermes.features.agent.MemoryScreen
+import com.example.hermes.features.agent.SkillDetailScreen
+import com.example.hermes.features.agent.SkillsScreen
+import com.example.hermes.features.agent.WorkspacesScreen
 import com.example.hermes.features.settings.SettingsScreen
 import com.example.hermes.core.model.ProfileInfo
 import com.example.hermes.features.chat.chatSessionTitle
@@ -201,15 +205,15 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onChangeProfile = { tools.profilesSheet = true },
                             onOpenSkills = {
                                 vm.chat.loadSkills()
-                                tools.skillsDialog = true
+                                go(nav.push(SkillsRoute))
                             },
                             onOpenMemory = {
                                 vm.chat.loadMemory()
-                                tools.memoryDialog = true
+                                go(nav.push(MemoryRoute))
                             },
                             onOpenWorkspaces = {
                                 vm.chat.loadWorkspaces()
-                                tools.workspaceDialog = true
+                                go(nav.push(WorkspacesRoute))
                             },
                             onOpenEnv = {
                                 vm.chat.loadProviders()
@@ -229,6 +233,57 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             },
                             onRestartGateway = { vm.chat.restartGateway() },
                             onOpenSettings = { go(nav.push(SettingsRoute)) },
+                        )
+                    }
+                    entry<SkillsRoute> {
+                        SkillsScreen(
+                            profileName = profileDisplayName(chat.activeProfile),
+                            skills = chat.skills,
+                            isLoading = chat.isSkillsLoading,
+                            onOpenSkill = { name ->
+                                vm.chat.loadSkillDetail(name)
+                                go(nav.push(SkillDetailRoute(name)))
+                            },
+                            onBack = { nav.back()?.let(::go) },
+                        )
+                    }
+                    entry<SkillDetailRoute> { route ->
+                        val back = {
+                            vm.chat.clearSkillDetail()
+                            nav.back()?.let(::go)
+                        }
+                        SkillDetailScreen(
+                            name = route.name,
+                            detail = chat.selectedSkillDetail,
+                            isLoading = chat.isSkillsLoading,
+                            error = chat.skillDetailError,
+                            onRetry = { vm.chat.loadSkillDetail(route.name) },
+                            onDelete = {
+                                vm.chat.deleteSkill(route.name)
+                                back()
+                            },
+                            onBack = { back() },
+                        )
+                    }
+                    entry<MemoryRoute> {
+                        MemoryScreen(
+                            profileName = profileDisplayName(chat.activeProfile),
+                            memory = chat.memoryData,
+                            isLoading = chat.isMemoryLoading,
+                            onSave = { section, content -> vm.chat.saveMemory(section.apiName, content) },
+                            onBack = { nav.back()?.let(::go) },
+                        )
+                    }
+                    entry<WorkspacesRoute> {
+                        WorkspacesScreen(
+                            profileName = profileDisplayName(chat.activeProfile),
+                            workspaces = chat.workspaces,
+                            activePath = chat.activeWorkspace,
+                            isLoading = chat.isWorkspacesLoading,
+                            onSelect = { vm.chat.selectWorkspace(it) },
+                            onAdd = { path, name -> vm.chat.addWorkspace(path, name) },
+                            onRemove = { vm.chat.removeWorkspace(it) },
+                            onBack = { nav.back()?.let(::go) },
                         )
                     }
                     entry<SettingsRoute> {
