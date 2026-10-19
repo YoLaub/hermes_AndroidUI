@@ -282,11 +282,11 @@ fun ChatScreen(
 
                                     StreamingIndicator(
                                         statusText = if (state.streamingToolCalls.any { it.output == null && !it.isError }) {
-                                            "Executing tool..."
+                                            stringResource(R.string.chat_status_tool)
                                         } else if (state.streamingReasoning.isNotBlank() && state.streamingTokens.isBlank()) {
-                                            "Reasoning..."
+                                            stringResource(R.string.chat_status_reasoning)
                                         } else {
-                                            "Generating response..."
+                                            stringResource(R.string.chat_status_generating)
                                         }
                                     )
                                 }

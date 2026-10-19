@@ -320,4 +320,47 @@
     <string name="inbox_no_token">Le jeton propriétaire n\'est pas encore saisi.</string>
     <string name="inbox_change_token">Changer le jeton</string>
     <string name="inbox_tools_still_available">Les approbations d\'outils restent disponibles.</string>
+    <!-- Connexion -->
+    <string name="auth_logo">Logo Hermes</string>
+    <string name="auth_title">Hermes</string>
+    <string name="auth_subtitle">Connexion à votre instance Hermes WebUI</string>
+    <string name="auth_emulator">Émulateur (10.0.2.2)</string>
+    <string name="auth_lan">IP locale</string>
+    <string name="auth_server_url">Adresse du serveur Hermes</string>
+    <string name="auth_clear">Effacer</string>
+    <string name="auth_password">Mot de passe (HERMES_WEBUI_PASSWORD)</string>
+    <string name="auth_password_hint">Laisser vide si l\'authentification est désactivée</string>
+    <string name="auth_hide_password">Masquer le mot de passe</string>
+    <string name="auth_show_password">Afficher le mot de passe</string>
+    <string name="auth_probing">Vérification de l\'instance Hermes…</string>
+    <string name="auth_online">En ligne (%1$s)</string>
+    <string name="auth_health">Démarrée depuis %1$d s · flux actifs : %2$d · authentification : %3$s</string>
+    <string name="auth_required">requise</string>
+    <string name="auth_none">aucune</string>
+    <string name="auth_failed">Connexion impossible</string>
+    <string name="auth_test">Tester</string>
+    <string name="auth_connect">Se connecter</string>
+    <string name="auth_tips">Conseils pour un déploiement local</string>
+
+    <!-- Chat statuses -->
+    <string name="chat_status_tool">Exécution de l\'outil…</string>
+    <string name="chat_status_reasoning">Raisonnement en cours…</string>
+    <string name="chat_status_generating">Rédaction de la réponse…</string>
+    <string name="chat_thinking">Réflexion…</string>
+    <string name="chat_thought">Raisonnement</string>
+    <string name="chat_approval_required">Approbation requise</string>
+    <string name="chat_commands">Commandes disponibles</string>
+    <string name="chat_copy_code">Copier le code</string>
+
+    <!-- Contrôle du téléphone -->
+    <string name="control_title">Contrôle du téléphone</string>
+    <string name="control_session_active">Session active</string>
+    <string name="control_stop">Arrêter le contrôle</string>
+    <string name="control_a11y">Service d\'accessibilité</string>
+    <string name="control_a11y_on">Actif et prêt</string>
+    <string name="control_a11y_off">Désactivé · requis pour démarrer</string>
+    <string name="relay_short">Relais mobile</string>
+    <string name="control_journal">Journal d\'activité</string>
+    <string name="control_show_detail">Détail technique</string>
+    <string name="control_hide_detail">Masquer le détail</string>
 </resources>

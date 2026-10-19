@@ -88,7 +88,7 @@ fun ChatInputField(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Text(
-                            text = "COMMANDES DISPONIBLES",
+                            text = stringResource(R.string.chat_commands),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = HermesTextMuted,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)

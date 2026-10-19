@@ -1,5 +1,7 @@
 package com.example.hermes.features.chat.components
 
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -90,7 +92,7 @@ fun MarkdownText(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Copy code",
+                                        contentDescription = stringResource(R.string.chat_copy_code),
                                         tint = HermesTextMuted,
                                         modifier = Modifier.size(14.dp)
                                     )

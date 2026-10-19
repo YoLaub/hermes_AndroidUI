@@ -1,5 +1,7 @@
 package com.example.hermes.features.mobilecontrol
 
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
 import com.example.hermes.ui.components.StopControlDialog
 import com.example.hermes.core.mobilecontrol.ConsentLevel
 import com.example.hermes.core.mobilecontrol.consentLevel
@@ -76,7 +78,7 @@ fun MobileControlScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Contrôle par Hermes",
+                            stringResource(R.string.control_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = HermesTextPrimary
@@ -137,7 +139,7 @@ fun MobileControlScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        "SESSION ACTIVE",
+                                        stringResource(R.string.control_session_active),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = HermesError
@@ -182,7 +184,7 @@ fun MobileControlScreen(
                             ) {
                                 Icon(Icons.Default.StopCircle, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("ARRÊTER LE CONTRÔLE", fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.control_stop), fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
@@ -217,12 +219,12 @@ fun MobileControlScreen(
                         ) {
                             Column {
                                 Text(
-                                    "Service d'accessibilité Hermes",
+                                    stringResource(R.string.control_a11y),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = HermesTextPrimary
                                 )
                                 Text(
-                                    if (state.isAccessibilityEnabled) "Actif et prêt" else "Inactif (requis pour le contrôle)",
+                                    stringResource(if (state.isAccessibilityEnabled) R.string.control_a11y_on else R.string.control_a11y_off),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.isAccessibilityEnabled) HermesSuccess else HermesError
                                 )
@@ -249,7 +251,7 @@ fun MobileControlScreen(
                         ) {
                             Column {
                                 Text(
-                                    "Relais VPS (WebSocket)",
+                                    stringResource(R.string.relay_short),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = HermesTextPrimary
                                 )
@@ -258,6 +260,16 @@ fun MobileControlScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.isRelayConnected) HermesSuccess else HermesTextMuted
                                 )
+                                // The socket's own message, on demand ("détail technique").
+                                if (!state.isRelayConnected && state.relayErrorDetail != null) {
+                                    var showDetail by remember { mutableStateOf(false) }
+                                    TextButton(onClick = { showDetail = !showDetail }) {
+                                        Text(stringResource(if (showDetail) R.string.control_hide_detail else R.string.control_show_detail))
+                                    }
+                                    if (showDetail) {
+                                        Text(state.relayErrorDetail!!, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = HermesTextSecondary)
+                                    }
+                                }
                             }
                             // Address and pairing live in Réglages › Relais mobile.
                             IconButton(onClick = onOpenRelaySettings) {
@@ -381,7 +393,7 @@ fun MobileControlScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Journal d'activité et audits",
+                        stringResource(R.string.control_journal),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = HermesTextPrimary
@@ -485,7 +497,7 @@ private fun AuditLogRow(log: AuditLogEntry) {
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = log.status,
+                        text = auditStatusLabel(log.status),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isSuccess) HermesSuccess else HermesError,
                         fontWeight = FontWeight.SemiBold

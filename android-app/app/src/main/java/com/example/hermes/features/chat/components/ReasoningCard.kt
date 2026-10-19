@@ -1,5 +1,7 @@
 package com.example.hermes.features.chat.components
 
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -64,7 +66,7 @@ fun ReasoningCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = if (isStreaming) "Thinking..." else "Thought process",
+                    text = stringResource(if (isStreaming) R.string.chat_thinking else R.string.chat_thought),
                     style = MaterialTheme.typography.labelMedium,
                     color = HermesTertiary
                 )
