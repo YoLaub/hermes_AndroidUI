@@ -1,6 +1,8 @@
 package com.example.hermes.features.mobilecontrol
 
 import com.example.hermes.ui.components.StopControlDialog
+import com.example.hermes.core.mobilecontrol.ConsentLevel
+import com.example.hermes.core.mobilecontrol.consentLevel
 
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -562,6 +564,30 @@ private val CONSENT_ROWS = listOf(
 )
 
 @Composable
+private fun ConsentGroupHeader(level: ConsentLevel) {
+    val (number, title, subtitle) = when (level) {
+        ConsentLevel.Read -> Triple("1", "Lecture", "Consulter, sans rien modifier")
+        ConsentLevel.ConfirmedWrite -> Triple("2", "Écriture avec confirmation", "Chaque action vous est demandée")
+        ConsentLevel.CallsAndSms -> Triple("3", "Appels & SMS", "Confirmation + permission Android")
+    }
+    val (container, content) = when (level) {
+        ConsentLevel.Read -> HermesColors.PrimaryContainer to HermesColors.OnPrimaryContainer
+        ConsentLevel.ConfirmedWrite -> HermesColors.WarningContainer to HermesColors.OnWarningContainer
+        ConsentLevel.CallsAndSms -> HermesColors.DangerContainer to HermesColors.OnDangerContainer
+    }
+    HorizontalDivider()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(28.dp).background(container, CircleShape), contentAlignment = Alignment.Center) {
+            Text(number, color = content, style = MaterialTheme.typography.labelLarge)
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
+        }
+    }
+}
+
+@Composable
 private fun StartSessionDialog(
     allowedApps: List<AllowedApp>,
     availableProfiles: List<String>,
@@ -663,15 +689,33 @@ private fun StartSessionDialog(
                     }
                 }
 
-                CONSENT_ROWS.forEach { row ->
-                    HorizontalDivider()
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(row.title, style = MaterialTheme.typography.labelMedium)
-                            Text(row.description, style = MaterialTheme.typography.bodySmall, color = HermesTextSecondary)
+                // Grouped by sensitivity; each consent is still given for this session only.
+                ConsentLevel.entries.forEach { level ->
+                    ConsentGroupHeader(level)
+                    CONSENT_ROWS.filter { consentLevel(it.consent) == level }.forEach { row ->
+                        val on = row.consent in consents
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(row.title, style = MaterialTheme.typography.labelLarge)
+                                // State as icon + text, not colour alone.
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(
+                                        if (on) Icons.Default.Check else Icons.Default.Block,
+                                        contentDescription = null,
+                                        tint = if (on) HermesColors.OnSuccessContainer else HermesTextSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        if (on) "Autorisé pour cette session" else "Refusé",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (on) HermesColors.OnSuccessContainer else HermesTextSecondary
+                                    )
+                                }
+                                Text(row.description, style = MaterialTheme.typography.bodySmall, color = HermesTextSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Switch(checked = on, onCheckedChange = { toggle(row.consent, it) })
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(checked = row.consent in consents, onCheckedChange = { toggle(row.consent, it) })
                     }
                 }
             }
