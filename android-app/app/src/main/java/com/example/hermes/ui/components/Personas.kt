@@ -19,7 +19,8 @@ fun personaOf(profile: ProfileInfo): Persona {
     return Persona(id = profile.name, name = name, initials = initialsOf(name), model = profile.model)
 }
 
-fun personasOf(profiles: List<ProfileInfo>): List<Persona> = profiles.map(::personaOf)
+// One persona per name: the server can list two profiles with the same name.
+fun personasOf(profiles: List<ProfileInfo>): List<Persona> = profiles.distinctBy { it.name }.map(::personaOf)
 
 /** The persona for [id], or one derived from the id when the profile list does not have it. */
 fun personaOrFallback(personas: List<Persona>, id: String): Persona =

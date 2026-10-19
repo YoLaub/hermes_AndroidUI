@@ -28,4 +28,11 @@ class PersonasTest {
         assertEquals("Mario", p.name)
         assertEquals("MA", p.initials)
     }
+
+    @Test
+    fun `two profiles with the same name give one persona`() {
+        // The server lists two profiles named "default".
+        val personas = personasOf(listOf(ProfileInfo(name = "default", isDefault = true), ProfileInfo(name = "default"), ProfileInfo(name = "gaston")))
+        assertEquals(listOf("default", "gaston"), personas.map { it.id })
+    }
 }
