@@ -131,10 +131,12 @@ fun CalendarScreen(
 
             // Day Events Timeline / List
             if (state.filteredEventsForSelectedDate.isEmpty()) {
+                // Bottom padding keeps the hint clear of the new-slot FAB, like the list's.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .weight(1f)
+                        .padding(bottom = 80.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
