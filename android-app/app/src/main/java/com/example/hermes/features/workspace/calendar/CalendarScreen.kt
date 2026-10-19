@@ -24,6 +24,9 @@ import com.example.hermes.core.model.OWNER_NAME
 import com.example.hermes.ui.components.Persona
 import java.time.format.DateTimeFormatter
 import java.util.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
+import com.example.hermes.ui.components.AppFab
 
 @Composable
 fun CalendarScreen(
@@ -181,13 +184,9 @@ fun CalendarScreen(
         }
 
         // Floating Action Button (New Event / Booking)
-        ExtendedFloatingActionButton(
+        AppFab(
+            label = stringResource(R.string.agenda_new_slot),
             onClick = { viewModel.openNewEvent() },
-            containerColor = HermesPrimary,
-            contentColor = OnyxDarkBackground,
-            shape = RoundedCornerShape(16.dp),
-            icon = { Icon(Icons.Default.Add, contentDescription = null) },
-            text = { Text("Créneau / RDV", fontWeight = FontWeight.Bold) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)

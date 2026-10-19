@@ -28,6 +28,9 @@ import com.example.hermes.features.workspace.notes.components.NoteCard
 import com.example.hermes.features.workspace.notes.components.NoteEditorDialog
 import com.example.hermes.theme.*
 import com.example.hermes.ui.components.Persona
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
+import com.example.hermes.ui.components.AppFab
 
 @Composable
 fun NotesScreen(
@@ -215,13 +218,9 @@ fun NotesScreen(
             }
 
             // New Note Button
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.openNewNote() },
-                containerColor = HermesPrimary,
-                contentColor = OnyxDarkBackground,
-                shape = RoundedCornerShape(16.dp),
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Note", fontWeight = FontWeight.Bold) }
+            AppFab(
+                label = stringResource(R.string.notes_new),
+                onClick = { viewModel.openNewNote() }
             )
         }
 

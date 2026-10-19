@@ -31,6 +31,9 @@ import com.example.hermes.core.model.KanbanTask
 import com.example.hermes.features.workspace.readyCount
 import com.example.hermes.ui.components.ConfirmDialog
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
+import com.example.hermes.ui.components.AppFab
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -204,13 +207,9 @@ fun KanbanScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.showCreateDialog(true) },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Nouvelle tâche", fontWeight = FontWeight.SemiBold) },
-                containerColor = HermesPrimary,
-                contentColor = OnyxDarkBackground,
-                shape = RoundedCornerShape(16.dp)
+            AppFab(
+                label = stringResource(R.string.space_new_task),
+                onClick = { viewModel.showCreateDialog(true) }
             )
         },
         containerColor = OnyxDarkBackground
