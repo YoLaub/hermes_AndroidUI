@@ -3,6 +3,7 @@ package com.example.hermes.features.mobilecontrol
 import com.example.hermes.R
 import androidx.compose.ui.res.stringResource
 import com.example.hermes.ui.components.StopControlDialog
+import com.example.hermes.ui.components.LabeledSwitch
 import com.example.hermes.core.mobilecontrol.ConsentLevel
 import com.example.hermes.core.mobilecontrol.consentLevel
 
@@ -373,13 +374,10 @@ fun MobileControlScreen(
                                 color = HermesTextSecondary
                             )
                         }
-                        Switch(
+                        LabeledSwitch(
                             checked = app.isEnabled,
                             onCheckedChange = { viewModel.toggleApp(app.packageName) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = HermesPrimary,
-                                checkedTrackColor = HermesPrimary.copy(alpha = 0.3f)
-                            )
+                            label = app.appName
                         )
                     }
                 }
@@ -726,7 +724,7 @@ private fun StartSessionDialog(
                                 Text(row.description, style = MaterialTheme.typography.bodySmall, color = HermesTextSecondary)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            Switch(checked = on, onCheckedChange = { toggle(row.consent, it) })
+                            LabeledSwitch(checked = on, onCheckedChange = { toggle(row.consent, it) }, label = row.title)
                         }
                     }
                 }
