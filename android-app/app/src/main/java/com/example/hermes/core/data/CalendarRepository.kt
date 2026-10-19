@@ -6,6 +6,7 @@ import com.example.hermes.core.model.CalendarPermissionLevel
 import com.example.hermes.core.model.EventStatus
 import com.example.hermes.core.model.OWNER_NAME
 import com.example.hermes.core.model.ProfileCalendarPermission
+import com.example.hermes.core.model.withOwnerRenamed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +45,7 @@ class CalendarRepository(private val context: Context) {
         val loadedEvents = try {
             if (eventsFile.exists()) {
                 val text = eventsFile.readText()
-                if (text.isNotBlank()) json.decodeFromString<List<CalendarEvent>>(text) else null
+                if (text.isNotBlank()) json.decodeFromString<List<CalendarEvent>>(text).map { it.withOwnerRenamed() } else null
             } else null
         } catch (_: Exception) { null } ?: defaultEvents(todayEpochDay)
 
@@ -96,7 +97,7 @@ class CalendarRepository(private val context: Context) {
             startTime = "10:00",
             endTime = "10:45",
             organizer = "Mario",
-            assignedProfiles = listOf("Yoann", "Mario"),
+            assignedProfiles = listOf(OWNER_NAME, "Mario"),
             status = EventStatus.CONFIRMED,
             locationOrLink = "Telegram / Hermes Call"
         ),
@@ -117,8 +118,8 @@ class CalendarRepository(private val context: Context) {
             dateEpochDay = todayEpochDay + 1,
             startTime = "11:00",
             endTime = "12:00",
-            organizer = "Yoann",
-            assignedProfiles = listOf("Yoann", "Mario", "Gaston"),
+            organizer = OWNER_NAME,
+            assignedProfiles = listOf(OWNER_NAME, "Mario", "Gaston"),
             status = EventStatus.CONFIRMED,
             locationOrLink = "Forum Agents Hub"
         )

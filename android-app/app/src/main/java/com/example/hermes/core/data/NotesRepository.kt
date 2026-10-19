@@ -2,6 +2,8 @@ package com.example.hermes.core.data
 
 import android.content.Context
 import com.example.hermes.core.model.AgentNote
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.core.model.withOwnerRenamed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,7 @@ class NotesRepository(private val context: Context) {
             if (notesFile.exists()) {
                 val content = notesFile.readText()
                 if (content.isNotBlank()) {
-                    val list = json.decodeFromString<List<AgentNote>>(content)
+                    val list = json.decodeFromString<List<AgentNote>>(content).map { it.withOwnerRenamed() }
                     _notes.value = list.sortedWith(compareByDescending<AgentNote> { it.isPinned }.thenByDescending { it.updatedAt })
                     return@withContext _notes.value
                 }
@@ -39,7 +41,7 @@ class NotesRepository(private val context: Context) {
                 AgentNote(
                     title = "🎯 Objectifs Prospection Morbihan",
                     content = "Points validés avec **Mario** :\n- Recherche de 6 PME cibles (secteur agro & nautisme)\n- Collecte documentaire sans prise de contact directe\n- Restitution dans le Kanban *growth-commercial*",
-                    author = "Yoann",
+                    author = OWNER_NAME,
                     authorRole = "user",
                     tags = listOf("Prospection", "Mario", "Morbihan"),
                     isPinned = true

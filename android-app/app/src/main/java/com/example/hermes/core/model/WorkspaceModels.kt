@@ -11,6 +11,25 @@ private const val LEGACY_OWNER_NAME = "Yoann"
 
 fun isOwnerName(name: String): Boolean = name == OWNER_NAME || name.equals(LEGACY_OWNER_NAME, ignoreCase = true)
 
+/** [name], with the legacy owner name replaced by [OWNER_NAME]. */
+fun ownerRenamed(name: String): String = if (isOwnerName(name)) OWNER_NAME else name
+
+private val legacyOwnerWord = Regex("""\b$LEGACY_OWNER_NAME\b""", RegexOption.IGNORE_CASE)
+
+fun ForumRoom.withOwnerRenamed(): ForumRoom = copy(
+    topic = topic.replace(legacyOwnerWord, OWNER_NAME),
+    participants = participants.map { it.copy(name = ownerRenamed(it.name)) },
+)
+
+fun ForumMessage.withOwnerRenamed(): ForumMessage = copy(senderName = ownerRenamed(senderName))
+
+fun AgentNote.withOwnerRenamed(): AgentNote = copy(author = ownerRenamed(author))
+
+fun CalendarEvent.withOwnerRenamed(): CalendarEvent = copy(
+    organizer = ownerRenamed(organizer),
+    assignedProfiles = assignedProfiles.map(::ownerRenamed),
+)
+
 /** Whether [name] is the person a filter on [filter] selects; a filter on the owner also matches older data. */
 fun matchesPerson(name: String, filter: String): Boolean =
     if (filter == OWNER_NAME) isOwnerName(name) else name.equals(filter, ignoreCase = true)

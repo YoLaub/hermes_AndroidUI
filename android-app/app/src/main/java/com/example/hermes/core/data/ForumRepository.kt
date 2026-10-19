@@ -42,7 +42,7 @@ class ForumRepository(private val context: Context) {
         val loadedRooms = try {
             if (roomsFile.exists()) {
                 val text = roomsFile.readText()
-                if (text.isNotBlank()) json.decodeFromString<List<ForumRoom>>(text) else null
+                if (text.isNotBlank()) json.decodeFromString<List<ForumRoom>>(text).map { it.withOwnerRenamed() } else null
             } else null
         } catch (_: Exception) { null } ?: defaultRooms(loadedA2A)
 
@@ -53,7 +53,8 @@ class ForumRepository(private val context: Context) {
         val loadedMessages = try {
             if (messagesFile.exists()) {
                 val text = messagesFile.readText()
-                if (text.isNotBlank()) json.decodeFromString<Map<String, List<ForumMessage>>>(text) else null
+                if (text.isNotBlank()) json.decodeFromString<Map<String, List<ForumMessage>>>(text)
+                    .mapValues { (_, messages) -> messages.map { it.withOwnerRenamed() } } else null
             } else null
         } catch (_: Exception) { null } ?: defaultMessages(loadedRooms)
 
@@ -147,10 +148,10 @@ class ForumRepository(private val context: Context) {
     private fun defaultRooms(a2aAgents: List<A2AExternalAgent>): List<ForumRoom> = listOf(
         ForumRoom(
             name = "🏛️ Conseil de Direction Multi-Agents",
-            topic = "Tour de table stratégique avec Yoann, Mario et Gaston",
+            topic = "Tour de table stratégique avec vous, Mario et Gaston",
             iconEmoji = "🏛️",
             participants = listOf(
-                ForumParticipant(name = "Yoann", type = ParticipantType.USER, roleTitle = "Fondateur"),
+                ForumParticipant(name = OWNER_NAME, type = ParticipantType.USER, roleTitle = "Fondateur"),
                 ForumParticipant(name = "Mario", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Commercial & Growth"),
                 ForumParticipant(name = "Gaston", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Tech & CRM"),
                 ForumParticipant(name = "Hermes", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Orchestrateur")
@@ -161,7 +162,7 @@ class ForumRepository(private val context: Context) {
             topic = "Coordination Mario + Agent Externe A2A pour la qualification",
             iconEmoji = "🚀",
             participants = listOf(
-                ForumParticipant(name = "Yoann", type = ParticipantType.USER, roleTitle = "Pilote"),
+                ForumParticipant(name = OWNER_NAME, type = ParticipantType.USER, roleTitle = "Pilote"),
                 ForumParticipant(name = "Mario", type = ParticipantType.INTERNAL_AGENT, roleTitle = "Commercial"),
                 ForumParticipant(
                     name = a2aAgents.firstOrNull()?.name ?: "ScrapingBot A2A",
@@ -182,7 +183,7 @@ class ForumRepository(private val context: Context) {
         map[firstRoom.id] = listOf(
             ForumMessage(
                 roomId = firstRoom.id,
-                senderName = "Yoann",
+                senderName = OWNER_NAME,
                 senderType = ParticipantType.USER,
                 content = "Bonjour l'équipe ! Où en sommes-nous sur le déploiement du workflow Morbihan ?"
             ),
