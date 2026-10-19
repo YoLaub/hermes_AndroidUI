@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -32,6 +33,9 @@ import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.agent.AgentScreen
 import com.example.hermes.features.agent.AgentState
+import com.example.hermes.features.profiles.OpenBaoVaultScreen
+import com.example.hermes.features.profiles.ProfileEnvScreen
+import kotlinx.coroutines.launch
 import com.example.hermes.features.guard.GuardActions
 import com.example.hermes.features.guard.GuardScreen
 import com.example.hermes.features.guard.GuardState
@@ -104,6 +108,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
 
     val tools = rememberAgentToolsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var spaceLoaded by remember { mutableStateOf(false) }
 
     fun onSelect(tab: Tab) {
@@ -230,7 +235,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             },
                             onOpenEnv = {
                                 vm.chat.loadProviders()
-                                tools.profileEnvDialog = true
+                                go(nav.push(EnvRoute))
                             },
                             onOpenGuard = {
                                 refreshInbox()
@@ -379,6 +384,110 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onBack = { nav.back()?.let(::go) },
                         )
                     }
+                    entry<EnvRoute> {
+                        ProfileEnvScreen(
+                            activeProfile = chat.activeProfile,
+                            envEntries = chat.envEntries,
+                            providers = chat.providers,
+                            isLoading = chat.isProvidersLoading || chat.isEnvLoading,
+                            isEnvFallback = chat.isEnvFallback,
+                            onSaveEnvVar = { key, value, onFinished ->
+                                vm.chat.setProfileEnvVar(key, value) { success, errorMsg ->
+                                    onFinished(success, errorMsg)
+                                    if (success) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Variable $key enregistrée dans le .env du profil ${chat.activeProfile}")
+                                        }
+                                    }
+                                }
+                            },
+                            onDeleteEnvVar = { key, onFinished ->
+                                vm.chat.deleteProfileEnvVar(key) { success, errorMsg ->
+                                    onFinished?.invoke(success, errorMsg)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (success) "Variable $key supprimée du .env"
+                                            else "Échec de la suppression de $key : ${errorMsg ?: ""}"
+                                        )
+                                    }
+                                }
+                            },
+                            onSaveProviderKey = { providerId, apiKey, onFinished ->
+                                vm.chat.setProviderKey(providerId, apiKey) { success, errorMsg ->
+                                    onFinished(success, errorMsg)
+                                    if (success) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Clé $providerId enregistrée dans le .env du profil ${chat.activeProfile}")
+                                        }
+                                    }
+                                }
+                            },
+                            onDeleteProviderKey = { providerId, onFinished ->
+                                vm.chat.deleteProviderKey(providerId) { success, errorMsg ->
+                                    onFinished?.invoke(success, errorMsg)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (success) "Clé $providerId supprimée du .env"
+                                            else "Échec de la suppression : ${errorMsg ?: ""}"
+                                        )
+                                    }
+                                }
+                            },
+                            onRefresh = {
+                                vm.chat.loadProfileEnv()
+                                vm.chat.loadProviders()
+                            },
+                            onOpenOpenbao = {
+                                vm.chat.loadOpenbaoSecrets()
+                                go(nav.push(OpenBaoRoute))
+                            },
+                            onDismiss = { nav.back()?.let(::go) }
+                        )
+                    }
+                    entry<OpenBaoRoute> {
+                        OpenBaoVaultScreen(
+                            activeProfile = chat.activeProfile,
+                            openbaoUrl = chat.openbaoUrl,
+                            openbaoToken = chat.openbaoToken,
+                            openbaoMount = chat.openbaoMount,
+                            health = chat.openbaoHealth,
+                            secrets = chat.openbaoSecrets,
+                            isLoading = chat.isOpenbaoLoading,
+                            errorMessage = chat.openbaoError,
+                            onSaveConfig = { url, token, mount, onFinished ->
+                                vm.chat.saveOpenbaoConfig(url, token, mount, onFinished)
+                            },
+                            onSaveSecret = { key, value, onFinished ->
+                                vm.chat.saveOpenbaoSecret(key, value, chat.activeProfile) { success, err ->
+                                    onFinished(success, err)
+                                    if (success) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Secret $key enregistré dans OpenBao. Redémarrez le conteneur ${chat.activeProfile} pour appliquer.")
+                                        }
+                                    }
+                                }
+                            },
+                            onDeleteSecret = { key, onFinished ->
+                                vm.chat.deleteOpenbaoSecret(key, chat.activeProfile) { success, err ->
+                                    onFinished(success, err)
+                                    if (success) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Secret $key supprimé d'OpenBao. Redémarrez le conteneur ${chat.activeProfile} pour appliquer.")
+                                        }
+                                    }
+                                }
+                            },
+                            onRefresh = {
+                                vm.chat.loadOpenbaoHealth()
+                                vm.chat.loadOpenbaoSecrets()
+                            },
+                            onRestartGateway = {
+                                vm.chat.restartGateway()
+                            },
+                            isRestartingGateway = chat.isRestartingGateway,
+                            onDismiss = { nav.back()?.let(::go) }
+                        )
+                    }
                     entry<SettingsRoute> {
                         SettingsScreen(
                             serverUrl = chat.serverUrl,
@@ -392,7 +501,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                             onSaveOwnerToken = { vm.chat.saveMemoryOwnerToken(it) },
                             onOpenOpenBao = {
                                 vm.chat.loadOpenbaoSecrets()
-                                tools.openBaoDialog = true
+                                go(nav.push(OpenBaoRoute))
                             },
                             onDisconnect = onDisconnect,
                         )

@@ -19,6 +19,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object MemoryRoute : NavKey
 @Serializable data object WorkspacesRoute : NavKey
 @Serializable data object GuardRoute : NavKey
+@Serializable data object EnvRoute : NavKey
+@Serializable data object OpenBaoRoute : NavKey
 @Serializable data object NewMemoryProfileRoute : NavKey
 @Serializable data object NewMandateRoute : NavKey
 

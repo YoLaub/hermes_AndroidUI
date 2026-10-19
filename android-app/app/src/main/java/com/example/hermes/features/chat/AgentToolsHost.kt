@@ -21,8 +21,6 @@ import kotlinx.coroutines.launch
 class AgentToolsState {
     var profilesSheet by mutableStateOf(false)
     var createProfileDialog by mutableStateOf(false)
-    var profileEnvDialog by mutableStateOf(false)
-    var openBaoDialog by mutableStateOf(false)
 }
 
 @Composable
@@ -88,114 +86,6 @@ fun AgentToolsHost(
                     }
                 }
             }
-        )
-    }
-
-    // Profile Env Dialog (.env variables & API keys)
-    if (tools.profileEnvDialog) {
-        ProfileEnvDialog(
-            activeProfile = state.activeProfile,
-            envEntries = state.envEntries,
-            providers = state.providers,
-            isLoading = state.isProvidersLoading || state.isEnvLoading,
-            isEnvFallback = state.isEnvFallback,
-            onSaveEnvVar = { key, value, onFinished ->
-                viewModel.setProfileEnvVar(key, value) { success, errorMsg ->
-                    onFinished(success, errorMsg)
-                    if (success) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Variable $key enregistrée dans le .env du profil ${state.activeProfile}")
-                        }
-                    }
-                }
-            },
-            onDeleteEnvVar = { key, onFinished ->
-                viewModel.deleteProfileEnvVar(key) { success, errorMsg ->
-                    onFinished?.invoke(success, errorMsg)
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            if (success) "Variable $key supprimée du .env"
-                            else "Échec de la suppression de $key : ${errorMsg ?: ""}"
-                        )
-                    }
-                }
-            },
-            onSaveProviderKey = { providerId, apiKey, onFinished ->
-                viewModel.setProviderKey(providerId, apiKey) { success, errorMsg ->
-                    onFinished(success, errorMsg)
-                    if (success) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Clé $providerId enregistrée dans le .env du profil ${state.activeProfile}")
-                        }
-                    }
-                }
-            },
-            onDeleteProviderKey = { providerId, onFinished ->
-                viewModel.deleteProviderKey(providerId) { success, errorMsg ->
-                    onFinished?.invoke(success, errorMsg)
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            if (success) "Clé $providerId supprimée du .env"
-                            else "Échec de la suppression : ${errorMsg ?: ""}"
-                        )
-                    }
-                }
-            },
-            onRefresh = {
-                viewModel.loadProfileEnv()
-                viewModel.loadProviders()
-            },
-            onOpenOpenbao = {
-                viewModel.loadOpenbaoSecrets()
-                tools.openBaoDialog = true
-            },
-            onDismiss = { tools.profileEnvDialog = false }
-        )
-    }
-
-    // OpenBao Vault Dialog (HashiCorp / OpenBao Secrets Management)
-    if (tools.openBaoDialog) {
-        OpenBaoVaultDialog(
-            activeProfile = state.activeProfile,
-            openbaoUrl = state.openbaoUrl,
-            openbaoToken = state.openbaoToken,
-            openbaoMount = state.openbaoMount,
-            health = state.openbaoHealth,
-            secrets = state.openbaoSecrets,
-            isLoading = state.isOpenbaoLoading,
-            errorMessage = state.openbaoError,
-            onSaveConfig = { url, token, mount, onFinished ->
-                viewModel.saveOpenbaoConfig(url, token, mount, onFinished)
-            },
-            onSaveSecret = { key, value, onFinished ->
-                viewModel.saveOpenbaoSecret(key, value, state.activeProfile) { success, err ->
-                    onFinished(success, err)
-                    if (success) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Secret $key enregistré dans OpenBao. Redémarrez le conteneur ${state.activeProfile} pour appliquer.")
-                        }
-                    }
-                }
-            },
-            onDeleteSecret = { key, onFinished ->
-                viewModel.deleteOpenbaoSecret(key, state.activeProfile) { success, err ->
-                    onFinished(success, err)
-                    if (success) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Secret $key supprimé d'OpenBao. Redémarrez le conteneur ${state.activeProfile} pour appliquer.")
-                        }
-                    }
-                }
-            },
-            onRefresh = {
-                viewModel.loadOpenbaoHealth()
-                viewModel.loadOpenbaoSecrets()
-            },
-            onRestartGateway = {
-                viewModel.restartGateway()
-            },
-            isRestartingGateway = state.isRestartingGateway,
-            onDismiss = { tools.openBaoDialog = false }
         )
     }
 

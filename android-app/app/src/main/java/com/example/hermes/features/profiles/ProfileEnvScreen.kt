@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.ProfileEnvEntry
 import com.example.hermes.core.model.ProviderInfo
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.ConfirmDialog
+import com.example.hermes.ui.components.ScreenHeader
 
 private val SUGGESTED_ENV_VARS = listOf(
     "OPENAI_API_KEY",
@@ -44,8 +46,10 @@ private val SUGGESTED_ENV_VARS = listOf(
     "XAI_API_KEY"
 )
 
+private data class PendingEnvDelete(val key: String, val isProvider: Boolean, val label: String? = null)
+
 @Composable
-fun ProfileEnvDialog(
+fun ProfileEnvScreen(
     activeProfile: String,
     envEntries: List<ProfileEnvEntry>,
     providers: List<ProviderInfo>,
@@ -71,6 +75,7 @@ fun ProfileEnvDialog(
     var apiKeyInput by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var revealedKeys by remember { mutableStateOf(setOf<String>()) }
+    var pendingDelete by remember { mutableStateOf<PendingEnvDelete?>(null) }
 
     // Fallback: If custom env endpoint is empty/unreachable, synthesize env entries from configured providers
     val effectiveEnvEntries = remember(envEntries, providers) {
@@ -103,36 +108,22 @@ fun ProfileEnvDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Variables d'environnement (.env)",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = HermesTextPrimary
-                    )
-                    Text(
-                        text = "Profil actif : $activeProfile",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = HermesPrimary
-                    )
-                }
-                IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Rafraîchir", tint = HermesTextMuted)
-                }
+    // A pushed screen (Agent › Variables & fournisseurs); system back pops it.
+    Column(Modifier.fillMaxSize()) {
+        ScreenHeader(
+            "Variables & fournisseurs (.env)",
+            subtitle = "Agent · $activeProfile",
+            onBack = onDismiss
+        ) {
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = "Actualiser")
             }
-        },
-        text = {
+        }
+        Box(Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 8.dp)) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 500.dp)
+                    .fillMaxSize()
             ) {
                 // Info banner explaining profile isolation
                 Surface(
@@ -377,7 +368,7 @@ fun ProfileEnvDialog(
                                                     )
                                                 }
                                                 IconButton(
-                                                    onClick = { onDeleteEnvVar(entry.key, null) },
+                                                    onClick = { pendingDelete = PendingEnvDelete(entry.key, isProvider = false) },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(
@@ -465,7 +456,7 @@ fun ProfileEnvDialog(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (provider.hasKey) {
                                                 IconButton(
-                                                    onClick = { onDeleteProviderKey(provider.id, null) },
+                                                    onClick = { pendingDelete = PendingEnvDelete(provider.id, isProvider = true, label = provider.displayName.ifBlank { provider.id }) },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(
@@ -497,14 +488,22 @@ fun ProfileEnvDialog(
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Fermer")
-            }
-        },
-        containerColor = OnyxDarkSurface
-    )
+        }
+    }
+
+    pendingDelete?.let { del ->
+        ConfirmDialog(
+            title = if (del.isProvider) "Supprimer la clé ${del.label ?: del.key} ?" else "Supprimer ${del.key} ?",
+            message = "La valeur est retirée du .env du profil $activeProfile. Redémarrez l'agent pour l'appliquer.",
+            confirmLabel = "Supprimer",
+            destructive = true,
+            onConfirm = {
+                pendingDelete = null
+                if (del.isProvider) onDeleteProviderKey(del.key, null) else onDeleteEnvVar(del.key, null)
+            },
+            onDismiss = { pendingDelete = null }
+        )
+    }
 
     // ── Generic Add / Edit .env Variable Dialog ──
     if (showAddVarDialog) {
@@ -588,12 +587,16 @@ fun ProfileEnvDialog(
                     OutlinedTextField(
                         value = inputKey,
                         onValueChange = { raw ->
-                            val sanitized = raw.uppercase()
-                                .replace(" ", "_")
-                                .replace("-", "_")
-                                .filter { it.isLetterOrDigit() || it == '_' }
-                            inputKey = sanitized
+                            inputKey = sanitizeEnvKey(raw)
                             submitError = null
+                        },
+                        isError = inputKey.isNotEmpty() && envKeyError(inputKey) != null,
+                        supportingText = {
+                            when (envKeyError(inputKey)) {
+                                EnvKeyError.StartsWithDigit -> Text("Le nom ne peut pas commencer par un chiffre")
+                                EnvKeyError.Invalid -> Text("Majuscules, chiffres et _ uniquement")
+                                else -> Text("En MAJUSCULES, ex. OPENAI_API_KEY")
+                            }
                         },
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.Characters,
@@ -699,7 +702,7 @@ fun ProfileEnvDialog(
                             }
                         }
                     },
-                    enabled = inputKey.isNotBlank() && inputValue.isNotBlank() && !isSubmitting,
+                    enabled = envKeyError(inputKey) == null && inputValue.isNotBlank() && !isSubmitting,
                     colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
                 ) {
                     if (isSubmitting) {

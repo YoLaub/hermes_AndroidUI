@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,7 +58,7 @@ private val SUGGESTED_SECRET_KEYS = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OpenBaoVaultDialog(
+fun OpenBaoVaultScreen(
     activeProfile: String,
     openbaoUrl: String,
     openbaoToken: String,
@@ -100,17 +101,11 @@ fun OpenBaoVaultDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    // A pushed screen (Réglages › Coffre OpenBao); system back pops it.
+    Box(Modifier.fillMaxSize().statusBarsPadding()) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.92f),
-            shape = RoundedCornerShape(24.dp),
-            color = OnyxDarkSurface,
-            tonalElevation = 8.dp
+            modifier = Modifier.fillMaxSize(),
+            color = OnyxDarkBackground
         ) {
             Column(
                 modifier = Modifier
@@ -127,6 +122,13 @@ fun OpenBaoVaultDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Retour",
+                                tint = HermesTextPrimary
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
@@ -166,13 +168,6 @@ fun OpenBaoVaultDialog(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Actualiser",
-                                tint = HermesTextSecondary
-                            )
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Fermer",
                                 tint = HermesTextSecondary
                             )
                         }
