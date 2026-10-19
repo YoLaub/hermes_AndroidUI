@@ -124,9 +124,13 @@ fun MonthCalendarView(
                             val isToday = date == today
                             val dayEvents = eventsMap[date] ?: emptyList()
 
+                            // 48 dp target around a 38 dp circle.
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .clickable { onDateSelected(date) }
+                                    .padding(5.dp)
                                     .clip(CircleShape)
                                     .background(
                                         when {
@@ -134,8 +138,7 @@ fun MonthCalendarView(
                                             isToday -> HermesPrimaryContainer.copy(alpha = 0.6f)
                                             else -> Color.Transparent
                                         }
-                                    )
-                                    .clickable { onDateSelected(date) },
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -167,7 +170,7 @@ fun MonthCalendarView(
                             }
                         } else {
                             // Empty placeholder cell
-                            Spacer(modifier = Modifier.size(38.dp))
+                            Spacer(modifier = Modifier.size(48.dp))
                         }
                     }
                 }

@@ -71,6 +71,7 @@ fun ForumInputBar(
                     val isA2A = p.type == ParticipantType.EXTERNAL_A2A
                     Box(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(6.dp))
                             .background(if (isA2A) HermesSecondaryContainer else HermesTertiaryContainer)
                             .clickable { onAppendMention(p.name) }
