@@ -90,7 +90,10 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
         vm.chat.loadMemoryActions()
     }
     // The badge needs the counts before the tab is ever opened.
-    LaunchedEffect(Unit) { refreshInbox() }
+    LaunchedEffect(Unit) {
+        refreshInbox()
+        vm.mobileControl.refreshProfiles()
+    }
     var confirmStop by remember { mutableStateOf(false) }
 
     val tools = rememberAgentToolsState()
@@ -100,6 +103,7 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
     fun onSelect(tab: Tab) {
         if (tab == Tab.Inbox) refreshInbox()
         if (tab == Tab.Agent) vm.chat.loadWorkspaces()
+        if (tab == Tab.Control) vm.mobileControl.refreshProfiles()
         if (tab == Tab.Space && !spaceLoaded) {
             vm.notes.loadNotes()
             vm.calendar.loadCalendarData()

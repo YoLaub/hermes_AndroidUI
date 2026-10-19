@@ -141,10 +141,14 @@ class MobileControlViewModel(
             }
         }
 
-        loadProfiles()
+        refreshProfiles()
     }
 
-    private fun loadProfiles() {
+    /**
+     * Reads the profile list for the john gate. Also called once signed in and when Contrôle opens:
+     * at creation the session cookie may not be restored yet, and a failed read was never retried.
+     */
+    fun refreshProfiles() {
         viewModelScope.launch {
             val res = repository.getProfiles()
             if (res.isSuccess) {
