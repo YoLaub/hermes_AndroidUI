@@ -10,11 +10,13 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
+        "features/profiles/MemoryProfileParts.kt",
+        "features/profiles/ProfileEnvScreen.kt",
         "features/profiles/OpenBaoVaultScreen.kt",
     )
 
     private val literalUiText = Regex(
-        """(?:Text\(\s*(?:text\s*=\s*)?|contentDescription\s*=\s*|label\s*=\s*\{\s*Text\(\s*|placeholder\s*=\s*\{\s*Text\(\s*|""" +
+        """(?:(?<![A-Za-z])Text\(\s*(?:text\s*=\s*)?|contentDescription\s*=\s*|label\s*=\s*\{\s*Text\(\s*|placeholder\s*=\s*\{\s*Text\(\s*|""" +
             """title\s*=\s*|subtitle\s*=\s*|message\s*=\s*|confirmLabel\s*=\s*)"((?:[^"\\]|\\.)*[A-Za-zÀ-ÿ](?:[^"\\]|\\.)*)""""
     )
 

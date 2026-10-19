@@ -28,6 +28,8 @@ import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.hermes.core.model.MemoryProfile
 import com.example.hermes.core.model.MemoryProfileCreated
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -43,7 +45,7 @@ internal fun ZoneEditor(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             // Given from the terminal only: shown, never a toggle.
             ADMIN_ONLY_ZONES.filter { it in held }.forEach { zone ->
-                AssistChip(onClick = {}, enabled = false, label = { Text("$zone (terminal)", fontSize = 12.sp) })
+                AssistChip(onClick = {}, enabled = false, label = { Text(stringResource(R.string.memory_terminal, zone), fontSize = 12.sp) })
             }
             TOGGLE_ZONES.forEach { zone ->
                 FilterChip(
@@ -68,11 +70,11 @@ internal fun NewProfileCard(enabled: Boolean, onCreate: (String, List<String>, L
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Nouveau profil", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.profiles_new), fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Nom (a-z, 0-9, - et _)") },
+                label = { Text(stringResource(R.string.memory_nom_a_z_0_9)) },
                 isError = name.isNotEmpty() && !nameOk,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -80,11 +82,11 @@ internal fun NewProfileCard(enabled: Boolean, onCreate: (String, List<String>, L
             // No grant at all is a valid profile.
             ZoneEditor("Lecture", emptyList(), read, { read = read.toggled(it) }, enabled)
             ZoneEditor("Écriture", emptyList(), write, { write = write.toggled(it) }, enabled)
-            Text("secrets et finance ne se donnent que depuis le terminal.", fontSize = 12.sp)
+            Text(stringResource(R.string.memory_secrets_et_finance_ne_se), fontSize = 12.sp)
             Button(
                 onClick = { onCreate(name, grantsToSend(emptyList(), read), grantsToSend(emptyList(), write)) },
                 enabled = enabled && nameOk
-            ) { Text("Créer") }
+            ) { Text(stringResource(R.string.memory_creer)) }
         }
     }
 }
@@ -100,20 +102,20 @@ internal fun OneTimeTokenDialog(created: MemoryProfileCreated, onDone: () -> Uni
     AlertDialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, securePolicy = SecureFlagPolicy.SecureOn),
-        title = { Text("Jeton de « ${created.name} »") },
+        title = { Text(stringResource(R.string.memory_jeton_de, created.name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Il ne sera plus jamais affiché. Copie-le maintenant.", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.memory_il_ne_sera_plus_jamais), fontWeight = FontWeight.SemiBold)
                 SelectionContainer {
                     Text(created.token, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
                 }
                 OutlinedButton(onClick = {
                     copySensitive(context, created.token)
                     copied = true
-                }) { Text(if (copied) "Copié" else "Copier") }
+                }) { Text(stringResource(if (copied) R.string.memory_copied else R.string.openbao_copier)) }
             }
         },
-        confirmButton = { Button(onClick = onDone) { Text("C'est copié, fermer") } }
+        confirmButton = { Button(onClick = onDone) { Text(stringResource(R.string.memory_c_est_copie_fermer)) } }
     )
 }
 

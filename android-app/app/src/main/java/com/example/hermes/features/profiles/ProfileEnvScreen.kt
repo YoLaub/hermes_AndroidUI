@@ -32,6 +32,8 @@ import com.example.hermes.core.model.ProviderInfo
 import com.example.hermes.theme.*
 import com.example.hermes.ui.components.ConfirmDialog
 import com.example.hermes.ui.components.ScreenHeader
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 private val SUGGESTED_ENV_VARS = listOf(
     "OPENAI_API_KEY",
@@ -112,11 +114,11 @@ fun ProfileEnvScreen(
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(
             "Variables & fournisseurs (.env)",
-            subtitle = "Agent · $activeProfile",
+            subtitle = stringResource(R.string.breadcrumb_agent_profile, activeProfile),
             onBack = onDismiss
         ) {
             IconButton(onClick = onRefresh) {
-                Icon(Icons.Default.Refresh, contentDescription = "Actualiser")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_refresh))
             }
         }
         Box(Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -146,7 +148,7 @@ fun ProfileEnvScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Variables isolées dans le .env du profil « $activeProfile ».",
+                            text = stringResource(R.string.env_variables_isolees_dans_le_env, activeProfile),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary,
                             modifier = Modifier.weight(1f)
@@ -161,7 +163,7 @@ fun ProfileEnvScreen(
                             ) {
                                 Icon(Icons.Default.Lock, contentDescription = null, tint = HermesSecondary, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("OpenBao", style = MaterialTheme.typography.labelSmall, color = HermesSecondary)
+                                Text(stringResource(R.string.env_openbao), style = MaterialTheme.typography.labelSmall, color = HermesSecondary)
                             }
                         }
                     }
@@ -182,7 +184,7 @@ fun ProfileEnvScreen(
                         onClick = { selectedTab = 0 },
                         text = {
                             Text(
-                                text = "Variables .env (${effectiveEnvEntries.size})",
+                                text = stringResource(R.string.env_variables_env, effectiveEnvEntries.size),
                                 fontSize = 12.sp,
                                 fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
                             )
@@ -193,7 +195,7 @@ fun ProfileEnvScreen(
                         onClick = { selectedTab = 1 },
                         text = {
                             Text(
-                                text = "Providers IA (${providers.count { it.hasKey }})",
+                                text = stringResource(R.string.env_providers_ia, providers.count { it.hasKey }),
                                 fontSize = 12.sp,
                                 fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
                             )
@@ -229,7 +231,7 @@ fun ProfileEnvScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Mode officiel Hermes WebUI : le serveur officiel gère les clés des providers IA (OpenAI, Anthropic, Gemini, Groq...). Les variables de services, comptes ou MCP doivent être définies dans la section 'environment' du docker-compose.yml.",
+                                        text = stringResource(R.string.env_mode_officiel_hermes_webui_le),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFFFEF08A),
                                         fontSize = 12.sp
@@ -252,7 +254,7 @@ fun ProfileEnvScreen(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Ajouter une variable (.env)", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            Text(stringResource(R.string.env_ajouter_une_variable_env), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
 
                         if (effectiveEnvEntries.isEmpty()) {
@@ -271,12 +273,12 @@ fun ProfileEnvScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Aucune variable dans le .env de ce profil",
+                                    text = stringResource(R.string.env_aucune_variable_dans_le_env),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = HermesTextMuted
                                 )
                                 Text(
-                                    text = "Cliquez sur « Ajouter une variable » ci-dessus",
+                                    text = stringResource(R.string.env_cliquez_sur_ajouter_une_variable),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = HermesTextMuted
                                 )
@@ -336,7 +338,7 @@ fun ProfileEnvScreen(
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Icon(
                                                         imageVector = if (isRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                        contentDescription = "Toggle visibilité",
+                                                        contentDescription = stringResource(R.string.env_toggle_visibilite),
                                                         tint = HermesTextMuted,
                                                         modifier = Modifier
                                                             .size(14.dp)
@@ -361,7 +363,7 @@ fun ProfileEnvScreen(
                                                 ) {
                                                     Icon(
                                                         Icons.Default.Edit,
-                                                        contentDescription = "Modifier",
+                                                        contentDescription = stringResource(R.string.openbao_modifier),
                                                         tint = HermesPrimary,
                                                         modifier = Modifier.size(16.dp)
                                                     )
@@ -371,7 +373,7 @@ fun ProfileEnvScreen(
                                                 ) {
                                                     Icon(
                                                         Icons.Default.DeleteOutline,
-                                                        contentDescription = "Supprimer",
+                                                        contentDescription = stringResource(R.string.action_delete),
                                                         tint = HermesTextMuted,
                                                         modifier = Modifier.size(16.dp)
                                                     )
@@ -401,7 +403,7 @@ fun ProfileEnvScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Aucun provider détecté",
+                                text = stringResource(R.string.env_aucun_provider_detecte),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextMuted
                             )
@@ -458,7 +460,7 @@ fun ProfileEnvScreen(
                                                 ) {
                                                     Icon(
                                                         Icons.Default.DeleteOutline,
-                                                        contentDescription = "Supprimer clé",
+                                                        contentDescription = stringResource(R.string.env_supprimer_cle),
                                                         tint = HermesTextMuted,
                                                         modifier = Modifier.size(18.dp)
                                                     )
@@ -491,8 +493,8 @@ fun ProfileEnvScreen(
     pendingDelete?.let { del ->
         ConfirmDialog(
             title = if (del.isProvider) "Supprimer la clé ${del.label ?: del.key} ?" else "Supprimer ${del.key} ?",
-            message = "La valeur est retirée du .env du profil $activeProfile. Redémarrez l'agent pour l'appliquer.",
-            confirmLabel = "Supprimer",
+            message = stringResource(R.string.env_la_valeur_est_retiree_du, activeProfile),
+            confirmLabel = stringResource(R.string.action_delete),
             destructive = true,
             onConfirm = {
                 pendingDelete = null
@@ -539,7 +541,7 @@ fun ProfileEnvScreen(
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "La variable sera enregistrée dans le .env du profil $activeProfile.",
+                        text = stringResource(R.string.env_la_variable_sera_enregistree_dans, activeProfile),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextMuted
                     )
@@ -548,7 +550,7 @@ fun ProfileEnvScreen(
                     if (!isEditMode) {
                         // Suggested Presets Chips
                         Text(
-                            text = "Suggestions rapides :",
+                            text = stringResource(R.string.env_suggestions_rapides),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary
                         )
@@ -590,17 +592,17 @@ fun ProfileEnvScreen(
                         isError = inputKey.isNotEmpty() && envKeyError(inputKey) != null,
                         supportingText = {
                             when (envKeyError(inputKey)) {
-                                EnvKeyError.StartsWithDigit -> Text("Le nom ne peut pas commencer par un chiffre")
-                                EnvKeyError.Invalid -> Text("Majuscules, chiffres et _ uniquement")
-                                else -> Text("En MAJUSCULES, ex. OPENAI_API_KEY")
+                                EnvKeyError.StartsWithDigit -> Text(stringResource(R.string.env_le_nom_ne_peut_pas))
+                                EnvKeyError.Invalid -> Text(stringResource(R.string.env_majuscules_chiffres_et_uniquement))
+                                else -> Text(stringResource(R.string.env_en_majuscules_ex_openai_api))
                             }
                         },
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.Characters,
                             imeAction = ImeAction.Next
                         ),
-                        label = { Text("Nom de la variable (MAJUSCULES)") },
-                        placeholder = { Text("EX: CRM_API_KEY, TELEGRAM_BOT_TOKEN") },
+                        label = { Text(stringResource(R.string.env_nom_de_la_variable_majuscules)) },
+                        placeholder = { Text(stringResource(R.string.env_ex_crm_api_key_telegram)) },
                         singleLine = true,
                         enabled = !isSubmitting,
                         modifier = Modifier.fillMaxWidth(),
@@ -622,8 +624,8 @@ fun ProfileEnvScreen(
                             inputValue = it
                             submitError = null
                         },
-                        label = { Text("Valeur / Clé / Paramètre") },
-                        placeholder = { Text("sk-... ou https://... ou jeton") },
+                        label = { Text(stringResource(R.string.env_valeur_cle_parametre)) },
+                        placeholder = { Text(stringResource(R.string.env_sk_ou_https_ou_jeton)) },
                         singleLine = true,
                         enabled = !isSubmitting,
                         visualTransformation = if (varShowPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -709,9 +711,9 @@ fun ProfileEnvScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enregistrement...", fontSize = 12.sp)
+                        Text(stringResource(R.string.env_enregistrement), fontSize = 12.sp)
                     } else {
-                        Text("Enregistrer dans .env", fontSize = 12.sp)
+                        Text(stringResource(R.string.env_enregistrer_dans_env), fontSize = 12.sp)
                     }
                 }
             },
@@ -724,7 +726,7 @@ fun ProfileEnvScreen(
                     },
                     enabled = !isSubmitting
                 ) {
-                    Text("Annuler")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
             containerColor = OnyxDarkSurface
@@ -744,7 +746,7 @@ fun ProfileEnvScreen(
             },
             title = {
                 Text(
-                    text = "Configurer ${provider.displayName}",
+                    text = stringResource(R.string.env_configurer, provider.displayName),
                     style = MaterialTheme.typography.titleMedium,
                     color = HermesTextPrimary
                 )
@@ -752,7 +754,7 @@ fun ProfileEnvScreen(
             text = {
                 Column {
                     Text(
-                        text = "Cette variable sera écrite dans le .env du profil $activeProfile.",
+                        text = stringResource(R.string.env_cette_variable_sera_ecrite_dans, activeProfile),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextMuted
                     )
@@ -763,8 +765,8 @@ fun ProfileEnvScreen(
                             apiKeyInput = it
                             providerError = null
                         },
-                        label = { Text("Clé d'API") },
-                        placeholder = { Text("sk-...") },
+                        label = { Text(stringResource(R.string.env_cle_d_api)) },
+                        placeholder = { Text(stringResource(R.string.env_sk)) },
                         singleLine = true,
                         enabled = !isSubmittingKey,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -845,9 +847,9 @@ fun ProfileEnvScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enregistrement...", fontSize = 12.sp)
+                        Text(stringResource(R.string.env_enregistrement), fontSize = 12.sp)
                     } else {
-                        Text("Enregistrer dans .env", fontSize = 12.sp)
+                        Text(stringResource(R.string.env_enregistrer_dans_env), fontSize = 12.sp)
                     }
                 }
             },
@@ -856,7 +858,7 @@ fun ProfileEnvScreen(
                     onClick = { selectedProviderForEdit = null },
                     enabled = !isSubmittingKey
                 ) {
-                    Text("Annuler")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
             containerColor = OnyxDarkSurface
