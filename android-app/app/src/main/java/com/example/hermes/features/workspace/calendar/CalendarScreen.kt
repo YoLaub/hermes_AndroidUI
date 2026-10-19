@@ -90,7 +90,7 @@ fun CalendarScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Security,
-                        contentDescription = "Droits d'accès",
+                        contentDescription = stringResource(R.string.agenda_droits_d_acces),
                         tint = HermesTertiary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -123,7 +123,7 @@ fun CalendarScreen(
                 )
 
                 Text(
-                    text = "${state.filteredEventsForSelectedDate.size} créneau(x)",
+                    text = stringResource(R.string.agenda_creneau_x, state.filteredEventsForSelectedDate.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = HermesTextMuted
                 )
@@ -151,13 +151,13 @@ fun CalendarScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "Aucun créneau ce jour-ci",
+                            text = stringResource(R.string.agenda_aucun_creneau_ce_jour_ci),
                             style = MaterialTheme.typography.titleMedium,
                             color = HermesTextSecondary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Cliquez sur '+' pour planifier un rendez-vous ou une tâche d'agent.",
+                            text = stringResource(R.string.agenda_cliquez_sur_pour_planifier_un),
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center

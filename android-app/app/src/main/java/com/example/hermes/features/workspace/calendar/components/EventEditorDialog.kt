@@ -23,6 +23,8 @@ import com.example.hermes.core.model.OWNER_NAME
 import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
 import java.time.LocalDate
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -85,7 +87,7 @@ fun EventEditorDialog(
                         color = HermesTextPrimary
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fermer", tint = HermesTextMuted)
+                        Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = HermesTextMuted)
                     }
                 }
 
@@ -95,7 +97,7 @@ fun EventEditorDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titre de l'événement") },
+                    label = { Text(stringResource(R.string.agenda_titre_de_l_evenement)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -112,7 +114,7 @@ fun EventEditorDialog(
                     OutlinedTextField(
                         value = startTime,
                         onValueChange = { startTime = it },
-                        label = { Text("Début (HH:mm)") },
+                        label = { Text(stringResource(R.string.agenda_debut_hh_mm)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -123,7 +125,7 @@ fun EventEditorDialog(
                     OutlinedTextField(
                         value = endTime,
                         onValueChange = { endTime = it },
-                        label = { Text("Fin (HH:mm)") },
+                        label = { Text(stringResource(R.string.agenda_fin_hh_mm)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -139,7 +141,7 @@ fun EventEditorDialog(
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it },
-                    label = { Text("Lieu ou Lien (ex: Telegram / Call / Bureau)") },
+                    label = { Text(stringResource(R.string.agenda_lieu_ou_lien_ex_telegram)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -151,7 +153,7 @@ fun EventEditorDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Organizer
-                Text(text = "Organisateur / Porteur :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
+                Text(text = stringResource(R.string.agenda_organisateur_porteur), style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
                 FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     availableProfiles.forEach { p ->
@@ -171,7 +173,7 @@ fun EventEditorDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Participants / Assigned Profiles
-                Text(text = "Participants / Agents impliqués :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
+                Text(text = stringResource(R.string.agenda_participants_agents_impliques), style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
                 FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     availableProfiles.forEach { p ->
@@ -198,7 +200,7 @@ fun EventEditorDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Status selection
-                Text(text = "Statut :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
+                Text(text = stringResource(R.string.agenda_statut), style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     EventStatus.entries.forEach { st ->
@@ -227,7 +229,7 @@ fun EventEditorDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Description & Notes de réunion") },
+                    label = { Text(stringResource(R.string.agenda_description_notes_de_reunion)) },
                     minLines = 3,
                     maxLines = 6,
                     modifier = Modifier.fillMaxWidth(),
@@ -246,7 +248,7 @@ fun EventEditorDialog(
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) {
-                        Text("Annuler", color = HermesTextMuted)
+                        Text(stringResource(R.string.action_cancel), color = HermesTextMuted)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -269,7 +271,7 @@ fun EventEditorDialog(
                     ) {
                         Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enregistrer", color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.action_save), color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
                     }
                 }
             }

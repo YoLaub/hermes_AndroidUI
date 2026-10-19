@@ -24,6 +24,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.CalendarPermissionLevel
 import com.example.hermes.core.model.ProfileCalendarPermission
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun ProfilePermissionSheet(
@@ -74,12 +76,12 @@ fun ProfilePermissionSheet(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Droits du Calendrier",
+                                text = stringResource(R.string.agenda_droits_du_calendrier),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "Permissions de lecture et écriture par agent",
+                                text = stringResource(R.string.agenda_permissions_de_lecture_et_ecriture),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = HermesTextMuted
                             )
@@ -87,7 +89,7 @@ fun ProfilePermissionSheet(
                     }
 
                     IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fermer", tint = HermesTextMuted)
+                        Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = HermesTextMuted)
                     }
                 }
 
@@ -204,7 +206,7 @@ fun ProfilePermissionSheet(
                     colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Terminé", color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.agenda_termine), color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
                 }
             }
         }

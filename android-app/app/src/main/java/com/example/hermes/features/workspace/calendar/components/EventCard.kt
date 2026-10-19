@@ -20,6 +20,8 @@ import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.EventStatus
 import com.example.hermes.core.model.isOwnerName
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun EventCard(
@@ -197,7 +199,7 @@ fun EventCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Supprimer",
+                        contentDescription = stringResource(R.string.action_delete),
                         tint = HermesTextMuted,
                         modifier = Modifier.size(16.dp)
                     )

@@ -24,6 +24,8 @@ import com.example.hermes.core.model.OWNER_NAME
 import com.example.hermes.core.model.isOwnerName
 import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -76,7 +78,7 @@ fun NoteEditorDialog(
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Fermer",
+                            contentDescription = stringResource(R.string.action_close),
                             tint = HermesTextMuted
                         )
                     }
@@ -86,7 +88,7 @@ fun NoteEditorDialog(
 
                 // Author selection chips
                 Text(
-                    text = "Auteur / Profil :",
+                    text = stringResource(R.string.notes_auteur_profil),
                     style = MaterialTheme.typography.labelMedium,
                     color = HermesTextSecondary
                 )
@@ -112,7 +114,7 @@ fun NoteEditorDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titre de la note") },
+                    label = { Text(stringResource(R.string.notes_titre_de_la_note)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -128,7 +130,7 @@ fun NoteEditorDialog(
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("Contenu (Markdown supporté)") },
+                    label = { Text(stringResource(R.string.notes_contenu_markdown_supporte)) },
                     minLines = 6,
                     maxLines = 14,
                     modifier = Modifier.fillMaxWidth(),
@@ -143,7 +145,7 @@ fun NoteEditorDialog(
 
                 // Tags Input & List
                 Text(
-                    text = "Tags :",
+                    text = stringResource(R.string.notes_tags),
                     style = MaterialTheme.typography.labelMedium,
                     color = HermesTextSecondary
                 )
@@ -155,7 +157,7 @@ fun NoteEditorDialog(
                     OutlinedTextField(
                         value = tagInput,
                         onValueChange = { tagInput = it },
-                        placeholder = { Text("Ex: Prospection, Client...", fontSize = 12.sp) },
+                        placeholder = { Text(stringResource(R.string.notes_ex_prospection_client), fontSize = 12.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -178,7 +180,7 @@ fun NoteEditorDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Ajouter tag",
+                            contentDescription = stringResource(R.string.notes_ajouter_tag),
                             tint = HermesPrimary
                         )
                     }
@@ -198,7 +200,7 @@ fun NoteEditorDialog(
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Supprimer",
+                                        contentDescription = stringResource(R.string.action_delete),
                                         modifier = Modifier.size(14.dp)
                                     )
                                 },
@@ -219,7 +221,7 @@ fun NoteEditorDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Annuler", color = HermesTextMuted)
+                        Text(stringResource(R.string.action_cancel), color = HermesTextMuted)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -229,7 +231,7 @@ fun NoteEditorDialog(
                     ) {
                         Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enregistrer", color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.action_save), color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
                     }
                 }
             }

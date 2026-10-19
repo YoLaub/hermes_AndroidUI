@@ -24,6 +24,8 @@ import com.example.hermes.core.model.AgentNote
 import com.example.hermes.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun NoteCard(
@@ -99,7 +101,7 @@ fun NoteCard(
                     ) {
                         Icon(
                             imageVector = if (note.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                            contentDescription = "Épingler",
+                            contentDescription = stringResource(R.string.notes_epingler),
                             tint = if (note.isPinned) HermesPrimary else HermesTextMuted,
                             modifier = Modifier.size(16.dp)
                         )
@@ -110,7 +112,7 @@ fun NoteCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Supprimer",
+                            contentDescription = stringResource(R.string.action_delete),
                             tint = HermesTextMuted,
                             modifier = Modifier.size(16.dp)
                         )
@@ -190,7 +192,7 @@ fun NoteCard(
                         )
                     } else {
                         Text(
-                            text = "Enregistrement vocal",
+                            text = stringResource(R.string.notes_enregistrement_vocal),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary,
                             modifier = Modifier.weight(1f)

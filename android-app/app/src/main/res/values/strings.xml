@@ -519,4 +519,38 @@
     <string name="agent_anthropic_claude_sonnet" translatable="false">anthropic/claude-sonnet</string>
     <string name="guard_site_org_ou_site_org" translatable="false">site.org ou *.site.org</string>
     <string name="guard_home_john_projet" translatable="false">/home/john/projet</string>
+    <!-- Notes and agenda -->
+    <string name="agenda_mois_precedent">Mois précédent</string>
+    <string name="agenda_mois_suivant">Mois suivant</string>
+    <string name="agenda_droits_du_calendrier">Droits du Calendrier</string>
+    <string name="agenda_permissions_de_lecture_et_ecriture">Permissions de lecture et écriture par agent</string>
+    <string name="agenda_termine">Terminé</string>
+    <string name="agenda_titre_de_l_evenement">Titre de l\'événement</string>
+    <string name="agenda_debut_hh_mm">Début (HH:mm)</string>
+    <string name="agenda_fin_hh_mm">Fin (HH:mm)</string>
+    <string name="agenda_lieu_ou_lien_ex_telegram">Lieu ou Lien (ex: Telegram / Call / Bureau)</string>
+    <string name="agenda_organisateur_porteur">Organisateur / Porteur :</string>
+    <string name="agenda_participants_agents_impliques">Participants / Agents impliqués :</string>
+    <string name="agenda_statut">Statut :</string>
+    <string name="agenda_description_notes_de_reunion">Description &amp; Notes de réunion</string>
+    <string name="agenda_droits_d_acces">Droits d\'accès</string>
+    <string name="agenda_creneau_x">%1$s créneau(x)</string>
+    <string name="agenda_aucun_creneau_ce_jour_ci">Aucun créneau ce jour-ci</string>
+    <string name="agenda_cliquez_sur_pour_planifier_un">Cliquez sur \'+\' pour planifier un rendez-vous ou une tâche d\'agent.</string>
+    <string name="notes_dictaphone_transcription">Dictaphone &amp; Transcription</string>
+    <string name="notes_en_ligne_google_speech">🌐 En ligne (Google Speech)</string>
+    <string name="notes_hors_ligne_on_device">📴 Hors ligne (On-Device)</string>
+    <string name="notes_creer_note">Créer note</string>
+    <string name="notes_auteur_profil">Auteur / Profil :</string>
+    <string name="notes_titre_de_la_note">Titre de la note</string>
+    <string name="notes_contenu_markdown_supporte">Contenu (Markdown supporté)</string>
+    <string name="notes_tags">Tags :</string>
+    <string name="notes_ex_prospection_client">Ex: Prospection, Client...</string>
+    <string name="notes_ajouter_tag">Ajouter tag</string>
+    <string name="notes_epingler">Épingler</string>
+    <string name="notes_enregistrement_vocal">Enregistrement vocal</string>
+    <string name="notes_rechercher_une_note_un_tag">Rechercher une note, un tag, un agent...</string>
+    <string name="notes_tous">Tous (%1$s)</string>
+    <string name="notes_enregistrez_un_audio_ou_ecrivez">Enregistrez un audio ou écrivez une note partagée avec vos agents.</string>
+    <string name="notes_dictaphone">Dictaphone</string>
 </resources>

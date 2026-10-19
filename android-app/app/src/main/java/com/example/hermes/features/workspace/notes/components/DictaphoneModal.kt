@@ -26,6 +26,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.TranscriptionState
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun DictaphoneModal(
@@ -93,7 +95,7 @@ fun DictaphoneModal(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Dictaphone & Transcription",
+                                text = stringResource(R.string.notes_dictaphone_transcription),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = HermesTextPrimary
                             )
@@ -108,7 +110,7 @@ fun DictaphoneModal(
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Fermer",
+                            contentDescription = stringResource(R.string.action_close),
                             tint = HermesTextMuted
                         )
                     }
@@ -128,7 +130,7 @@ fun DictaphoneModal(
                     FilterChip(
                         selected = !preferOffline,
                         onClick = { onToggleOffline(false) },
-                        label = { Text("🌐 En ligne (Google Speech)", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.notes_en_ligne_google_speech), fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = HermesPrimaryContainer,
                             selectedLabelColor = HermesPrimary
@@ -139,7 +141,7 @@ fun DictaphoneModal(
                     FilterChip(
                         selected = preferOffline,
                         onClick = { onToggleOffline(true) },
-                        label = { Text("📴 Hors ligne (On-Device)", fontSize = 12.sp) },
+                        label = { Text(stringResource(R.string.notes_hors_ligne_on_device), fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = HermesSecondaryContainer,
                             selectedLabelColor = HermesSecondary
@@ -228,7 +230,7 @@ fun DictaphoneModal(
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Effacer",
+                            contentDescription = stringResource(R.string.auth_clear),
                             tint = if (state.isRecording || state.finalText.isNotBlank()) HermesError else HermesTextMuted
                         )
                     }
@@ -274,7 +276,7 @@ fun DictaphoneModal(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Créer note")
+                        Text(stringResource(R.string.notes_creer_note))
                     }
                 }
             }

@@ -10,6 +10,15 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
+        "features/workspace/calendar/components/EventCard.kt",
+        "features/workspace/calendar/components/MonthCalendarView.kt",
+        "features/workspace/calendar/components/ProfilePermissionSheet.kt",
+        "features/workspace/calendar/components/EventEditorDialog.kt",
+        "features/workspace/calendar/CalendarScreen.kt",
+        "features/workspace/notes/components/DictaphoneModal.kt",
+        "features/workspace/notes/components/NoteEditorDialog.kt",
+        "features/workspace/notes/components/NoteCard.kt",
+        "features/workspace/notes/NotesScreen.kt",
         "features/inbox/InboxScreen.kt",
         "features/auth/AuthScreen.kt",
         "features/agent/WorkspacesScreen.kt",
@@ -38,9 +47,9 @@ class HardcodedStringsTest {
             """title\s*=\s*|subtitle\s*=\s*|message\s*=\s*|confirmLabel\s*=\s*)"((?:[^"\\]|\\.)*[A-Za-zÀ-ÿ](?:[^"\\]|\\.)*)""""
     )
 
-    private val template = Regex("""\$\{[^}]*\}|\$[A-Za-z_][\w.]*""")
+    private val template = Regex("""\$\{[^}]*\}|\$[A-Za-z_][\w.]*|%[-0-9.$]*[a-zA-Z]""")
 
-    /** "$count" or "#${id}" only formats values; there is nothing to translate. */
+    /** "$count", "#${id}" or "%02d:%02d" only format values; there is nothing to translate. */
     private fun hasWords(literal: String) = template.replace(literal, "").any { it.isLetter() }
 
     @Test

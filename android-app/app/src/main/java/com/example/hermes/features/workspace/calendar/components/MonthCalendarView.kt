@@ -25,6 +25,8 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun MonthCalendarView(
@@ -59,7 +61,7 @@ fun MonthCalendarView(
                 IconButton(onClick = { onMonthOffset(-1) }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "Mois précédent",
+                        contentDescription = stringResource(R.string.agenda_mois_precedent),
                         tint = HermesPrimary
                     )
                 }
@@ -73,7 +75,7 @@ fun MonthCalendarView(
                 IconButton(onClick = { onMonthOffset(1) }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "Mois suivant",
+                        contentDescription = stringResource(R.string.agenda_mois_suivant),
                         tint = HermesPrimary
                     )
                 }

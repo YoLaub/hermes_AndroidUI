@@ -73,7 +73,7 @@ fun NotesScreen(
                 OutlinedTextField(
                     value = state.searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
-                    placeholder = { Text("Rechercher une note, un tag, un agent...") },
+                    placeholder = { Text(stringResource(R.string.notes_rechercher_une_note_un_tag)) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -86,7 +86,7 @@ fun NotesScreen(
                             IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Effacer",
+                                    contentDescription = stringResource(R.string.auth_clear),
                                     tint = HermesTextMuted
                                 )
                             }
@@ -115,7 +115,7 @@ fun NotesScreen(
                             FilterChip(
                                 selected = state.selectedTag == null,
                                 onClick = { viewModel.onTagSelected(null) },
-                                label = { Text("Tous (${state.notes.size})") },
+                                label = { Text(stringResource(R.string.notes_tous, state.notes.size)) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = HermesPrimaryContainer,
                                     selectedLabelColor = HermesPrimary
@@ -165,7 +165,7 @@ fun NotesScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Enregistrez un audio ou écrivez une note partagée avec vos agents.",
+                            text = stringResource(R.string.notes_enregistrez_un_audio_ou_ecrivez),
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted
                         )
@@ -212,7 +212,7 @@ fun NotesScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Mic,
-                    contentDescription = "Dictaphone",
+                    contentDescription = stringResource(R.string.notes_dictaphone),
                     modifier = Modifier.size(24.dp)
                 )
             }
