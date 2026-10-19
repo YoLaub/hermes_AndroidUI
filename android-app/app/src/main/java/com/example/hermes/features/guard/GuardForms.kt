@@ -14,9 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.hermes.R
-import com.example.hermes.core.model.MemoryProfile
 import com.example.hermes.core.model.MemoryProfileCreated
-import com.example.hermes.features.profiles.NewMandateCard
 import com.example.hermes.features.profiles.NewProfileCard
 import com.example.hermes.features.profiles.OneTimeTokenDialog
 import com.example.hermes.ui.components.AlertBanner
@@ -45,26 +43,4 @@ fun NewMemoryProfileScreen(
         }
     }
     created?.let { OneTimeTokenDialog(it, onDone = onTokenSeen) }
-}
-
-/** New mandate. A refusal keeps the form as typed and shows the server's reason above it. */
-@Composable
-fun NewMandateScreen(
-    profiles: List<MemoryProfile>,
-    isLoading: Boolean,
-    error: String?,
-    onCreate: (profile: String, label: String, hosts: List<String>, folders: List<String>, expiresAt: String) -> Unit,
-    onBack: () -> Unit,
-) {
-    Column(Modifier.fillMaxSize()) {
-        ScreenHeader(stringResource(R.string.guard_new_mandate), subtitle = stringResource(R.string.guard_title), onBack = onBack)
-        if (isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        Column(
-            Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            error?.let { AlertBanner(it, tone = AlertTone.Blocking, title = stringResource(R.string.guard_error)) }
-            NewMandateCard(profiles = profiles.filter { it.state == "active" }, enabled = !isLoading, onCreate = onCreate)
-        }
-    }
 }

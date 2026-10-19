@@ -368,7 +368,9 @@ fun AppScaffold(vm: AppViewModels, onDisconnect: () -> Unit) {
                     }
                     entry<NewMandateRoute> {
                         NewMandateScreen(
-                            profiles = chat.memoryProfiles,
+                            activeProfile = chat.activeProfile,
+                            profileName = profileDisplayName(chat.activeProfile),
+                            memoryProfiles = chat.memoryProfiles,
                             isLoading = chat.isMandatesLoading,
                             error = chat.mandatesError,
                             onCreate = { profile, label, hosts, folders, expiresAt ->

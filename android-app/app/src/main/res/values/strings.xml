@@ -154,6 +154,25 @@
     <string name="guard_revoke_mandate_title">Révoquer ce mandat ?</string>
     <string name="guard_revoke_mandate_message">« %1$s » (profil %2$s) cessera tout de suite. Le profil redemandera votre accord.</string>
 
+    <!-- New mandate -->
+    <string name="mandate_breadcrumb">Mémoire &amp; garde › Mandats</string>
+    <string name="mandate_refused">Création refusée par le serveur.</string>
+    <string name="mandate_profile">Profil</string>
+    <string name="mandate_profile_active">%1$s (profil actif)</string>
+    <string name="mandate_no_memory_profile">%1$s n\'a pas de profil mémoire actif : créez-le dans l\'onglet Profils, ou changez de profil.</string>
+    <string name="mandate_label">Libellé de la tâche</string>
+    <string name="mandate_sites">Sites autorisés</string>
+    <string name="mandate_sites_help">Ni schéma (https://), ni adresse IP, ni nom interne. Exemple : site.org ou *.site.org</string>
+    <string name="mandate_add_site">Ajouter le site</string>
+    <string name="mandate_folders">Dossiers autorisés (chemins absolus)</string>
+    <string name="mandate_add_folder">Dossier</string>
+    <string name="mandate_remove">Retirer %1$s</string>
+    <string name="mandate_duration">Durée</string>
+    <string name="mandate_expires">Expire le %1$s</string>
+    <string name="mandate_never_covers">Ce mandat ne couvre jamais</string>
+    <string name="mandate_create">Créer le mandat</string>
+    <string name="mandate_fix_site">Corrigez le site en erreur pour continuer</string>
+
     <!-- Profile switcher -->
     <string name="profiles_sheet_subtitle">Persona, modèle et configuration de l\'agent</string>
     <string name="profiles_new">Nouveau profil</string>
