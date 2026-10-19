@@ -91,7 +91,7 @@ fun MobileControlScreen(
                         IconButton(onClick = onNavigateBack) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Retour",
+                                contentDescription = stringResource(R.string.action_back),
                                 tint = HermesTextPrimary
                             )
                         }
@@ -147,7 +147,7 @@ fun MobileControlScreen(
                                     )
                                 }
                                 Text(
-                                    "Temps restant : ${session.remainingSeconds / 60}m ${session.remainingSeconds % 60}s",
+                                    stringResource(R.string.control_temps_restant_m_s, session.remainingSeconds / 60, session.remainingSeconds % 60),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontFamily = FontFamily.Monospace,
                                     color = HermesTextPrimary
@@ -157,13 +157,13 @@ fun MobileControlScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
-                                text = "Application : ${session.targetAppName} (${session.targetPackage})",
+                                text = stringResource(R.string.control_application, session.targetAppName, session.targetPackage),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "Profil autorisé : John (${session.allowedProfile}) • Mode : ${session.mode.name.lowercase()}" +
+                                text = stringResource(R.string.control_profil_autorise_john_mode, session.allowedProfile, session.mode.name.lowercase()) +
                                     (if (session.allowScreenshots) " • Captures autorisées" else "") +
                                     (if (session.allowCalendar) " • Calendrier autorisé" else "") +
                                     (if (session.allows(Consent.SMS_READ)) " • SMS autorisés" else "") +
@@ -204,7 +204,7 @@ fun MobileControlScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "État du système",
+                            stringResource(R.string.control_etat_du_systeme),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = HermesTextPrimary
@@ -235,7 +235,7 @@ fun MobileControlScreen(
                                     onClick = { viewModel.openAccessibilitySettings() },
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("Activer", fontSize = 12.sp)
+                                    Text(stringResource(R.string.yolo_confirm), fontSize = 12.sp)
                                 }
                             } else {
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = HermesSuccess)
@@ -276,7 +276,7 @@ fun MobileControlScreen(
                             IconButton(onClick = onOpenRelaySettings) {
                                 Icon(
                                     Icons.Default.Settings,
-                                    contentDescription = "Relais mobile et appairage",
+                                    contentDescription = stringResource(R.string.control_relais_mobile_et_appairage),
                                     tint = HermesPrimary
                                 )
                             }
@@ -304,7 +304,7 @@ fun MobileControlScreen(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                "Démarrer une session de contrôle",
+                                stringResource(R.string.control_demarrer_une_session_de_controle),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Black
@@ -314,7 +314,7 @@ fun MobileControlScreen(
                         if (!isJohnAvailable) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Profil John ('john') indisponible : démarrage du contrôle mobile désactivé (aucun fallback autorisé).",
+                                text = stringResource(R.string.control_profil_john_john_indisponible_demarrage),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesError
                             )
@@ -331,7 +331,7 @@ fun MobileControlScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Applications autorisées",
+                        stringResource(R.string.control_applications_autorisees),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = HermesTextPrimary
@@ -339,7 +339,7 @@ fun MobileControlScreen(
                     TextButton(onClick = { showAddAppDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ajouter", fontSize = 12.sp)
+                        Text(stringResource(R.string.workspaces_add_confirm), fontSize = 12.sp)
                     }
                 }
             }
@@ -398,7 +398,7 @@ fun MobileControlScreen(
                     )
                     if (state.auditLogs.isNotEmpty()) {
                         TextButton(onClick = { viewModel.clearAuditLogs() }) {
-                            Text("Effacer", fontSize = 12.sp, color = HermesTextMuted)
+                            Text(stringResource(R.string.auth_clear), fontSize = 12.sp, color = HermesTextMuted)
                         }
                     }
                 }
@@ -407,7 +407,7 @@ fun MobileControlScreen(
             if (state.auditLogs.isEmpty()) {
                 item {
                     Text(
-                        "Aucune action enregistrée pour le moment.",
+                        stringResource(R.string.control_aucune_action_enregistree_pour_le),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextMuted,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -636,10 +636,10 @@ private fun StartSessionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Démarrer le contrôle mobile") },
+        title = { Text(stringResource(R.string.control_demarrer_le_controle_mobile)) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Application cible :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_application_cible), style = MaterialTheme.typography.labelMedium)
                 allowedApps.forEach { app ->
                     Row(
                         modifier = Modifier
@@ -656,45 +656,45 @@ private fun StartSessionDialog(
                     }
                 }
 
-                Text("Profil Hermes autorisé :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_profil_hermes_autorise), style = MaterialTheme.typography.labelMedium)
                 if (isJohnAvailable) {
                     FilterChip(
                         selected = true,
                         onClick = { /* John est le seul profil autorisé pour le contrôle mobile */ },
-                        label = { Text("John (john)") },
+                        label = { Text(stringResource(R.string.control_john_john)) },
                         leadingIcon = {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                     )
                 } else {
                     Text(
-                        "Le profil John ('john') est introuvable. Démarrage impossible.",
+                        stringResource(R.string.control_le_profil_john_john_est),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesError
                     )
                 }
 
-                Text("Mode de contrôle :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_mode_de_controle), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = selectedMode == MobileControlMode.INTERACTION,
                         onClick = { selectedMode = MobileControlMode.INTERACTION },
-                        label = { Text("Interaction") }
+                        label = { Text(stringResource(R.string.control_interaction)) }
                     )
                     FilterChip(
                         selected = selectedMode == MobileControlMode.OBSERVATION,
                         onClick = { selectedMode = MobileControlMode.OBSERVATION },
-                        label = { Text("Observation seule") }
+                        label = { Text(stringResource(R.string.control_observation_seule)) }
                     )
                 }
 
-                Text("Durée maximale :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_duree_maximale), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 15, 30).forEach { dur ->
                         FilterChip(
                             selected = selectedDuration == dur,
                             onClick = { selectedDuration = dur },
-                            label = { Text("$dur min") }
+                            label = { Text(stringResource(R.string.control_min, dur)) }
                         )
                     }
                 }
@@ -740,11 +740,11 @@ private fun StartSessionDialog(
                 },
                 enabled = selectedApp != null && isJohnAvailable
             ) {
-                Text("Démarrer")
+                Text(stringResource(R.string.control_demarrer))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -759,20 +759,20 @@ private fun AddAppDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Autoriser une application") },
+        title = { Text(stringResource(R.string.control_autoriser_une_application)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = nameText,
                     onValueChange = { nameText = it },
-                    label = { Text("Nom d'affichage (ex: LinkedIn)") },
+                    label = { Text(stringResource(R.string.control_nom_d_affichage_ex_linkedin)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = pkgText,
                     onValueChange = { pkgText = it },
-                    label = { Text("Nom du package (ex: com.linkedin.android)") },
+                    label = { Text(stringResource(R.string.control_nom_du_package_ex_com)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -783,11 +783,11 @@ private fun AddAppDialog(
                 onClick = { onAdd(pkgText.trim(), nameText.trim()) },
                 enabled = pkgText.isNotBlank() && nameText.isNotBlank()
             ) {
-                Text("Ajouter")
+                Text(stringResource(R.string.workspaces_add_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

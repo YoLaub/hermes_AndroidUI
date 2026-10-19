@@ -427,4 +427,28 @@
     <string name="memory_jeton_de">Jeton de « %1$s »</string>
     <string name="memory_il_ne_sera_plus_jamais">Il ne sera plus jamais affiché. Copie-le maintenant.</string>
     <string name="memory_c_est_copie_fermer">C\'est copié, fermer</string>
+    <!-- Phone control screen -->
+    <string name="control_temps_restant_m_s">Temps restant : %1$sm %2$ss</string>
+    <string name="control_application">Application : %1$s (%2$s)</string>
+    <string name="control_profil_autorise_john_mode">Profil autorisé : John (%1$s) • Mode : %2$s</string>
+    <string name="control_etat_du_systeme">État du système</string>
+    <string name="control_relais_mobile_et_appairage">Relais mobile et appairage</string>
+    <string name="control_demarrer_une_session_de_controle">Démarrer une session de contrôle</string>
+    <string name="control_profil_john_john_indisponible_demarrage">Profil John (\'john\') indisponible : démarrage du contrôle mobile désactivé (aucun fallback autorisé).</string>
+    <string name="control_applications_autorisees">Applications autorisées</string>
+    <string name="control_aucune_action_enregistree_pour_le">Aucune action enregistrée pour le moment.</string>
+    <string name="control_demarrer_le_controle_mobile">Démarrer le contrôle mobile</string>
+    <string name="control_application_cible">Application cible :</string>
+    <string name="control_profil_hermes_autorise">Profil Hermes autorisé :</string>
+    <string name="control_john_john">John (john)</string>
+    <string name="control_le_profil_john_john_est">Le profil John (\'john\') est introuvable. Démarrage impossible.</string>
+    <string name="control_mode_de_controle">Mode de contrôle :</string>
+    <string name="control_interaction">Interaction</string>
+    <string name="control_observation_seule">Observation seule</string>
+    <string name="control_duree_maximale">Durée maximale :</string>
+    <string name="control_min">%1$s min</string>
+    <string name="control_demarrer">Démarrer</string>
+    <string name="control_autoriser_une_application">Autoriser une application</string>
+    <string name="control_nom_d_affichage_ex_linkedin">Nom d\'affichage (ex: LinkedIn)</string>
+    <string name="control_nom_du_package_ex_com">Nom du package (ex: com.linkedin.android)</string>
 </resources>

@@ -10,6 +10,7 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
+        "features/mobilecontrol/MobileControlScreen.kt",
         "features/profiles/MemoryProfileParts.kt",
         "features/profiles/ProfileEnvScreen.kt",
         "features/profiles/OpenBaoVaultScreen.kt",
