@@ -10,9 +10,8 @@ import java.io.File
  */
 class HardcodedStringsTest {
     private val extracted = listOf(
-        "features/workspace/calendar/components/EventCard.kt",
+        "features/workspace/calendar/components/AgendaItemCard.kt",
         "features/workspace/calendar/components/MonthCalendarView.kt",
-        "features/workspace/calendar/components/ProfilePermissionSheet.kt",
         "features/workspace/calendar/components/EventEditorDialog.kt",
         "features/workspace/calendar/CalendarScreen.kt",
         "features/workspace/notes/components/DictaphoneModal.kt",

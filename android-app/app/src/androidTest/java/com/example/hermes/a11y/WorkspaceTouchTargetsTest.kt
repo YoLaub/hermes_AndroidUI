@@ -22,7 +22,7 @@ class WorkspaceTouchTargetsTest {
                 MonthCalendarView(
                     currentMonth = YearMonth.of(2026, 10),
                     selectedDate = LocalDate.of(2026, 10, 1),
-                    eventsMap = emptyMap(),
+                    markedDays = emptySet(),
                     onDateSelected = {},
                     onMonthOffset = {},
                 )

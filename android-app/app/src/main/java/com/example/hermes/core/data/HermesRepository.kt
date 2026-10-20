@@ -359,6 +359,8 @@ class HermesRepository(
 
     // ── Kanban ────────────────────────────────────────────────────────────────
 
+    suspend fun getCrons(): Result<CronsResponse> = apiClient.getCrons(getBaseUrl())
+
     suspend fun getKanbanBoards(): Result<KanbanBoardsResponse> {
         return apiClient.getKanbanBoards(getBaseUrl())
     }

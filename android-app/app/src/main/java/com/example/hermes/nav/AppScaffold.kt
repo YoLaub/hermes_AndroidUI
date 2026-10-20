@@ -145,7 +145,7 @@ private fun AppScaffoldContent(vm: AppViewModels, avatarStore: AvatarStore, onDi
         if (tab == Tab.Space && !spaceLoaded) {
             vm.kanban.loadData()
             vm.notes.loadNotes()
-            vm.calendar.loadCalendarData()
+            vm.calendar.refresh()
             vm.forum.loadData()
             spaceLoaded = true
         }
@@ -232,7 +232,7 @@ private fun AppScaffoldContent(vm: AppViewModels, avatarStore: AvatarStore, onDi
                                 tasks = tasksSummary(kanban.columns),
                                 board = kanban.currentBoard,
                                 notes = notesSummary(notes.notes),
-                                agenda = agendaSummary(calendar.events),
+                                agenda = agendaSummary(calendar.items),
                             ),
                             onOpenTasks = {
                                 vm.kanban.loadData()

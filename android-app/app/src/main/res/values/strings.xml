@@ -536,7 +536,7 @@
     <string name="agenda_droits_d_acces">Droits d\'accès</string>
     <string name="agenda_creneau_x">%1$s créneau(x)</string>
     <string name="agenda_aucun_creneau_ce_jour_ci">Aucun créneau ce jour-ci</string>
-    <string name="agenda_cliquez_sur_pour_planifier_un">Cliquez sur \'+\' pour planifier un rendez-vous ou une tâche d\'agent.</string>
+    <string name="agenda_cliquez_sur_pour_planifier_un">Touchez « Créneau / RDV » pour planifier un rendez-vous dans l\'agenda du téléphone.</string>
     <string name="notes_dictaphone_transcription">Dictaphone &amp; Transcription</string>
     <string name="notes_en_ligne_google_speech">🌐 En ligne (Google Speech)</string>
     <string name="notes_hors_ligne_on_device">📴 Hors ligne (On-Device)</string>
@@ -616,4 +616,16 @@
     <string name="agenda_en_attente">⏳ En attente</string>
     <string name="agenda_termine_2">🏁 Terminé</string>
     <string name="agenda_annule">❌ Annulé</string>
+    <!-- Agenda: phone calendar and agent runs -->
+    <string name="agenda_filter_all">Tout</string>
+    <string name="agenda_filter_phone">📱 Mon agenda</string>
+    <string name="agenda_allow_title">Agenda du téléphone</string>
+    <string name="agenda_allow_text">Pour afficher vos rendez-vous et en ajouter depuis Hermes.</string>
+    <string name="agenda_allow_button">Autoriser</string>
+    <string name="agenda_runs_unavailable">Tâches des agents indisponibles : serveur injoignable.</string>
+    <string name="agenda_write_failed">L\'agenda du téléphone a refusé la modification.</string>
+    <string name="agenda_all_day">Journée</string>
+    <string name="agenda_run_schedule">Tâche planifiée · %1$s</string>
+    <string name="agenda_read_only">Répétitif ou en lecture seule : à modifier dans l\'app Agenda</string>
+    <string name="agenda_location">Lieu</string>
 </resources>

@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.theme.*
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -32,7 +31,7 @@ import com.example.hermes.R
 fun MonthCalendarView(
     currentMonth: YearMonth,
     selectedDate: LocalDate,
-    eventsMap: Map<LocalDate, List<CalendarEvent>>,
+    markedDays: Set<LocalDate>,
     onDateSelected: (LocalDate) -> Unit,
     onMonthOffset: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -124,7 +123,6 @@ fun MonthCalendarView(
                             val date = currentMonth.atDay(dayNum)
                             val isSelected = date == selectedDate
                             val isToday = date == today
-                            val dayEvents = eventsMap[date] ?: emptyList()
 
                             // 48 dp target around a 38 dp circle.
                             Box(
@@ -158,7 +156,7 @@ fun MonthCalendarView(
                                     )
 
                                     // Event Dot Indicator
-                                    if (dayEvents.isNotEmpty()) {
+                                    if (date in markedDays) {
                                         Box(
                                             modifier = Modifier
                                                 .size(4.dp)

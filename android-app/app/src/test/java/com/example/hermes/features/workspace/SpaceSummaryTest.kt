@@ -1,13 +1,15 @@
 package com.example.hermes.features.workspace
 
 import com.example.hermes.core.model.AgentNote
-import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.KanbanColumn
 import com.example.hermes.core.model.KanbanTask
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import com.example.hermes.features.workspace.calendar.AgentRun
+import com.example.hermes.features.workspace.calendar.PhoneEvent
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class SpaceSummaryTest {
     private val columns = listOf(
@@ -37,14 +39,15 @@ class SpaceSummaryTest {
     }
 
     @Test
-    fun `agenda summary is today's slots, earliest first`() {
+    fun `agenda summary is today's events and runs, earliest first`() {
         val today = LocalDate.of(2026, 10, 19)
-        val events = listOf(
-            CalendarEvent(title = "Tard", dateEpochDay = today.toEpochDay(), startTime = "16:00", endTime = "17:00"),
-            CalendarEvent(title = "Point formation", dateEpochDay = today.toEpochDay(), startTime = "10:00", endTime = "11:00"),
-            CalendarEvent(title = "Demain", dateEpochDay = today.plusDays(1).toEpochDay(), startTime = "08:00", endTime = "09:00"),
+        fun at(time: String) = LocalDateTime.parse("2026-10-19T$time")
+        val items = listOf(
+            PhoneEvent(1, "Tard", at("16:00"), at("17:00"), null, false),
+            AgentRun("j", "Point formation", at("10:00"), "memtest", null),
+            PhoneEvent(2, "Demain", at("08:00").plusDays(1), at("09:00").plusDays(1), null, false),
         )
-        assertEquals(AgendaSummary(todayCount = 2, next = "10:00 Point formation"), agendaSummary(events, today))
+        assertEquals(AgendaSummary(todayCount = 2, next = "10:00 Point formation"), agendaSummary(items, today))
         assertEquals(AgendaSummary(0, null), agendaSummary(emptyList(), today))
     }
 }

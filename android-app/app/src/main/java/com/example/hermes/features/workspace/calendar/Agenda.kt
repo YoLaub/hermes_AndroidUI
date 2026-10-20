@@ -29,6 +29,8 @@ data class PhoneEvent(
     val end: LocalDateTime,
     val location: String?,
     val allDay: Boolean,
+    /** False for a repeating event or a read-only calendar: the app changes only single events it may write. */
+    val editable: Boolean = true,
 ) : AgendaItem {
     override val key get() = "event-$eventId-$start"
 

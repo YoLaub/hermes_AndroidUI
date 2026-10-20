@@ -1,5 +1,8 @@
 package com.example.hermes.features.workspace.calendar
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,21 +15,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.hermes.features.workspace.calendar.components.EventCard
+import com.example.hermes.R
+import com.example.hermes.features.workspace.calendar.components.AgendaItemCard
 import com.example.hermes.features.workspace.calendar.components.EventEditorDialog
 import com.example.hermes.features.workspace.calendar.components.MonthCalendarView
-import com.example.hermes.features.workspace.calendar.components.ProfilePermissionSheet
 import com.example.hermes.theme.*
-import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.ui.components.AppFab
 import com.example.hermes.ui.components.Persona
 import java.time.format.DateTimeFormatter
 import java.util.*
-import androidx.compose.ui.res.stringResource
-import com.example.hermes.R
-import com.example.hermes.ui.components.AppFab
+
+private val CALENDAR_PERMISSIONS = arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
 
 @Composable
 fun CalendarScreen(
@@ -36,17 +40,20 @@ fun CalendarScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // Agents come from the profile list; the access sheet lists each of them.
-    LaunchedEffect(personas) { viewModel.syncAgents(personas.map { it.name }) }
+    // The phone's calendar may have changed since the last visit.
+    LaunchedEffect(Unit) { viewModel.refresh() }
 
-    val profileFilters = listOf<Pair<String?, String>>(
-        null to "🌐 Vue Globale",
-        OWNER_NAME to "👤 Mon Agenda"
-    ) + personas.map { it.name to "🤖 ${it.name}" }
-
-    val frenchDateFormatter = remember {
-        DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH)
+    val askCalendar = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        viewModel.refresh()
     }
+
+    val profiles = (personas.map { it.id } + state.runProfiles).distinctBy { it.lowercase() }
+    val filters = listOf<Pair<AgendaFilter, String>>(
+        AgendaFilter.All to stringResource(R.string.agenda_filter_all),
+        AgendaFilter.Phone to stringResource(R.string.agenda_filter_phone),
+    ) + profiles.map { id -> AgendaFilter.Profile(id) to "🤖 " + (personas.firstOrNull { it.id == id }?.name ?: id) }
+
+    val frenchDateFormatter = remember { DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH) }
 
     Box(
         modifier = modifier
@@ -54,61 +61,47 @@ fun CalendarScreen(
             .background(OnyxDarkBackground)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Profile / View Selector Filter Row
-            Row(
+            LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(profileFilters) { (profileKey, label) ->
-                        val isSelected = state.selectedProfileFilter == profileKey
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { viewModel.onSelectProfileFilter(profileKey) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = HermesPrimaryContainer,
-                                selectedLabelColor = HermesPrimary
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(32.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Rights & Permissions Button
-                IconButton(
-                    onClick = { viewModel.openPermissionSheet() }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = stringResource(R.string.agenda_droits_d_acces),
-                        tint = HermesTertiary,
-                        modifier = Modifier.size(18.dp)
+                items(filters) { (filter, label) ->
+                    FilterChip(
+                        selected = state.filter == filter,
+                        onClick = { viewModel.onSelectFilter(filter) },
+                        label = { Text(label, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = HermesPrimaryContainer,
+                            selectedLabelColor = HermesPrimary
+                        ),
+                        shape = RoundedCornerShape(8.dp)
                     )
                 }
             }
 
-            // Month Calendar View
+            if (!state.canReadPhone) {
+                CalendarAccessCard(onAllow = { askCalendar.launch(CALENDAR_PERMISSIONS) })
+            }
+            if (state.runsUnavailable) {
+                Notice(stringResource(R.string.agenda_runs_unavailable))
+            }
+            if (state.writeFailed) {
+                Notice(stringResource(R.string.agenda_write_failed))
+            }
+
             MonthCalendarView(
                 currentMonth = state.currentMonth,
                 selectedDate = state.selectedDate,
-                eventsMap = state.allEventsCountForMonth,
+                markedDays = state.itemsByDay.keys,
                 onDateSelected = { viewModel.onSelectDate(it) },
                 onMonthOffset = { viewModel.onMonthChanged(it) }
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Day Agenda Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -121,16 +114,14 @@ fun CalendarScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = HermesTextPrimary
                 )
-
                 Text(
-                    text = stringResource(R.string.agenda_creneau_x, state.filteredEventsForSelectedDate.size),
+                    text = stringResource(R.string.agenda_creneau_x, state.dayItems.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = HermesTextMuted
                 )
             }
 
-            // Day Events Timeline / List
-            if (state.filteredEventsForSelectedDate.isEmpty()) {
+            if (state.dayItems.isEmpty()) {
                 // Bottom padding keeps the hint clear of the new-slot FAB, like the list's.
                 Box(
                     modifier = Modifier
@@ -160,7 +151,7 @@ fun CalendarScreen(
                             text = stringResource(R.string.agenda_cliquez_sur_pour_planifier_un),
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -172,48 +163,70 @@ fun CalendarScreen(
                         .padding(horizontal = 16.dp),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
                 ) {
-                    items(state.filteredEventsForSelectedDate, key = { it.id }) { event ->
-                        EventCard(
-                            event = event,
-                            onToggleStatus = { viewModel.toggleEventStatus(event.id) },
-                            onEdit = { viewModel.openEditEvent(event) },
-                            onDelete = { viewModel.deleteEvent(event.id) }
+                    items(state.dayItems, key = { it.key }) { item ->
+                        AgendaItemCard(
+                            item = item,
+                            profileName = { id -> personas.firstOrNull { it.id == id }?.name ?: id },
+                            onEdit = { viewModel.openEditEvent(it) },
+                            onDelete = { viewModel.deleteEvent(it) }
                         )
                     }
                 }
             }
         }
 
-        // Floating Action Button (New Event / Booking)
         AppFab(
             label = stringResource(R.string.agenda_new_slot),
-            onClick = { viewModel.openNewEvent() },
+            onClick = { if (state.canReadPhone) viewModel.openNewEvent() else askCalendar.launch(CALENDAR_PERMISSIONS) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)
         )
 
-        // Event Editor Dialog
-        if (state.isEventEditorOpen && state.activeEditingEvent != null) {
+        state.editor?.let { editor ->
             EventEditorDialog(
-                event = state.activeEditingEvent!!,
-                personas = personas,
-                onSave = { title, desc, date, start, end, org, assigned, st, loc ->
-                    viewModel.saveEvent(title, desc, date, start, end, org, assigned, st, loc)
-                },
+                editor = editor,
+                onSave = { title, start, end, location -> viewModel.saveEvent(title, start, end, location) },
                 onDismiss = { viewModel.closeEventEditor() }
             )
         }
+    }
+}
 
-        // Permissions Sheet
-        if (state.isPermissionSheetOpen) {
-            ProfilePermissionSheet(
-                permissions = state.permissions,
-                onUpdatePermission = { prof, lvl ->
-                    viewModel.updatePermission(prof, lvl)
-                },
-                onDismiss = { viewModel.closePermissionSheet() }
-            )
+@Composable
+private fun CalendarAccessCard(onAllow: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = OnyxDarkSurface)
+    ) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.agenda_allow_title),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = HermesTextPrimary
+                )
+                Text(
+                    text = stringResource(R.string.agenda_allow_text),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = HermesTextSecondary
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Button(onClick = onAllow) { Text(stringResource(R.string.agenda_allow_button)) }
         }
     }
+}
+
+@Composable
+private fun Notice(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = HermesWarning,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+    )
 }

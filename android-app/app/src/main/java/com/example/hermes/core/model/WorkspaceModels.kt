@@ -25,11 +25,6 @@ fun ForumMessage.withOwnerRenamed(): ForumMessage = copy(senderName = ownerRenam
 
 fun AgentNote.withOwnerRenamed(): AgentNote = copy(author = ownerRenamed(author))
 
-fun CalendarEvent.withOwnerRenamed(): CalendarEvent = copy(
-    organizer = ownerRenamed(organizer),
-    assignedProfiles = assignedProfiles.map(::ownerRenamed),
-)
-
 /** Whether [name] is the person a filter on [filter] selects; a filter on the owner also matches older data. */
 fun matchesPerson(name: String, filter: String): Boolean =
     if (filter == OWNER_NAME) isOwnerName(name) else name.equals(filter, ignoreCase = true)

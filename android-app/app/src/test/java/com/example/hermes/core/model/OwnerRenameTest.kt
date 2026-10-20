@@ -26,13 +26,7 @@ class OwnerRenameTest {
     }
 
     @Test
-    fun `notes and events name the owner Moi and leave agents alone`() {
+    fun `notes name the owner Moi`() {
         assertEquals(OWNER_NAME, AgentNote(title = "t", content = "c", author = "Yoann").withOwnerRenamed().author)
-        val event = CalendarEvent(
-            title = "Point", dateEpochDay = 0, startTime = "09:00", endTime = "10:00",
-            organizer = "Yoann", assignedProfiles = listOf("Yoann", "Gaston"),
-        ).withOwnerRenamed()
-        assertEquals(OWNER_NAME, event.organizer)
-        assertEquals(listOf(OWNER_NAME, "Gaston"), event.assignedProfiles)
     }
 }

@@ -1,8 +1,9 @@
 package com.example.hermes.features.workspace
 
 import com.example.hermes.core.model.AgentNote
-import com.example.hermes.core.model.CalendarEvent
 import com.example.hermes.core.model.KanbanColumn
+import com.example.hermes.features.workspace.calendar.AgendaItem
+import com.example.hermes.features.workspace.calendar.byDay
 import java.time.LocalDate
 
 data class TasksSummary(val blocked: Int, val running: Int)
@@ -20,9 +21,9 @@ fun notesSummary(notes: List<AgentNote>) = NotesSummary(notes.size, notes.firstO
 
 data class AgendaSummary(val todayCount: Int, val next: String?)
 
-fun agendaSummary(events: List<CalendarEvent>, today: LocalDate = LocalDate.now()): AgendaSummary {
-    val todays = events.filter { it.dateEpochDay == today.toEpochDay() }.sortedBy { it.startTime }
-    return AgendaSummary(todays.size, todays.firstOrNull()?.let { "${it.startTime} ${it.title}" })
+fun agendaSummary(items: List<AgendaItem>, today: LocalDate = LocalDate.now()): AgendaSummary {
+    val todays = items.byDay()[today].orEmpty()
+    return AgendaSummary(todays.size, todays.firstOrNull()?.let { "%02d:%02d %s".format(it.start.hour, it.start.minute, it.title) })
 }
 
 enum class EventFormError(val message: String) {

@@ -17,6 +17,7 @@ import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.kanban.KanbanViewModel
 import com.example.hermes.features.mobilecontrol.MobileControlViewModel
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
+import com.example.hermes.features.workspace.calendar.DevicePhoneCalendar
 import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
 import com.example.hermes.nav.AppScaffold
@@ -45,7 +46,7 @@ fun MainNavigation() {
         }
     })
     val calendarViewModel: CalendarViewModel = viewModel(factory = viewModelFactory {
-        initializer { CalendarViewModel(container.calendarRepository) }
+        initializer { CalendarViewModel(DevicePhoneCalendar(appContext), loadRuns = { container.repository.getCrons().map { it.jobs } }) }
     })
     val forumViewModel: ForumViewModel = viewModel(factory = viewModelFactory {
         initializer { ForumViewModel(container.forumRepository) }
