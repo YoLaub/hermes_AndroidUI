@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
@@ -14,24 +13,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.hermes.R
 import com.example.hermes.core.model.ForumMessage
-import com.example.hermes.core.model.ParticipantType
+import com.example.hermes.core.model.ReplyState
 import com.example.hermes.features.chat.components.MarkdownText
 import com.example.hermes.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** One message of the room: the owner's, or a member's real reply, which may wait for a decision or have failed. */
 @Composable
 fun ForumMessageItem(
     message: ForumMessage,
+    senderName: String,
+    onOpenSession: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isUser = message.senderType == ParticipantType.USER
-    val isA2A = message.senderType == ParticipantType.EXTERNAL_A2A
+    val isUser = message.fromOwner
     val formattedTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp))
 
     Row(
@@ -42,26 +45,7 @@ fun ForumMessageItem(
         verticalAlignment = Alignment.Top
     ) {
         if (!isUser) {
-            // Agent Avatar
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(if (isA2A) HermesSecondaryContainer else HermesTertiaryContainer)
-                    .border(
-                        1.dp,
-                        if (isA2A) HermesSecondary.copy(alpha = 0.5f) else HermesTertiary.copy(alpha = 0.5f),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isA2A) Icons.Default.Language else Icons.Default.SmartToy,
-                    contentDescription = null,
-                    tint = if (isA2A) HermesSecondary else HermesTertiary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            Avatar(isUser = false)
             Spacer(modifier = Modifier.width(10.dp))
         }
 
@@ -69,62 +53,30 @@ fun ForumMessageItem(
             modifier = Modifier.weight(1f, fill = false),
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
-            // Sender Info Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 3.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 3.dp)) {
                 Text(
-                    text = message.senderName,
+                    text = senderName,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = when {
-                        isUser -> HermesPrimary
-                        isA2A -> HermesSecondary
-                        else -> HermesTertiary
-                    }
+                    color = if (isUser) HermesPrimary else HermesTertiary
                 )
-
                 Spacer(modifier = Modifier.width(6.dp))
-
-                // Role / A2A Badge
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .background(
-                            when {
-                                isUser -> HermesPrimaryContainer
-                                isA2A -> HermesSecondaryContainer
-                                else -> OnyxDarkSurfaceVariant
-                            }
-                        )
+                        .background(if (isUser) HermesPrimaryContainer else OnyxDarkSurfaceVariant)
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = when {
-                            isUser -> "Vous"
-                            isA2A -> "A2A Externe"
-                            else -> "Agent"
-                        },
+                        text = stringResource(if (isUser) R.string.forum_you else R.string.forum_agent),
                         style = MaterialTheme.typography.labelSmall,
-                        color = when {
-                            isUser -> HermesPrimary
-                            isA2A -> HermesSecondary
-                            else -> HermesTextMuted
-                        },
+                        color = if (isUser) HermesPrimary else HermesTextMuted,
                         fontSize = 12.sp
                     )
                 }
-
                 Spacer(modifier = Modifier.width(6.dp))
-
-                Text(
-                    text = formattedTime,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = HermesTextMuted
-                )
+                Text(text = formattedTime, style = MaterialTheme.typography.labelSmall, color = HermesTextMuted)
             }
 
-            // Message Bubble Card
             Card(
                 shape = RoundedCornerShape(
                     topStart = if (isUser) 16.dp else 4.dp,
@@ -132,18 +84,13 @@ fun ForumMessageItem(
                     bottomStart = 16.dp,
                     bottomEnd = 16.dp
                 ),
-                colors = CardDefaults.cardColors(
-                    containerColor = when {
-                        isUser -> HermesUserBubble
-                        isA2A -> HermesToolBackground
-                        else -> HermesAssistantBubble
-                    }
-                ),
+                colors = CardDefaults.cardColors(containerColor = if (isUser) HermesUserBubble else HermesAssistantBubble),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(
+                    brush = SolidColor(
                         when {
                             isUser -> HermesPrimary.copy(alpha = 0.4f)
-                            isA2A -> HermesSecondary.copy(alpha = 0.35f)
+                            message.state == ReplyState.FAILED -> HermesError.copy(alpha = 0.5f)
+                            message.state == ReplyState.WAITING -> HermesWarning.copy(alpha = 0.5f)
                             else -> OnyxBorder
                         }
                     )
@@ -151,59 +98,52 @@ fun ForumMessageItem(
                 modifier = Modifier.widthIn(max = 340.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    // A2A Source Endpoint chip if present
-                    message.a2aSourceEndpoint?.let { endpoint ->
-                        Row(
-                            modifier = Modifier
-                                .padding(bottom = 6.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(HermesCodeBackground)
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Language,
-                                contentDescription = null,
-                                tint = HermesSecondary,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = endpoint,
-                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                                color = HermesSecondary,
-                                fontSize = 12.sp
-                            )
+                    when (message.state) {
+                        ReplyState.FAILED -> Text(
+                            text = stringResource(R.string.forum_reply_failed, message.content),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HermesError
+                        )
+                        else -> if (message.content.isNotBlank()) MarkdownText(text = message.content, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    val sessionId = message.sessionId
+                    if (message.state == ReplyState.WAITING && sessionId != null) {
+                        Text(
+                            text = stringResource(R.string.forum_reply_waiting),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HermesWarning,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                        TextButton(onClick = { onOpenSession(sessionId) }) {
+                            Text(stringResource(R.string.forum_open_session))
                         }
                     }
-
-                    // Markdown Content
-                    MarkdownText(
-                        text = message.content,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
                 }
             }
         }
 
         if (isUser) {
             Spacer(modifier = Modifier.width(10.dp))
-            // User Avatar
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(OnyxDarkSurfaceVariant)
-                    .border(1.dp, OnyxBorder, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "User",
-                    tint = HermesPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            Avatar(isUser = true)
         }
+    }
+}
+
+@Composable
+private fun Avatar(isUser: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(if (isUser) OnyxDarkSurfaceVariant else HermesTertiaryContainer)
+            .border(1.dp, if (isUser) OnyxBorder else HermesTertiary.copy(alpha = 0.5f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isUser) Icons.Default.Person else Icons.Default.SmartToy,
+            contentDescription = null,
+            tint = if (isUser) HermesPrimary else HermesTertiary,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }

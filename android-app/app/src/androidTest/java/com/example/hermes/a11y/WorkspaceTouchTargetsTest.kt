@@ -2,8 +2,6 @@ package com.example.hermes.a11y
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import com.example.hermes.core.model.ForumParticipant
-import com.example.hermes.core.model.ParticipantType
 import com.example.hermes.features.workspace.calendar.components.MonthCalendarView
 import com.example.hermes.features.workspace.forum.components.ForumInputBar
 import com.example.hermes.theme.HermesTheme
@@ -37,12 +35,11 @@ class WorkspaceTouchTargetsTest {
             HermesTheme {
                 ForumInputBar(
                     inputText = "",
-                    participants = listOf(ForumParticipant(name = "Ada", type = ParticipantType.INTERNAL_AGENT)),
+                    members = listOf("Ada"),
                     onInputTextChanged = {},
                     onAppendMention = {},
                     onSendMessage = {},
-                    isAgentTyping = false,
-                    typingAgentName = null,
+                    speakingName = null,
                 )
             }
         }

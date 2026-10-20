@@ -2,33 +2,54 @@ package com.example.hermes.features.workspace.forum
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.hermes.core.data.ForumRepository
-import com.example.hermes.core.model.*
-import kotlinx.coroutines.delay
+import com.example.hermes.core.model.ForumData
+import com.example.hermes.core.model.ForumMessage
+import com.example.hermes.core.model.ForumRoom
+import com.example.hermes.core.model.HermesSseEvent
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.core.model.ReplyState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** The Hermes calls a room needs: a session per member, a turn in it, its stream, and its last answer. */
+interface ForumServer {
+    suspend fun newSession(profile: String, title: String): Result<String>
+    /** Starts a turn in [sessionId], run by [profile]; returns the stream id. */
+    suspend fun startTurn(sessionId: String, profile: String, message: String): Result<String>
+    fun stream(streamId: String): Flow<HermesSseEvent>
+    /** The session's last assistant message, or null if the session has not answered yet. */
+    suspend fun lastReply(sessionId: String): Result<String?>
+}
+
+/** Where the phone keeps the rooms and their transcripts. */
+interface ForumStore {
+    suspend fun load(): ForumData
+    suspend fun save(data: ForumData)
+}
+
 data class ForumUiState(
     val rooms: List<ForumRoom> = emptyList(),
-    val selectedRoom: ForumRoom? = null,
+    val selectedRoomId: String? = null,
     val roomMessages: List<ForumMessage> = emptyList(),
-    val a2aAgents: List<A2AExternalAgent> = emptyList(),
     val inputText: String = "",
     val isCreateRoomOpen: Boolean = false,
-    val isA2AManagerOpen: Boolean = false,
-    val isAgentTyping: Boolean = false,
-    val typingAgentName: String? = null,
-    val isLoading: Boolean = false,
-    val messageNotice: String? = null
-)
+    /** The member answering right now. */
+    val speaking: String? = null,
+) {
+    val selectedRoom: ForumRoom? get() = rooms.firstOrNull { it.id == selectedRoomId }
+}
 
 class ForumViewModel(
-    private val repository: ForumRepository
+    private val server: ForumServer,
+    private val store: ForumStore,
+    private val displayName: (String) -> String,
 ) : ViewModel() {
 
+    private var data = ForumData()
     private val _uiState = MutableStateFlow(ForumUiState())
     val uiState: StateFlow<ForumUiState> = _uiState.asStateFlow()
 
@@ -38,209 +59,112 @@ class ForumViewModel(
 
     fun loadData() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val (rooms, messagesMap, a2a) = repository.loadData()
-
-            val initialRoom = _uiState.value.selectedRoom?.let { cur ->
-                rooms.find { it.id == cur.id }
-            } ?: rooms.firstOrNull()
-
-            val activeMsgs = initialRoom?.let { messagesMap[it.id] } ?: emptyList()
-
-            _uiState.update {
-                it.copy(
-                    rooms = rooms,
-                    selectedRoom = initialRoom,
-                    roomMessages = activeMsgs,
-                    a2aAgents = a2a,
-                    isLoading = false
-                )
-            }
+            data = store.load()
+            publish(_uiState.value.selectedRoomId?.takeIf { id -> data.rooms.any { it.id == id } } ?: data.rooms.firstOrNull()?.id)
         }
     }
 
     fun selectRoom(roomId: String) {
-        val room = _uiState.value.rooms.find { it.id == roomId } ?: return
-        val msgs = repository.messages.value[roomId] ?: emptyList()
-        _uiState.update {
-            it.copy(
-                selectedRoom = room,
-                roomMessages = msgs,
-                inputText = ""
-            )
-        }
+        publish(roomId)
+        _uiState.update { it.copy(inputText = "") }
     }
 
     fun onInputTextChanged(text: String) {
         _uiState.update { it.copy(inputText = text) }
     }
 
-    fun appendMentionToInput(agentName: String) {
+    fun appendMentionToInput(name: String) {
         val current = _uiState.value.inputText
-        val mention = "@$agentName "
-        val updated = if (current.endsWith(" ") || current.isEmpty()) current + mention else "$current $mention"
-        _uiState.update { it.copy(inputText = updated) }
+        val mention = "@$name "
+        _uiState.update { it.copy(inputText = if (current.isEmpty() || current.endsWith(" ")) current + mention else "$current $mention") }
     }
 
     fun sendMessage() {
-        val currentText = _uiState.value.inputText.trim()
-        val currentRoom = _uiState.value.selectedRoom ?: return
-        if (currentText.isBlank()) return
-
-        // Extract mentioned agents
-        val mentioned = currentRoom.participants
-            .filter { currentText.contains("@${it.name}", ignoreCase = true) }
-            .map { it.name }
-
-        val userMessage = ForumMessage(
-            roomId = currentRoom.id,
-            senderName = OWNER_NAME,
-            senderType = ParticipantType.USER,
-            content = currentText,
-            mentionedAgents = mentioned
-        )
-
+        val text = _uiState.value.inputText.trim()
+        val room = _uiState.value.selectedRoom ?: return
+        if (text.isBlank() || _uiState.value.speaking != null) return
         _uiState.update { it.copy(inputText = "") }
 
         viewModelScope.launch {
-            repository.postMessage(userMessage)
-            updateCurrentRoomMessages(currentRoom.id)
-
-            // Trigger collaborative agent responses
-            triggerCollaborativeResponses(currentRoom, currentText, mentioned)
-        }
-    }
-
-    private suspend fun triggerCollaborativeResponses(
-        room: ForumRoom,
-        userQuery: String,
-        mentionedNames: List<String>
-    ) {
-        val targetParticipants = if (mentionedNames.isNotEmpty()) {
-            room.participants.filter { mentionedNames.contains(it.name) }
-        } else {
-            // If no specific mention, pick the first 1-2 non-user participants for group collaboration
-            room.participants.filter { it.type != ParticipantType.USER }.take(2)
-        }
-
-        for (participant in targetParticipants) {
-            _uiState.update {
-                it.copy(isAgentTyping = true, typingAgentName = participant.name)
+            append(ForumMessage(roomId = room.id, sender = OWNER_NAME, fromOwner = true, content = text))
+            for (member in targetsOf(text, room.members, displayName)) {
+                _uiState.update { it.copy(speaking = member) }
+                append(turnOf(room.id, member))
             }
-            delay(1200)
-
-            val replyContent = generateCollaborativeReply(participant, userQuery, room)
-
-            val agentMessage = ForumMessage(
-                roomId = room.id,
-                senderName = participant.name,
-                senderType = participant.type,
-                content = replyContent,
-                a2aSourceEndpoint = participant.a2aEndpointUrl
-            )
-
-            repository.postMessage(agentMessage)
-            updateCurrentRoomMessages(room.id)
-        }
-
-        _uiState.update {
-            it.copy(isAgentTyping = false, typingAgentName = null)
+            _uiState.update { it.copy(speaking = null) }
         }
     }
 
-    private fun generateCollaborativeReply(
-        participant: ForumParticipant,
-        query: String,
-        room: ForumRoom
-    ): String {
-        return when (participant.type) {
-            ParticipantType.EXTERNAL_A2A -> {
-                "📡 **[A2A Protocol Event]** Réponse reçue de l'agent distant `${participant.name}` via endpoint `${participant.a2aEndpointUrl ?: "https://a2a-node.internal"}` :\n\nJ'ai analysé la demande *\"$query\"*. Les signaux de données ont été mis à disposition du salon `${room.name}`."
-            }
-            ParticipantType.INTERNAL_AGENT -> {
-                "Message bien pris en compte par ${participant.name}. Je poursuis le traitement collaboratif dans le salon."
-            }
-            else -> "Reçu."
-        }
+    /** One member's reply: in its session (created on its first turn), told what the room said since it last spoke. */
+    private suspend fun turnOf(roomId: String, member: String): ForumMessage {
+        fun failed(error: Throwable, sessionId: String? = null) =
+            ForumMessage(roomId = roomId, sender = member, content = error.message.orEmpty(), state = ReplyState.FAILED, sessionId = sessionId)
+
+        val room = data.rooms.first { it.id == roomId }
+        val sessionId = room.sessions[member] ?: server.newSession(member, "Forum · ${room.name}")
+            .onSuccess { id -> saveRoom(room.copy(sessions = room.sessions + (member to id))) }
+            .getOrElse { return failed(it) }
+        val prompt = promptFor(room, messagesOf(roomId), member, displayName)
+        val streamId = server.startTurn(sessionId, member, prompt).getOrElse { return failed(it, sessionId) }
+        val reply = runCatching { collectReply(server.stream(streamId)) }.getOrElse { return failed(it, sessionId) }
+        return ForumMessage(roomId = roomId, sender = member, content = reply.text, state = reply.state, sessionId = sessionId)
     }
 
-    private fun updateCurrentRoomMessages(roomId: String) {
-        val msgs = repository.messages.value[roomId] ?: emptyList()
-        _uiState.update {
-            it.copy(
-                rooms = repository.rooms.value,
-                roomMessages = msgs
-            )
-        }
-    }
-
-    // --- Room Creation & Management ---
-
-    fun openCreateRoom() {
-        _uiState.update { it.copy(isCreateRoomOpen = true) }
-    }
-
-    fun closeCreateRoom() {
-        _uiState.update { it.copy(isCreateRoomOpen = false) }
-    }
-
-    fun createRoom(
-        name: String,
-        topic: String,
-        icon: String,
-        participants: List<ForumParticipant>,
-        isA2AEnabled: Boolean
-    ) {
-        if (name.isBlank()) return
-        val newRoom = ForumRoom(
-            name = name,
-            topic = topic,
-            iconEmoji = icon.ifBlank { "🏛️" },
-            participants = participants,
-            isA2AEnabled = isA2AEnabled
-        )
-
+    /** Fills the replies that were waiting for a decision, once their session has answered. */
+    fun refreshWaiting() {
         viewModelScope.launch {
-            repository.saveRoom(newRoom)
-            loadData()
-            selectRoom(newRoom.id)
+            data.messages.filter { it.state == ReplyState.WAITING && it.sessionId != null }.forEach { waiting ->
+                val answer = server.lastReply(waiting.sessionId!!).getOrNull() ?: return@forEach
+                if (answer.isNotBlank()) replace(waiting.copy(content = answer, state = ReplyState.DONE))
+            }
+        }
+    }
+
+    fun openCreateRoom() = _uiState.update { it.copy(isCreateRoomOpen = true) }
+
+    fun closeCreateRoom() = _uiState.update { it.copy(isCreateRoomOpen = false) }
+
+    fun createRoom(name: String, topic: String, icon: String, members: List<String>) {
+        if (name.isBlank() || members.isEmpty()) return
+        val room = ForumRoom(name = name.trim(), topic = topic.trim(), iconEmoji = icon.ifBlank { "🏛️" }, members = members)
+        viewModelScope.launch {
+            commit(data.copy(rooms = data.rooms + room))
+            publish(room.id)
             closeCreateRoom()
         }
     }
 
+    /** Forgets the room and its transcript; the members' sessions stay in the server's history. */
     fun deleteRoom(roomId: String) {
         viewModelScope.launch {
-            repository.deleteRoom(roomId)
-            loadData()
+            commit(data.copy(rooms = data.rooms.filterNot { it.id == roomId }, messages = data.messages.filterNot { it.roomId == roomId }))
+            publish(data.rooms.firstOrNull()?.id)
         }
     }
 
-    // --- A2A External Agent Management ---
+    private fun messagesOf(roomId: String) = data.messages.filter { it.roomId == roomId }
 
-    fun openA2AManager() {
-        _uiState.update { it.copy(isA2AManagerOpen = true) }
+    private suspend fun append(message: ForumMessage) {
+        commit(data.copy(messages = data.messages + message))
+        publish(_uiState.value.selectedRoomId)
     }
 
-    fun closeA2AManager() {
-        _uiState.update { it.copy(isA2AManagerOpen = false) }
+    private suspend fun replace(message: ForumMessage) {
+        commit(data.copy(messages = data.messages.map { if (it.id == message.id) message else it }))
+        publish(_uiState.value.selectedRoomId)
     }
 
-    fun saveA2AAgent(agent: A2AExternalAgent) {
-        viewModelScope.launch {
-            repository.saveA2AAgent(agent)
-            loadData()
-            _uiState.update { it.copy(messageNotice = "Agent A2A '${agent.name}' enregistré") }
-        }
+    private suspend fun saveRoom(room: ForumRoom) {
+        commit(data.copy(rooms = data.rooms.map { if (it.id == room.id) room else it }))
+        publish(_uiState.value.selectedRoomId)
     }
 
-    fun deleteA2AAgent(agentId: String) {
-        viewModelScope.launch {
-            repository.deleteA2AAgent(agentId)
-            loadData()
-        }
+    private suspend fun commit(next: ForumData) {
+        data = next
+        store.save(next)
     }
 
-    fun clearNotice() {
-        _uiState.update { it.copy(messageNotice = null) }
+    private fun publish(selected: String?) {
+        _uiState.update { it.copy(rooms = data.rooms, selectedRoomId = selected, roomMessages = selected?.let(::messagesOf).orEmpty()) }
     }
 }

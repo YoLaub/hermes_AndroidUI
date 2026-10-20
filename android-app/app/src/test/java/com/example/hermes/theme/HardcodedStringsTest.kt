@@ -39,6 +39,10 @@ class HardcodedStringsTest {
         "features/profiles/MemoryProfileParts.kt",
         "features/profiles/ProfileEnvScreen.kt",
         "features/profiles/OpenBaoVaultScreen.kt",
+        "features/workspace/forum/ForumScreen.kt",
+        "features/workspace/forum/components/ForumInputBar.kt",
+        "features/workspace/forum/components/ForumMessageItem.kt",
+        "features/workspace/forum/components/CreateRoomDialog.kt",
     )
 
     private val literalUiText = Regex(

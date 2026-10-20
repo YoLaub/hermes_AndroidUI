@@ -637,4 +637,26 @@
     <string name="notes_delete_confirm">Supprimer la note</string>
     <string name="notes_unavailable">Notes indisponibles</string>
     <string name="notes_unavailable_hint">Ouvrez une conversation : les notes sont les fichiers du dossier notes/ de son espace de travail.</string>
+    <!-- Forum: rooms of real profile sessions -->
+    <string name="forum_new_room">Nouveau salon</string>
+    <string name="forum_delete_room">Supprimer le salon</string>
+    <string name="forum_delete_title">Supprimer ce salon ?</string>
+    <string name="forum_delete_message">« %1$s » et sa discussion seront retirés du téléphone. Les conversations des agents restent dans l\'historique.</string>
+    <string name="forum_no_room">Aucun salon</string>
+    <string name="forum_no_room_hint">Un salon réunit plusieurs de vos profils : chacun répond depuis sa propre conversation.</string>
+    <string name="forum_welcome">Salon prêt</string>
+    <string name="forum_welcome_hint">Écrivez à tout le salon, ou mentionnez un agent avec @ pour ne vous adresser qu\'à lui.</string>
+    <string name="forum_speaking">%1$s répond…</string>
+    <string name="forum_input_placeholder">Écrivez au salon (ou @agent)…</string>
+    <string name="forum_send">Envoyer</string>
+    <string name="forum_you">Vous</string>
+    <string name="forum_agent">Agent</string>
+    <string name="forum_reply_failed">Pas de réponse : %1$s</string>
+    <string name="forum_reply_waiting">En attente de votre décision dans sa conversation.</string>
+    <string name="forum_open_session">Ouvrir sa conversation</string>
+    <string name="forum_room_name">Nom du salon</string>
+    <string name="forum_room_topic">Sujet</string>
+    <string name="forum_room_members">Agents invités, dans l\'ordre de parole :</string>
+    <string name="forum_room_cost">Chaque message sans mention est envoyé à tous les agents invités, un par un.</string>
+    <string name="forum_create">Créer le salon</string>
 </resources>

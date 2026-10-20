@@ -263,7 +263,14 @@ private fun AppScaffoldContent(vm: AppViewModels, avatarStore: AvatarStore, onDi
                     }
                     entry<ForumRoute> {
                         SpaceSectionScreen(stringResource(R.string.space_forum), onBack = { nav.back()?.let(::go) }) {
-                            ForumScreen(viewModel = vm.forum, personas = personasOf(chat.profiles))
+                            ForumScreen(
+                                viewModel = vm.forum,
+                                personas = personasOf(chat.profiles),
+                                onOpenSession = { id ->
+                                    vm.chat.selectSession(id)
+                                    onSelect(Tab.Chat)
+                                },
+                            )
                         }
                     }
                     entry<ControlRoute> {

@@ -18,7 +18,10 @@ import com.example.hermes.features.auth.AuthViewModel
 import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.kanban.KanbanViewModel
 import com.example.hermes.features.mobilecontrol.MobileControlViewModel
+import com.example.hermes.core.data.FileForumStore
 import com.example.hermes.core.data.FileNoteAudioIndex
+import com.example.hermes.core.data.HermesForumServer
+import com.example.hermes.ui.components.personasOf
 import com.example.hermes.core.data.NotesRepository
 import com.example.hermes.core.data.SessionWorkspaceFiles
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
@@ -62,7 +65,13 @@ fun MainNavigation() {
         initializer { CalendarViewModel(DevicePhoneCalendar(appContext), loadRuns = { container.repository.getCrons().map { it.jobs } }) }
     })
     val forumViewModel: ForumViewModel = viewModel(factory = viewModelFactory {
-        initializer { ForumViewModel(container.forumRepository) }
+        initializer {
+            ForumViewModel(
+                HermesForumServer(container.repository),
+                FileForumStore(appContext),
+                displayName = { id -> personasOf(chatViewModel.uiState.value.profiles).firstOrNull { it.id == id }?.name ?: id },
+            )
+        }
     })
     val mobileControlViewModel: MobileControlViewModel = viewModel(factory = viewModelFactory {
         initializer {
