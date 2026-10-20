@@ -5,7 +5,6 @@ import com.example.hermes.core.data.AvatarStore
 import com.example.hermes.core.data.ForumRepository
 import com.example.hermes.core.data.HermesPreferences
 import com.example.hermes.core.data.HermesRepository
-import com.example.hermes.core.data.NotesRepository
 import com.example.hermes.core.mobilecontrol.MobileControlManager
 
 /**
@@ -17,7 +16,6 @@ import com.example.hermes.core.mobilecontrol.MobileControlManager
 class AppContainer(val appContext: Context) {
     val preferences: HermesPreferences by lazy { HermesPreferences(appContext) }
     val repository: HermesRepository by lazy { HermesRepository(preferences) }
-    val notesRepository: NotesRepository by lazy { NotesRepository(appContext) }
     val forumRepository: ForumRepository by lazy { ForumRepository(appContext) }
     val avatarStore: AvatarStore by lazy { AvatarStore(appContext) }
     val mobileControlManager: MobileControlManager by lazy { MobileControlManager(appContext, preferences) }

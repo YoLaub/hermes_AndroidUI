@@ -348,6 +348,12 @@ class HermesRepository(
         return apiClient.listFiles(getBaseUrl(), sessionId, path)
     }
 
+    suspend fun readFile(sessionId: String, path: String) = apiClient.readFile(getBaseUrl(), sessionId, path)
+    suspend fun createFile(sessionId: String, path: String, content: String) = apiClient.createFile(getBaseUrl(), sessionId, path, content)
+    suspend fun saveFile(sessionId: String, path: String, content: String) = apiClient.saveFile(getBaseUrl(), sessionId, path, content)
+    suspend fun renameFile(sessionId: String, path: String, newName: String) = apiClient.renameFile(getBaseUrl(), sessionId, path, newName)
+    suspend fun deleteFile(sessionId: String, path: String) = apiClient.deleteFile(getBaseUrl(), sessionId, path)
+
     suspend fun uploadFile(
         sessionId: String,
         filename: String,

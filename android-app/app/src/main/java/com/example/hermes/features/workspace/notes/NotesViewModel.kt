@@ -25,6 +25,8 @@ data class NotesUiState(
     val transcriptionState: TranscriptionState = TranscriptionState(),
     val playerState: AudioPlayerState = AudioPlayerState(),
     val isLoading: Boolean = false,
+    /** The notes could not be read: no session to reach the workspace through, or the server is unreachable. */
+    val unavailable: Boolean = false,
     val messageNotice: String? = null
 )
 
@@ -58,9 +60,9 @@ class NotesViewModel(
     fun loadNotes() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val list = repository.loadNotes()
-            updateNotesList(list)
-            _uiState.update { it.copy(isLoading = false) }
+            val result = repository.loadNotes()
+            result.onSuccess(::updateNotesList)
+            _uiState.update { it.copy(isLoading = false, unavailable = result.isFailure) }
         }
     }
 
@@ -112,21 +114,24 @@ class NotesViewModel(
         if (content.isBlank() && st.audioFilePath == null) return
 
         val newNote = AgentNote(
-            title = "🎙️ Note vocale (${java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date())})",
+            // The title is the file name: no slash, no emoji.
+            title = "Note vocale " + java.text.SimpleDateFormat("dd-MM HH'h'mm", java.util.Locale.getDefault()).format(java.util.Date()),
             content = content.ifBlank { "*(Enregistrement audio sans transcription)*" },
             author = OWNER_NAME,
             authorRole = "user",
-            tags = listOf("Audio", "Vocal"),
+            tags = listOf("Vocal"),
             audioFilePath = st.audioFilePath,
             audioDurationSec = st.durationSec.takeIf { it > 0 }
         )
 
         viewModelScope.launch {
             repository.saveNote(newNote)
-            val updatedList = repository.notes.value
-            updateNotesList(updatedList)
-            closeDictaphoneModal()
-            _uiState.update { it.copy(messageNotice = "Note vocale enregistrée avec succès") }
+                .onSuccess {
+                    updateNotesList(repository.notes.value)
+                    closeDictaphoneModal()
+                    _uiState.update { it.copy(messageNotice = "Note vocale enregistrée") }
+                }
+                .onFailure(::reportFailure)
         }
     }
 
@@ -165,9 +170,11 @@ class NotesViewModel(
 
         viewModelScope.launch {
             repository.saveNote(updated)
-            val updatedList = repository.notes.value
-            updateNotesList(updatedList)
-            closeNoteEditor()
+                .onSuccess {
+                    updateNotesList(repository.notes.value)
+                    closeNoteEditor()
+                }
+                .onFailure(::reportFailure)
         }
     }
 
@@ -177,16 +184,16 @@ class NotesViewModel(
                 audioPlayer.stop()
             }
             repository.deleteNote(noteId)
-            val updatedList = repository.notes.value
-            updateNotesList(updatedList)
+                .onSuccess { updateNotesList(repository.notes.value) }
+                .onFailure(::reportFailure)
         }
     }
 
     fun togglePin(noteId: String) {
         viewModelScope.launch {
             repository.togglePin(noteId)
-            val updatedList = repository.notes.value
-            updateNotesList(updatedList)
+                .onSuccess { updateNotesList(repository.notes.value) }
+                .onFailure(::reportFailure)
         }
     }
 
@@ -202,6 +209,10 @@ class NotesViewModel(
 
     fun seekAudio(progress: Float) {
         audioPlayer.seekTo(progress)
+    }
+
+    private fun reportFailure(@Suppress("UNUSED_PARAMETER") error: Throwable) {
+        _uiState.update { it.copy(messageNotice = "Échec : les notes n'ont pas pu être enregistrées sur le serveur") }
     }
 
     fun clearNotice() {

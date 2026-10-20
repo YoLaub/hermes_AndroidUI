@@ -23,8 +23,6 @@ fun ForumRoom.withOwnerRenamed(): ForumRoom = copy(
 
 fun ForumMessage.withOwnerRenamed(): ForumMessage = copy(senderName = ownerRenamed(senderName))
 
-fun AgentNote.withOwnerRenamed(): AgentNote = copy(author = ownerRenamed(author))
-
 /** Whether [name] is the person a filter on [filter] selects; a filter on the owner also matches older data. */
 fun matchesPerson(name: String, filter: String): Boolean =
     if (filter == OWNER_NAME) isOwnerName(name) else name.equals(filter, ignoreCase = true)

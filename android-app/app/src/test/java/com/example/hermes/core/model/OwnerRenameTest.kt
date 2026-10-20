@@ -24,9 +24,4 @@ class OwnerRenameTest {
         val message = ForumMessage(roomId = "r", senderName = "yoann", senderType = ParticipantType.USER, content = "Bonjour")
         assertEquals(OWNER_NAME, message.withOwnerRenamed().senderName)
     }
-
-    @Test
-    fun `notes name the owner Moi`() {
-        assertEquals(OWNER_NAME, AgentNote(title = "t", content = "c", author = "Yoann").withOwnerRenamed().author)
-    }
 }

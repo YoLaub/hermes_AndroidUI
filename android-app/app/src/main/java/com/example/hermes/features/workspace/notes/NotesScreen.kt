@@ -39,6 +39,9 @@ fun NotesScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // Agents may have written notes since the last visit.
+    LaunchedEffect(Unit) { viewModel.loadNotes() }
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -139,6 +142,19 @@ fun NotesScreen(
                 }
             }
 
+            state.messageNotice?.let { notice ->
+                LaunchedEffect(notice) {
+                    kotlinx.coroutines.delay(4000)
+                    viewModel.clearNotice()
+                }
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = HermesWarning,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
             // Notes List or Empty State
             if (state.filteredNotes.isEmpty()) {
                 Box(
@@ -159,13 +175,18 @@ fun NotesScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (state.searchQuery.isNotBlank() || state.selectedTag != null) stringResource(R.string.notes_aucune_note_correspondante) else stringResource(R.string.notes_aucune_note_pour_le_moment),
+                            text = when {
+                                state.unavailable -> stringResource(R.string.notes_unavailable)
+                                state.searchQuery.isNotBlank() || state.selectedTag != null -> stringResource(R.string.notes_aucune_note_correspondante)
+                                else -> stringResource(R.string.notes_aucune_note_pour_le_moment)
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             color = HermesTextSecondary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = stringResource(R.string.notes_enregistrez_un_audio_ou_ecrivez),
+                            text = stringResource(if (state.unavailable) R.string.notes_unavailable_hint else R.string.notes_enregistrez_un_audio_ou_ecrivez),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted
                         )

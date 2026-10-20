@@ -16,6 +16,9 @@ import com.example.hermes.features.auth.AuthViewModel
 import com.example.hermes.features.chat.ChatViewModel
 import com.example.hermes.features.kanban.KanbanViewModel
 import com.example.hermes.features.mobilecontrol.MobileControlViewModel
+import com.example.hermes.core.data.FileNoteAudioIndex
+import com.example.hermes.core.data.NotesRepository
+import com.example.hermes.core.data.SessionWorkspaceFiles
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.calendar.DevicePhoneCalendar
 import com.example.hermes.features.workspace.forum.ForumViewModel
@@ -42,7 +45,15 @@ fun MainNavigation() {
     val notesViewModel: NotesViewModel = viewModel(factory = viewModelFactory {
         initializer {
             // The ViewModel destroys these in onCleared(), so they are created with it.
-            NotesViewModel(container.notesRepository, SpeechRecognitionManager(appContext), AudioPlayerManager(appContext))
+            // Notes are files of the open session's workspace, or of the profile's latest session.
+            val files = SessionWorkspaceFiles(container.repository) {
+                chatViewModel.uiState.value.let { it.sessionId ?: it.sessions.firstOrNull()?.sessionId }
+            }
+            NotesViewModel(
+                NotesRepository(files, FileNoteAudioIndex(appContext)),
+                SpeechRecognitionManager(appContext),
+                AudioPlayerManager(appContext),
+            )
         }
     })
     val calendarViewModel: CalendarViewModel = viewModel(factory = viewModelFactory {

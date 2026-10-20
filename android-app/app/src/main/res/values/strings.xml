@@ -628,4 +628,7 @@
     <string name="agenda_run_schedule">Tâche planifiée · %1$s</string>
     <string name="agenda_read_only">Répétitif ou en lecture seule : à modifier dans l\'app Agenda</string>
     <string name="agenda_location">Lieu</string>
+    <!-- Notes: workspace files -->
+    <string name="notes_unavailable">Notes indisponibles</string>
+    <string name="notes_unavailable_hint">Ouvrez une conversation : les notes sont les fichiers du dossier notes/ de son espace de travail.</string>
 </resources>

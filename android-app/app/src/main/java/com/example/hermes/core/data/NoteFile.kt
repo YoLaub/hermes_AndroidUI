@@ -1,4 +1,4 @@
-package com.example.hermes.features.workspace.notes
+package com.example.hermes.core.data
 
 import com.example.hermes.core.model.AgentNote
 import com.example.hermes.core.model.isOwnerName
