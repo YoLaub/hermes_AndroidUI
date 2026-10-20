@@ -500,6 +500,10 @@ class HermesApiClient(
         executeEmptyResponse(request)
     }
 
+    suspend fun getCrons(baseUrl: String): Result<CronsResponse> = withContext(Dispatchers.IO) {
+        executeRequest(Request.Builder().url("$baseUrl/api/crons").get().build())
+    }
+
     suspend fun getWorkspaces(baseUrl: String): Result<WorkspacesResponse> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("$baseUrl/api/workspaces")
