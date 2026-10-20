@@ -632,6 +632,9 @@
     <string name="agenda_delete_message">« %1$s » sera retiré de l\'agenda du téléphone.</string>
     <string name="agenda_delete_confirm">Supprimer de l\'agenda</string>
     <!-- Notes: workspace files -->
+    <string name="notes_delete_title">Supprimer cette note ?</string>
+    <string name="notes_delete_message">Le fichier « %1$s » sera supprimé de l\'espace de travail, pour vous et vos agents.</string>
+    <string name="notes_delete_confirm">Supprimer la note</string>
     <string name="notes_unavailable">Notes indisponibles</string>
     <string name="notes_unavailable_hint">Ouvrez une conversation : les notes sont les fichiers du dossier notes/ de son espace de travail.</string>
 </resources>

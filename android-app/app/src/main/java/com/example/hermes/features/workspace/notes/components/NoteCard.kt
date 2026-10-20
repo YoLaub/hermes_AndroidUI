@@ -40,7 +40,8 @@ fun NoteCard(
     modifier: Modifier = Modifier
 ) {
     val isPlayingThis = playerState.isPlaying && playerState.currentPath == note.audioFilePath
-    val formattedDate = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(note.updatedAt))
+    // 0: a workspace file, whose date the server does not give.
+    val formattedDate = note.updatedAt.takeIf { it > 0 }?.let { SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(it)) }
 
     Card(
         modifier = modifier
@@ -89,12 +90,14 @@ fun NoteCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formattedDate,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = HermesTextMuted,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
+                    formattedDate?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = HermesTextMuted,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
 
                     IconButton(
                         onClick = onTogglePin

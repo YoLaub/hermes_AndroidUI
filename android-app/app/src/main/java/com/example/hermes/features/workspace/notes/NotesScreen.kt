@@ -31,6 +31,7 @@ import com.example.hermes.ui.components.Persona
 import androidx.compose.ui.res.stringResource
 import com.example.hermes.R
 import com.example.hermes.ui.components.AppFab
+import com.example.hermes.ui.components.ConfirmDialog
 
 @Composable
 fun NotesScreen(
@@ -39,6 +40,9 @@ fun NotesScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // A note is a file of the server's workspace: deleting it is asked first.
+    var pendingDelete by remember { mutableStateOf<com.example.hermes.core.model.AgentNote?>(null) }
 
     // Agents may have written notes since the last visit.
     LaunchedEffect(Unit) { viewModel.loadNotes() }
@@ -209,7 +213,7 @@ fun NotesScreen(
                             onSeekAudio = { viewModel.seekAudio(it) },
                             onTogglePin = { viewModel.togglePin(note.id) },
                             onEditNote = { viewModel.openEditNote(note) },
-                            onDeleteNote = { viewModel.deleteNote(note.id) }
+                            onDeleteNote = { pendingDelete = note }
                         )
                     }
                 }
@@ -256,6 +260,20 @@ fun NotesScreen(
                 onCancelRecording = { viewModel.cancelDictation() },
                 onSaveToNote = { viewModel.createNoteFromTranscription() },
                 onDismiss = { viewModel.closeDictaphoneModal() }
+            )
+        }
+
+        pendingDelete?.let { note ->
+            ConfirmDialog(
+                title = stringResource(R.string.notes_delete_title),
+                message = stringResource(R.string.notes_delete_message, note.title),
+                confirmLabel = stringResource(R.string.notes_delete_confirm),
+                destructive = true,
+                onConfirm = {
+                    viewModel.deleteNote(note.id)
+                    pendingDelete = null
+                },
+                onDismiss = { pendingDelete = null }
             )
         }
 

@@ -26,6 +26,9 @@ fun parseNote(path: String, text: String): AgentNote {
         authorRole = if (author.isBlank() || isOwnerName(author)) "user" else "agent",
         tags = header["tags"]?.removeSurrounding("[", "]")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
         isPinned = header["pinned"]?.trim().equals("true", ignoreCase = true),
+        // The file routes give no date; 0 means unknown.
+        createdAt = 0,
+        updatedAt = 0,
     )
 }
 

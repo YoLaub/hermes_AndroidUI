@@ -19,6 +19,8 @@ class NoteFileTest {
         assertFalse(note.isPinned)
         assertTrue(note.tags.isEmpty())
         assertEquals("", note.author)
+        // The file routes give no date: none is shown rather than the time of loading.
+        assertEquals(0L, note.updatedAt)
     }
 
     @Test
