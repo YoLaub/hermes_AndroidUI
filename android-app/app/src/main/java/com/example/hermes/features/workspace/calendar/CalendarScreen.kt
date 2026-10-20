@@ -26,6 +26,7 @@ import com.example.hermes.features.workspace.calendar.components.EventEditorDial
 import com.example.hermes.features.workspace.calendar.components.MonthCalendarView
 import com.example.hermes.theme.*
 import com.example.hermes.ui.components.AppFab
+import com.example.hermes.ui.components.ConfirmDialog
 import com.example.hermes.ui.components.Persona
 import java.time.format.DateTimeFormatter
 import java.util.*
@@ -52,6 +53,9 @@ fun CalendarScreen(
         AgendaFilter.All to stringResource(R.string.agenda_filter_all),
         AgendaFilter.Phone to stringResource(R.string.agenda_filter_phone),
     ) + profiles.map { id -> AgendaFilter.Profile(id) to "🤖 " + (personas.firstOrNull { it.id == id }?.name ?: id) }
+
+    // Deleting removes the event from the phone's real calendar: asked first.
+    var pendingDelete by remember { mutableStateOf<PhoneEvent?>(null) }
 
     val frenchDateFormatter = remember { DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH) }
 
@@ -168,7 +172,7 @@ fun CalendarScreen(
                             item = item,
                             profileName = { id -> personas.firstOrNull { it.id == id }?.name ?: id },
                             onEdit = { viewModel.openEditEvent(it) },
-                            onDelete = { viewModel.deleteEvent(it) }
+                            onDelete = { pendingDelete = it }
                         )
                     }
                 }
@@ -182,6 +186,20 @@ fun CalendarScreen(
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)
         )
+
+        pendingDelete?.let { event ->
+            ConfirmDialog(
+                title = stringResource(R.string.agenda_delete_title),
+                message = stringResource(R.string.agenda_delete_message, event.title),
+                confirmLabel = stringResource(R.string.agenda_delete_confirm),
+                destructive = true,
+                onConfirm = {
+                    viewModel.deleteEvent(event)
+                    pendingDelete = null
+                },
+                onDismiss = { pendingDelete = null }
+            )
+        }
 
         state.editor?.let { editor ->
             EventEditorDialog(

@@ -628,6 +628,9 @@
     <string name="agenda_run_schedule">Tâche planifiée · %1$s</string>
     <string name="agenda_read_only">Répétitif ou en lecture seule : à modifier dans l\'app Agenda</string>
     <string name="agenda_location">Lieu</string>
+    <string name="agenda_delete_title">Supprimer ce rendez-vous ?</string>
+    <string name="agenda_delete_message">« %1$s » sera retiré de l\'agenda du téléphone.</string>
+    <string name="agenda_delete_confirm">Supprimer de l\'agenda</string>
     <!-- Notes: workspace files -->
     <string name="notes_unavailable">Notes indisponibles</string>
     <string name="notes_unavailable_hint">Ouvrez une conversation : les notes sont les fichiers du dossier notes/ de son espace de travail.</string>
