@@ -141,7 +141,7 @@ fun CalendarScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
+                        modifier = Modifier.padding(horizontal = 24.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.EventBusy,
