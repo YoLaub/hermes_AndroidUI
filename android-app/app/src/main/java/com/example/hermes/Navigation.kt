@@ -1,6 +1,8 @@
 package com.example.hermes
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -71,7 +73,16 @@ fun MainNavigation() {
     // Connexion stays outside the tabs until an instance is validated.
     var connected by rememberSaveable { mutableStateOf(false) }
 
-    if (!connected) {
+    // A still valid saved session skips the sign-in screen.
+    val auth by authViewModel.uiState.collectAsState()
+    LaunchedEffect(auth.isConnected) {
+        if (auth.isConnected && !connected) {
+            connected = true
+            chatViewModel.loadInitialData()
+        }
+    }
+
+        if (!connected) {
         AuthScreen(
             viewModel = authViewModel,
             onNavigateToChat = {

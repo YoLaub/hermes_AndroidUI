@@ -59,7 +59,12 @@ class HermesRepository(
         return apiClient.checkHealth(getBaseUrl())
     }
 
-    suspend fun checkAuthStatus(): Result<AuthStatusResponse> {
+    /** Puts the saved session cookie on the requests now, without waiting for the start-up wiring. */
+    suspend fun restoreSessionCookie() {
+        if (authInterceptor.sessionCookie == null) authInterceptor.sessionCookie = preferences.sessionCookie.first()
+    }
+
+        suspend fun checkAuthStatus(): Result<AuthStatusResponse> {
         return apiClient.checkAuthStatus(getBaseUrl())
     }
 
