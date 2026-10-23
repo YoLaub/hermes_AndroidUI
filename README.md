@@ -100,3 +100,7 @@ cd android-app
 # L'APK généré se trouve dans :
 # app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## Relais AETHER (avatar macOS)
+
+Le relais dispose d'une extension AETHER distincte du contrôle Android. La [note de transmission pour l'agent de développement](docs/aether-relay/handoff.md) précise le contrat d'appairage, WebSocket/MCP, les tests et le travail restant dans le client macOS. Le code local n'implique pas un déploiement sur le VPS.

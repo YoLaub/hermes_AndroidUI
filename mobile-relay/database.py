@@ -71,6 +71,11 @@ def init_db():
                 last_attempt REAL NOT NULL
             )
         """)
+        # Additive migration: existing clients and outstanding codes remain Android.
+        for table in ("paired_devices", "pairing_codes"):
+            columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "device_kind" not in columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN device_kind TEXT NOT NULL DEFAULT 'android'")
     conn.close()
 
 def _env_number(name: str, default: float) -> float:
@@ -142,10 +147,10 @@ def purge_old_records(now: Optional[float] = None, audit_retention_days: Optiona
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
-def verify_device_token(device_id: str, token: str) -> bool:
+def verify_device_token(device_id: str, token: str, device_kind: str = "android") -> bool:
     conn = get_db()
     h = hash_token(token)
-    row = conn.execute("SELECT token_hash FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
+    row = conn.execute("SELECT token_hash FROM paired_devices WHERE device_id = ? AND device_kind = ?", (device_id, device_kind)).fetchone()
     if not row:
         conn.close()
         return False
@@ -167,7 +172,8 @@ def atomic_register_or_update_device(
     new_token: str,
     device_name: str,
     current_token: Optional[str] = None,
-    is_admin_authorized: bool = False
+    is_admin_authorized: bool = False,
+    device_kind: str = "android"
 ) -> Tuple[bool, str]:
     """
     Rend atomiques la vérification d'existence, l'autorisation de remplacement et l'enregistrement:
@@ -177,6 +183,8 @@ def atomic_register_or_update_device(
     Retourne (True, "created" | "updated") en cas de succès,
     ou (False, "UNAUTHORIZED_OVERWRITE" | "INTEGRITY_ERROR") en cas de refus.
     """
+    if device_kind not in ("android", "aether"):
+        raise ValueError("Unknown device kind")
     conn = get_db()
     conn.isolation_level = None # Allows explicit BEGIN IMMEDIATE transaction
     new_hash = hash_token(new_token)
@@ -186,11 +194,14 @@ def atomic_register_or_update_device(
         conn.execute("BEGIN IMMEDIATE")
         # 1. Vérification d'existence sous verrou transactionnel immédiat SQLite
         row = conn.execute(
-            "SELECT token_hash FROM paired_devices WHERE device_id = ?",
+            "SELECT token_hash, device_kind FROM paired_devices WHERE device_id = ?",
             (device_id,)
         ).fetchone()
 
         if row:
+            if row["device_kind"] != device_kind:
+                conn.execute("ROLLBACK")
+                return (False, "UNAUTHORIZED_OVERWRITE")
             # Appareil existant: remplacement
             existing_hash = row["token_hash"]
             token_matches = False
@@ -214,9 +225,9 @@ def atomic_register_or_update_device(
             # Nouvel appareil: INSERT strict (échoue atomiquement si doublon inséré en concurrence)
             try:
                 conn.execute("""
-                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (device_id, new_hash, device_name, now, now))
+                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen, device_kind)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (device_id, new_hash, device_name, now, now, device_kind))
                 conn.execute("COMMIT")
                 result = (True, "created")
             except sqlite3.IntegrityError:
@@ -279,16 +290,16 @@ def count_active_pairing_codes() -> int:
     conn.close()
     return count
 
-def save_pairing_code(code: str, user_id: str, expires_in_seconds: int = 300):
+def save_pairing_code(code: str, user_id: str, expires_in_seconds: int = 300, device_kind: str = "android"):
     conn = get_db()
     expires_at = time.time() + expires_in_seconds
     with conn:
         conn.execute("DELETE FROM pairing_codes WHERE expires_at < ?", (time.time(),))
-        conn.execute("INSERT OR REPLACE INTO pairing_codes (code, user_id, expires_at) VALUES (?, ?, ?)",
-                     (code, user_id, expires_at))
+        conn.execute("INSERT OR REPLACE INTO pairing_codes (code, user_id, expires_at, device_kind) VALUES (?, ?, ?, ?)",
+                     (code, user_id, expires_at, device_kind))
     conn.close()
 
-def consume_pairing_code(code: str) -> Optional[str]:
+def consume_pairing_code(code: str, device_kind: str = "android") -> Optional[str]:
     conn = get_db()
     now = time.time()
     clean_code = code.strip().upper()
@@ -296,8 +307,8 @@ def consume_pairing_code(code: str) -> Optional[str]:
     try:
         # SQLite 3.35+ supports DELETE ... RETURNING user_id, expires_at as a single atomic execution
         cursor = conn.execute(
-            "DELETE FROM pairing_codes WHERE code = ? RETURNING user_id, expires_at",
-            (clean_code,)
+            "DELETE FROM pairing_codes WHERE code = ? AND device_kind = ? RETURNING user_id, expires_at",
+            (clean_code, device_kind)
         )
         row = cursor.fetchone()
         conn.commit()
@@ -308,7 +319,7 @@ def consume_pairing_code(code: str) -> Optional[str]:
         try:
             conn.isolation_level = None
             conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ?", (clean_code,)).fetchone()
+            row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ? AND device_kind = ?", (clean_code, device_kind)).fetchone()
             if row:
                 conn.execute("DELETE FROM pairing_codes WHERE code = ?", (clean_code,))
                 if row["expires_at"] >= now:

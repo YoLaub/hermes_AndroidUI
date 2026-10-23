@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -114,13 +114,16 @@ class MobileAuthMsg(BaseModel):
     device_token: str
 
 class PairingGenerateRequest(BaseModel):
+    device_kind: Literal["android", "aether"] = "android"
     user_id: Optional[str] = "admin"
 
 class PairingGenerateResponse(BaseModel):
+    pairing_uri: Optional[str] = None
     code: str
     expires_in_seconds: int = 300
 
 class PairingVerifyRequest(BaseModel):
+    device_kind: Literal["android", "aether"] = "android"
     code: str
     device_id: str
     device_name: Optional[str] = "Android Phone"

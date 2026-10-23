@@ -12,6 +12,10 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
+from aether_pairing import pairing_uri
+from aether_protocol import TOOLS as AETHER_TOOLS
+from aether_relay import AetherRelay
+from aether_routes import router_for
 import memory_validations
 from database import (
     atomic_register_or_update_device,
@@ -330,6 +334,7 @@ class DeviceConnectionManager:
             future.set_result(result)
 
 manager = DeviceConnectionManager()
+aether = AetherRelay()
 
 # ── Authentication Helpers ───────────────────────────────────────────────────
 
@@ -590,7 +595,7 @@ def memory_mandate_revoke(request: Request, mandate_id: str):
     return _profile_answer(source, status, payload)
 
 
-@app.post("/api/pair/generate", response_model=PairingGenerateResponse)
+@app.post("/api/pair/generate", response_model=PairingGenerateResponse, response_model_exclude_none=True)
 def generate_pairing_code(request: Request, req: PairingGenerateRequest):
     # Requirement 2: Authentifier /api/pair/generate
     authenticate_admin_request(request)
@@ -600,10 +605,16 @@ def generate_pairing_code(request: Request, req: PairingGenerateRequest):
         raise HTTPException(status_code=429, detail="Too many active pairing codes. Please wait or use existing codes.")
 
     code = secrets.token_hex(3).upper() # 6 characters
-    save_pairing_code(code, req.user_id or "admin", expires_in_seconds=300)
+    link = None
+    if req.device_kind == "aether" and os.environ.get("AETHER_PUBLIC_URL"):
+        try:
+            link = pairing_uri(os.environ["AETHER_PUBLIC_URL"], code)
+        except ValueError:
+            raise HTTPException(status_code=503, detail="AETHER public URL is not configured correctly") from None
+    save_pairing_code(code, req.user_id or "admin", expires_in_seconds=300, device_kind=req.device_kind)
     # Requirement 2: Ne jamais journaliser ce code
     logger.info("Generated pairing code for user: %s (expires in 300s)", req.user_id or "admin")
-    return PairingGenerateResponse(code=code, expires_in_seconds=300)
+    return PairingGenerateResponse(code=code, expires_in_seconds=300, pairing_uri=link)
 
 @app.post("/api/pair/verify", response_model=PairingVerifyResponse)
 def verify_pairing_code(request: Request, req: PairingVerifyRequest):
@@ -631,7 +642,7 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     is_admin_auth = bool(candidate_admin_token and verify_admin_token(candidate_admin_token))
 
     # 2. Consume pairing code atomically FIRST
-    user_id = consume_pairing_code(req.code.strip().upper())
+    user_id = consume_pairing_code(req.code.strip().upper(), device_kind=req.device_kind)
     if not user_id:
         raise HTTPException(status_code=400, detail="Code d'appairage invalide ou expiré.")
 
@@ -640,6 +651,7 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     success, reason = atomic_register_or_update_device(
         device_id=req.device_id,
         new_token=device_token,
+        device_kind=req.device_kind,
         device_name=req.device_name or "Android Phone",
         current_token=candidate_device_token,
         is_admin_authorized=is_admin_auth
@@ -1146,7 +1158,7 @@ async def mcp_stream_endpoint(request: Request):
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "tools": MCP_TOOLS
+                    "tools": MCP_TOOLS + (AETHER_TOOLS if authenticated_profile == "john" else [])
                 }
             }
         )
@@ -1154,6 +1166,17 @@ async def mcp_stream_endpoint(request: Request):
     elif method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
+
+        if isinstance(tool_name, str) and tool_name in {tool["name"] for tool in AETHER_TOOLS}:
+            try:
+                if tool_name == "aether_get_status":
+                    if arguments != {}: raise ValueError("Status takes no arguments")
+                    result = aether.status(authenticated_profile)
+                else:
+                    result = await aether.move(authenticated_profile, arguments)
+                return format_mcp_response(req_id, json.dumps(result), protocol_version=negotiated_version)
+            except ValueError:
+                return format_mcp_error(req_id, "AETHER: profile or arguments rejected", protocol_version=negotiated_version)
 
         # 1. mobile_control_status
         if tool_name == "mobile_control_status":
@@ -1622,3 +1645,6 @@ def format_mcp_error(req_id: Any, message: str, protocol_version: str = DEFAULT_
         }
     )
 
+
+
+app.include_router(router_for(aether, client_ip, enforce_not_blocked, note_auth_failure))
