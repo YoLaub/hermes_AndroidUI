@@ -1,11 +1,13 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
-import pytest
-from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
+
 import database
+import pytest
 import server
 from aether_protocol import envelope
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):

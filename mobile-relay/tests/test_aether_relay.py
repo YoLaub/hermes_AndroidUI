@@ -1,6 +1,8 @@
 import asyncio
+
 import pytest
 from aether_relay import AetherRelay
+
 
 class Socket:
     def __init__(self): self.messages = asyncio.Queue()
@@ -25,7 +27,7 @@ async def test_disconnect_fails_pending_and_never_replays():
     relay = AetherRelay(); ws = Socket()
     connection = await relay.connect('mac', ws, profile='john')
     task = asyncio.create_task(relay.move('john', {'device_id': 'mac', 'screen_x': .4, 'screen_y': .7, 'posture': 'walk'}))
-    command = await ws.messages.get()
+    await ws.messages.get()
     replacement = Socket(); fresh = await relay.connect('mac', replacement, profile='john')
     assert (await task)['error']['code'] == 'session_lost'
     relay.disconnect(connection)

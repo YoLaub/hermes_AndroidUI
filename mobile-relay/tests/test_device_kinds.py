@@ -1,7 +1,9 @@
 """Pairing authority is scoped to a device kind, including legacy databases."""
 import sqlite3
-import pytest
+
 import database
+import pytest
+
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
