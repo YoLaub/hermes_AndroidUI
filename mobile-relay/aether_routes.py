@@ -3,8 +3,8 @@ import asyncio
 import secrets
 import time
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
-from pydantic import ValidationError
+
+from aether_protocol import ClaimPoll, ClaimStart, Envelope, Hello, Result, Status, envelope
 from database import (
     aether_device_profile,
     check_and_record_pairing_attempt,
@@ -13,7 +13,8 @@ from database import (
     start_aether_claim,
     verify_device_token,
 )
-from aether_protocol import ClaimPoll, ClaimStart, Envelope, Hello, Result, Status, envelope
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
 
 CLAIM_TTL_SECONDS = 300
 # No 0/O or 1/I/L: the code is read on one screen and typed or pasted into a chat.
@@ -63,10 +64,12 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
 
     async def receive(ws, timeout):
         text = await asyncio.wait_for(ws.receive_text(), timeout)
-        if len(text.encode('utf-8')) > 16384: raise ValueError('Message too large')
+        if len(text.encode('utf-8')) > 16384:
+            raise ValueError('Message too large')
         message = Envelope.model_validate_json(text)
         sent = datetime.fromisoformat(message.sent_at.replace('Z', '+00:00'))
-        if sent.utcoffset() != timedelta(0): raise ValueError('UTC timestamp required')
+        if sent.utcoffset() != timedelta(0):
+            raise ValueError('UTC timestamp required')
         return message
 
     @router.websocket('/ws/aether')
@@ -82,7 +85,8 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
             header = ws.headers.get('authorization', '')
             token = header[7:] if header.startswith('Bearer ') else ''
             message = await receive(ws, 5)
-            if message.type != 'client.hello': raise ValueError('Hello required')
+            if message.type != 'client.hello':
+                raise ValueError('Hello required')
             hello = Hello.model_validate(message.payload)
             if not token or not verify_device_token(hello.device_id, token, device_kind='aether'):
                 note_auth_failure(source, 'aether')
@@ -118,5 +122,6 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
         except (ValueError, ValidationError, asyncio.TimeoutError, HTTPException):
             await ws.close(code=1008)
         finally:
-            if connection: relay.disconnect(connection)
+            if connection:
+                relay.disconnect(connection)
     return router

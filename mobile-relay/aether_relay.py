@@ -3,9 +3,11 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from uuid import uuid4
 from typing import Callable
+from uuid import uuid4
+
 from aether_protocol import Move, envelope
+
 
 @dataclass(eq=False)
 class Connection:
@@ -24,7 +26,8 @@ class AetherRelay:
 
     async def connect(self, device_id, socket, can_move=True, authorized=lambda: True, profile=None):
         old = self.connections.get(device_id)
-        if old: self.disconnect(old)
+        if old:
+            self.disconnect(old)
         connection = Connection(device_id, socket, profile=profile, can_move=can_move, authorized=authorized)
         self.connections[device_id] = connection
         if old:
@@ -39,7 +42,8 @@ class AetherRelay:
             self.connections.pop(connection.device_id)
         if connection.pending:
             cid, future, args = connection.pending
-            if not future.done(): future.set_result(self.error(cid, 'session_lost'))
+            if not future.done():
+                future.set_result(self.error(cid, 'session_lost'))
 
     def owned(self, profile, device_id):
         """A profile reaches only the avatars it owns; an ownerless avatar is reachable by nobody."""
@@ -62,12 +66,15 @@ class AetherRelay:
         cid = uuid4().hex
         # Someone else's avatar answers exactly like a missing one, so its existence is not revealed.
         connection = self.owned(profile, args.device_id)
-        if not connection: return self.error(cid, 'avatar_unavailable')
+        if not connection:
+            return self.error(cid, 'avatar_unavailable')
         if not connection.authorized():
             self.disconnect(connection)
             return self.error(cid, 'unauthorized')
-        if not connection.can_move: return self.error(cid, 'unsupported_capability')
-        if connection.pending: return self.error(cid, 'command_rejected')
+        if not connection.can_move:
+            return self.error(cid, 'unsupported_capability')
+        if connection.pending:
+            return self.error(cid, 'command_rejected')
         future = asyncio.get_running_loop().create_future()
         connection.pending = (cid, future, args)
         expires = datetime.fromtimestamp(time.time() + args.ttl_seconds, timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -88,9 +95,11 @@ class AetherRelay:
             connection.pending = None
 
     def result(self, connection, kind, payload):
-        if self.connections.get(connection.device_id) is not connection or not connection.pending: return
+        if self.connections.get(connection.device_id) is not connection or not connection.pending:
+            return
         cid, future, args = connection.pending
-        if future.done() or payload['command_id'] != cid or kind == 'command.accepted': return
+        if future.done() or payload['command_id'] != cid or kind == 'command.accepted':
+            return
         if kind == 'command.completed':
             avatar = payload.get('avatar')
             if (not avatar or avatar.get('moving') is not False or avatar.get('posture') != args.posture
