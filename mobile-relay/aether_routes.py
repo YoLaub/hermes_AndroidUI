@@ -1,15 +1,65 @@
 """Bounded WebSocket adapter for the AETHER relay. No Android operations are imported."""
 import asyncio
+import secrets
 import time
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
-from database import aether_device_profile, verify_device_token
-from aether_protocol import Envelope, Hello, Result, Status, envelope
+from database import (
+    aether_device_profile,
+    check_and_record_pairing_attempt,
+    count_active_aether_claims,
+    finish_aether_claim,
+    start_aether_claim,
+    verify_device_token,
+)
+from aether_protocol import ClaimPoll, ClaimStart, Envelope, Hello, Result, Status, envelope
+
+CLAIM_TTL_SECONDS = 300
+# No 0/O or 1/I/L: the code is read on one screen and typed or pasted into a chat.
+CLAIM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+
+def new_claim_code():
+    code = ''.join(secrets.choice(CLAIM_ALPHABET) for _ in range(8))
+    return code[:4] + '-' + code[4:]
+
+
+def agent_prompt(device_name, code):
+    return (f"Connecte mon avatar AETHER « {device_name} » à ton profil : appelle l'outil "
+            f"aether_claim_avatar du relais mobile avec le code {code}. Ce code expire dans 5 minutes.")
 
 
 def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
     router = APIRouter()
+
+    @router.post('/api/aether/pair/start')
+    def start_pairing(request: Request, req: ClaimStart):
+        # Unauthenticated by design: the avatar has no credential yet. Bounded per source and globally.
+        source = client_ip(request)
+        enforce_not_blocked(source, 'aether')
+        if not check_and_record_pairing_attempt(f'aether_start_{source}', max_attempts=5, window_seconds=CLAIM_TTL_SECONDS):
+            raise HTTPException(status_code=429, detail='Too many AETHER pairing requests. Try again later.')
+        if count_active_aether_claims() >= 10:
+            raise HTTPException(status_code=429, detail='Too many pending AETHER pairing requests.')
+        code, poll_token = new_claim_code(), secrets.token_urlsafe(32)
+        if not start_aether_claim(req.device_id, req.device_name, code, poll_token, CLAIM_TTL_SECONDS):
+            raise HTTPException(status_code=409, detail='This avatar id is already paired; use a new one.')
+        return {'claim_code': code, 'poll_token': poll_token, 'expires_in_seconds': CLAIM_TTL_SECONDS,
+                'agent_prompt': agent_prompt(req.device_name, code)}
+
+    @router.post('/api/aether/pair/poll')
+    def poll_pairing(req: ClaimPoll):
+        # The poll token is 256 random bits, so polling every few seconds needs no attempt limit.
+        device_token = 'tok_' + secrets.token_urlsafe(24)
+        state, details = finish_aether_claim(req.poll_token, device_token)
+        if state == 'pending':
+            return {'status': 'pending'}
+        if state == 'conflict':
+            raise HTTPException(status_code=409, detail='This avatar id is already paired; use a new one.')
+        if state == 'unknown':
+            raise HTTPException(status_code=404, detail='Unknown or expired AETHER pairing request.')
+        return {'status': 'paired', 'device_token': device_token, **details}
 
     async def receive(ws, timeout):
         text = await asyncio.wait_for(ws.receive_text(), timeout)

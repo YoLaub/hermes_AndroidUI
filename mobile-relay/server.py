@@ -14,12 +14,14 @@ from typing import Any, Dict, Optional, Tuple
 
 from aether_pairing import pairing_uri
 from aether_protocol import TOOLS as AETHER_TOOLS
+from aether_protocol import Claim as AetherClaim
 from aether_relay import AetherRelay
 from aether_routes import router_for
 import memory_validations
 from database import (
     atomic_register_or_update_device,
     check_and_record_pairing_attempt,
+    claim_aether_avatar,
     consume_pairing_code,
     count_active_pairing_codes,
     init_db,
@@ -1174,6 +1176,13 @@ async def mcp_stream_endpoint(request: Request):
                 if tool_name == "aether_get_status":
                     if arguments != {}: raise ValueError("Status takes no arguments")
                     result = aether.status(authenticated_profile)
+                elif tool_name == "aether_claim_avatar":
+                    claimed = claim_aether_avatar(AetherClaim.model_validate(arguments).code, authenticated_profile)
+                    if claimed is None:
+                        return format_mcp_error(req_id, "AETHER: claim code invalid, expired or already used",
+                                                protocol_version=negotiated_version)
+                    log_event("aether_claimed", profile=authenticated_profile, device_id=claimed["device_id"])
+                    result = {"status": "claimed", **claimed}
                 else:
                     result = await aether.move(authenticated_profile, arguments)
                 return format_mcp_response(req_id, json.dumps(result), protocol_version=negotiated_version)
