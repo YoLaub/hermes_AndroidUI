@@ -652,6 +652,8 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
         device_id=req.device_id,
         new_token=device_token,
         device_kind=req.device_kind,
+        # Admin-generated AETHER codes predate per-profile avatars and stay owned by john.
+        profile="john" if req.device_kind == "aether" else None,
         device_name=req.device_name or "Android Phone",
         current_token=candidate_device_token,
         is_admin_authorized=is_admin_auth
@@ -1158,7 +1160,7 @@ async def mcp_stream_endpoint(request: Request):
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "tools": MCP_TOOLS + (AETHER_TOOLS if authenticated_profile == "john" else [])
+                    "tools": MCP_TOOLS + AETHER_TOOLS
                 }
             }
         )
@@ -1176,7 +1178,7 @@ async def mcp_stream_endpoint(request: Request):
                     result = await aether.move(authenticated_profile, arguments)
                 return format_mcp_response(req_id, json.dumps(result), protocol_version=negotiated_version)
             except ValueError:
-                return format_mcp_error(req_id, "AETHER: profile or arguments rejected", protocol_version=negotiated_version)
+                return format_mcp_error(req_id, "AETHER: arguments rejected", protocol_version=negotiated_version)
 
         # 1. mobile_control_status
         if tool_name == "mobile_control_status":
