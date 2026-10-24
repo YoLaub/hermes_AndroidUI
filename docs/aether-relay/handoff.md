@@ -5,96 +5,97 @@ description: Implemented server-side AETHER pairing and MCP routing, per-profile
 timestamp: 2026-10-24
 tags: [aether, relay, mcp, handoff]
 ---
-# Message pour l'agent de développement
+# Message for the development agent
 
-Le propriétaire a autorisé l'extension du relais existant pour connecter ses avatars AETHER à Hermes sur le VPS. AETHER vise tous les supports ; priorité : finir et tester macOS avec Hermes avant Windows. Chaque profil Hermes peut avoir ses propres avatars (décision du propriétaire, 2026-10-24). L'utilisateur colle un texte affiché par AETHER à l'agent du profil choisi, sans terminal ni configuration côté client. Aucun push, build Docker ou déploiement n'a été effectué. Le propriétaire a explicitement demandé de conserver le commit sur la branche actuelle `dev`, malgré la mention `main` dans AGENTS.md. Aucun secret de production n'a été consulté ni modifié.
+The owner authorized extending the existing relay to connect their AETHER avatars to Hermes on the VPS. AETHER targets every platform; priority: finish and test macOS with Hermes before Windows. Each Hermes profile can own its own avatars (owner decision, 2026-10-24). The user pastes a text shown by AETHER to the agent of the chosen profile, with no terminal and no client-side configuration. No push, Docker build or deployment has been done. The owner explicitly asked to keep the commits on the current `dev` branch, despite the `main` mention in AGENTS.md. No production secret was read or changed.
 
-Le relais côté serveur est implémenté et testé avec un client WebSocket simulé. Le connecteur AETHER (macOS d'abord) et son écran d'appairage restent à développer dans `/Users/yoann/Developer/project-aether`. Ne pas annoncer une intégration réelle Hermes–Mac déjà opérationnelle.
+The server-side relay is implemented and tested with a simulated WebSocket client. The AETHER connector (macOS first) and its pairing screen remain to be built in `/Users/yoann/Developer/project-aether`. Do not announce a working real Hermes–AETHER integration yet.
 
-# Organisation et compatibilité
+# Layout and compatibility
 
-- `aether_protocol.py` : schémas stricts et définitions des deux outils MCP.
-- `aether_relay.py` : connexions, commandes, délais et corrélation, sans opérations Android.
-- `aether_routes.py` : WebSocket `/ws/aether`, authentification et validation.
-- `aether_routes.py` porte aussi l'appairage `/api/aether/pair/start` et `/api/aether/pair/poll` ; `database.py` la table `aether_claims`.
-- `server.py` : branchements courts dans l'appairage et le MCP existants ; authentification de profil réutilisée.
-- `database.py` : migrations additives `device_kind` dans `paired_devices` et `pairing_codes` (valeur historique `android`) et `profile` dans `paired_devices` (profil propriétaire d'un avatar, `NULL` pour Android). `init_db` est réexécutable. Les codes, jetons et remplacements d'identité ne traversent pas les catégories `android` / `aether`.
+- `aether_protocol.py`: strict schemas and the definitions of the three MCP tools.
+- `aether_relay.py`: connections, commands, timeouts and correlation, with no Android operation.
+- `aether_routes.py`: the `/ws/aether` WebSocket, its authentication and validation, plus the `/api/aether/pair/start` and `/api/aether/pair/poll` pairing routes.
+- `server.py`: short hooks into the existing MCP endpoint; profile authentication is reused.
+- `database.py`: additive migrations — `device_kind` in `paired_devices` and `pairing_codes` (legacy value `android`), and `profile` in `paired_devices` (owner profile of an avatar, `NULL` for Android) — plus the `aether_claims` table. `init_db` can be re-run. Codes, tokens and identity replacements never cross the `android` / `aether` kinds.
 
-Le protocole Android `mobile-control/1`, ses codes d'erreur et ses sessions ne sont pas modifiés. Le contrôle Android reste réservé à `john`. Les outils AETHER sont visibles pour tout profil authentifié, mais chaque profil ne voit et ne pilote que les avatars qu'il possède. L'avatar d'un autre profil répond `avatar_unavailable`, exactement comme un avatar absent ; un avatar sans propriétaire n'est joignable par personne. On appaire un avatar, pas une machine : une machine peut porter plusieurs avatars de profils différents. Chaque mouvement désigne explicitement son `device_id`.
+The Android `mobile-control/1` protocol, its error codes and its sessions are unchanged. Android control stays restricted to `john`. The AETHER tools are listed for every authenticated profile, but each profile only sees and drives the avatars it owns. Another profile's avatar answers `avatar_unavailable`, exactly like a missing one; an avatar without an owner is reachable by nobody. What gets paired is an avatar, not a machine: one machine can host several avatars owned by different profiles. Every move names its `device_id` explicitly.
 
-# Appairage piloté par l'agent
+# Agent-driven pairing
 
-L'adresse du relais est embarquée par défaut dans AETHER (`https://mobile-relay-hermes.john-world.store`, modifiable dans ses réglages). Aucun jeton administrateur n'intervient.
+AETHER ships with the relay address as its default (`https://mobile-relay-hermes.john-world.store`, editable in its settings). No admin token is involved.
 
-1. AETHER appelle `POST /api/aether/pair/start` avec `{"device_id":"<nouvel identifiant stable de l'avatar>","device_name":"<nom affiché>"}` (champs inconnus refusés). Réponse : `claim_code` (format `XXXX-XXXX`), `poll_token`, `expires_in_seconds:300` et `agent_prompt`, un texte prêt à coller qui nomme l'outil et le code.
-2. AETHER affiche `agent_prompt`. L'utilisateur le colle à l'agent Hermes du profil voulu, qui appelle l'outil MCP `aether_claim_avatar` avec `{"code":"..."}`. Le relais rattache l'avatar au profil authentifié de l'appel ; la réponse contient `device_id` et `device_name`, jamais de jeton.
-3. AETHER interroge `POST /api/aether/pair/poll` avec `{"poll_token":"..."}` toutes les quelques secondes : `{"status":"pending"}` tant que rien n'est réclamé, puis une seule fois `{"status":"paired","device_token":"...","device_id":"...","profile":"..."}`. Ensuite 404, comme pour un code expiré ou inconnu.
-4. AETHER stocke `device_token` dans le coffre du système (Trousseau sur macOS), jamais dans une URL, Git, les logs ou le contexte LLM. `poll_token` reste privé à AETHER et ne figure jamais dans `agent_prompt`.
+1. AETHER calls `POST /api/aether/pair/start` with `{"device_id":"<new stable avatar id>","device_name":"<display name>"}` (unknown fields rejected). Response: `claim_code` (format `XXXX-XXXX`), `poll_token`, `expires_in_seconds:300` and `agent_prompt`, a ready-to-paste text naming the tool and the code.
+2. AETHER shows `agent_prompt`. The user pastes it to the Hermes agent of the chosen profile, which calls the `aether_claim_avatar` MCP tool with `{"code":"..."}`. The relay binds the avatar to the caller's authenticated profile; the answer contains `device_id` and `device_name`, never a token.
+3. AETHER polls `POST /api/aether/pair/poll` with `{"poll_token":"..."}` every few seconds: `{"status":"pending"}` until the code is claimed, then exactly once `{"status":"paired","device_token":"...","device_id":"...","profile":"..."}`. After that, 404, as for an unknown or expired request.
+4. AETHER stores `device_token` in the system credential store (Keychain on macOS), never in a URL, Git, logs or LLM context. `poll_token` stays private to AETHER and never appears in `agent_prompt`.
 
-Règles : code à usage unique, haché en base, valable 300 s ; 5 démarrages par source sur 5 minutes et 10 demandes en attente au maximum ; un `device_id` déjà appairé renvoie 409 (AETHER doit générer un nouvel identifiant pour réappairer) ; relancer `start` pour un même `device_id` remplace la demande précédente. `/api/pair/*` est redevenu réservé à Android et refuse `device_kind:"aether"` (422). Derrière Traefik sans `FORWARDED_ALLOW_IPS`, toutes les sources se confondent : la limite de 5 démarrages devient globale.
+Rules: single-use code, stored hashed, valid 300 s; 5 starts per source over 5 minutes and at most 10 pending requests; an already paired `device_id` gets 409 (AETHER must generate a new id to re-pair); restarting `start` for the same `device_id` replaces the previous request. `/api/pair/*` is Android-only again and rejects `device_kind:"aether"` (422). Behind Traefik without `FORWARDED_ALLOW_IPS`, every source looks the same, so the 5-start limit becomes global.
 
-# Contrat effectivement implémenté
+`agent_prompt` is in French on purpose: it is shown to the owner, who reads French.
 
-Ce contrat est la référence de cette tranche. Il diffère de la proposition d'audit du VPS : endpoint `/ws/aether`, outil `aether_avatar_move_to`, statut multi-appareils, réponses terminales simples sans champs `accepted_at`/`completed_at`. Ne pas implémenter aveuglément les anciens exemples : les champs inconnus sont rejetés.
+# Implemented contract
 
-Connexion sortante d'AETHER : `wss://<origine-du-relais>/ws/aether`, sous-protocole `aether.v1`, en-tête `Authorization: Bearer <device_token>`. Le relais conserve son endpoint MCP existant `/mcp` et son authentification de profil ; aucune deuxième configuration MCP n'est nécessaire si Hermes utilise déjà ce relais, mais il doit rafraîchir sa découverte d'outils.
+This contract is the reference for this slice. It differs from the VPS audit proposal: `/ws/aether` endpoint, `aether_avatar_move_to` tool, multi-device status, simple terminal answers without `accepted_at`/`completed_at` fields. Do not implement the old examples blindly: unknown fields are rejected.
 
-Toute trame JSON contient exactement :
+Outbound AETHER connection: `wss://<relay-origin>/ws/aether`, subprotocol `aether.v1`, header `Authorization: Bearer <device_token>`. The relay keeps its existing `/mcp` endpoint and profile authentication; no second MCP configuration is needed if Hermes already uses this relay, but it must refresh its tool discovery.
+
+Every JSON frame contains exactly:
 
 ```json
-{"version":"aether.v1","type":"client.hello","message_id":"identifiant-unique","sent_at":"2026-10-23T12:00:00Z","payload":{"device_id":"mac-id","client_version":"0.1.0","capabilities":["telemetry.status","avatar.move_to"]}}
+{"version":"aether.v1","type":"client.hello","message_id":"unique-id","sent_at":"2026-10-23T12:00:00Z","payload":{"device_id":"avatar-id","client_version":"0.1.0","capabilities":["telemetry.status","avatar.move_to"]}}
 ```
 
-`client.hello` doit arriver sous 5 secondes. `server.ready` fournit `session_id`, `heartbeat_interval_seconds:20` et `max_command_ttl_seconds:30`. Le client envoie une trame `heartbeat` avec `payload:{}` toutes les 20 secondes ; le relais répond à cette trame. Après 40 secondes sans message entrant, il ferme la connexion. Les messages applicatifs sont limités à 16 Kio ; cette vérification vient après la réception par le transport, dont la limite globale reste celle d'Uvicorn pour préserver les captures Android.
+`client.hello` must arrive within 5 seconds. `server.ready` provides `session_id`, `heartbeat_interval_seconds:20` and `max_command_ttl_seconds:30`. The client sends a `heartbeat` frame with `payload:{}` every 20 seconds; the relay answers it. After 40 seconds without an incoming message, the relay closes the connection. Application messages are limited to 16 KiB; this check happens after the transport has received the message, whose global limit stays Uvicorn's so Android screenshots still fit.
 
-`telemetry.status` accepte uniquement :
+`telemetry.status` accepts only:
 
 ```json
 {"availability":"ready","avatar":{"screen_x":0.4,"screen_y":0.7,"posture":"walk","moving":false}}
 ```
 
-`availability` : `ready`, `busy` ou `unavailable`. Coordonnées normalisées `[0,1]`, postures `walk`, `run`, `sneak`, `cautious`. Pas de capture, nom de fenêtre, presse-papiers, batterie ou autre donnée personnelle. Le statut mis en cache expire après 40 secondes sans nouvelle télémétrie (les heartbeats ne le rafraîchissent pas).
+`availability`: `ready`, `busy` or `unavailable`. Normalized coordinates in `[0,1]`; postures `walk`, `run`, `sneak`, `cautious`. No screenshot, window name, clipboard, battery or other personal data. The cached status expires after 40 seconds without fresh telemetry (heartbeats do not refresh it).
 
-Commande sortante `command.avatar_move_to`, payload :
+Outbound command `command.avatar_move_to`, payload:
 
 ```json
-{"command_id":"id-unique","expires_at":"2026-10-23T12:00:20Z","screen_x":0.4,"screen_y":0.7,"posture":"walk"}
+{"command_id":"unique-id","expires_at":"2026-10-23T12:00:20Z","screen_x":0.4,"screen_y":0.7,"posture":"walk"}
 ```
 
-Réponses du client :
+Client answers:
 
-- `command.accepted` : `{"command_id":"id-unique"}` ; ne termine pas l'appel MCP.
-- `command.completed` : `{"command_id":"id-unique","avatar":{"screen_x":0.4,"screen_y":0.7,"posture":"walk","moving":false}}`. Le relais vérifie l'arrêt, la posture et une tolérance de 0,01 par axe autour de la cible. Il s'agit toujours d'une déclaration du client, pas d'une mesure indépendante.
-- `command.error` : `{"command_id":"id-unique","code":"execution_failed"}`. Codes AETHER uniquement : `invalid_payload`, `unsupported_capability`, `avatar_unavailable`, `command_expired`, `command_rejected`, `execution_failed`, `session_lost`, `unauthorized`, `protocol_error`.
+- `command.accepted`: `{"command_id":"unique-id"}`; does not end the MCP call.
+- `command.completed`: `{"command_id":"unique-id","avatar":{"screen_x":0.4,"screen_y":0.7,"posture":"walk","moving":false}}`. The relay checks the avatar stopped, the posture, and a 0.01 tolerance per axis around the target. This remains a claim by the client, not an independent measurement.
+- `command.error`: `{"command_id":"unique-id","code":"execution_failed"}`. AETHER codes only: `invalid_payload`, `unsupported_capability`, `avatar_unavailable`, `command_expired`, `command_rejected`, `execution_failed`, `session_lost`, `unauthorized`, `protocol_error`.
 
-# Outils MCP et cycle des commandes
+# MCP tools and command lifecycle
 
-- `aether_get_status`, arguments `{}` : liste `devices` des avatars connectés du profil appelant, avec `device_id`, connexion et dernier statut autorisé ou `null`.
-- `aether_claim_avatar`, arguments `code` : rattache un avatar en attente au profil appelant (voir l'appairage).
-- `aether_avatar_move_to` (avatars du profil appelant uniquement), arguments `device_id`, `screen_x`, `screen_y`, `posture` optionnelle (`walk`), `ttl_seconds` optionnel (20, intervalle 1–30). Un seul mouvement en vol par appareil. L'appel MCP attend un résultat terminal et renvoie du JSON dans son bloc texte, selon le format déjà utilisé par le relais.
+- `aether_get_status`, arguments `{}`: `devices` list of the caller profile's connected avatars, with `device_id`, connection and last allowed status or `null`.
+- `aether_claim_avatar`, argument `code`: binds a pending avatar to the caller profile (see pairing).
+- `aether_avatar_move_to` (caller profile's avatars only), arguments `device_id`, `screen_x`, `screen_y`, optional `posture` (`walk`), optional `ttl_seconds` (20, range 1–30). One move in flight per device. The MCP call waits for a terminal result and returns JSON in its text block, in the relay's existing format.
 
-Une déconnexion/remplacement de connexion termine les appels en attente par `session_lost`. Aucun mouvement n'est mis en file ou renvoyé à la reconnexion. Les réponses d'une ancienne connexion, d'un autre appareil ou d'une commande expirée ne valident pas la nouvelle commande. L'autorité du jeton est revérifiée avant chaque mouvement et à chaque message entrant ; sa rotation rend l'ancienne connexion inapte à recevoir de nouveaux mouvements. Il n'y a pas de nouvel écran/API de révocation dans cette tranche.
+A disconnect or connection replacement ends pending calls with `session_lost`. No move is queued or resent on reconnect. Answers from an old connection, another device or an expired command never validate the new command. Token authority is re-checked before every move and on every incoming message; rotating the token makes the old connection unable to receive new moves. This slice adds no revocation screen or API.
 
-IMPORTANT : expiration et perte de session signifient que le résultat est inconnu, pas que le mouvement physique est arrêté. Il n'existe pas de commande d'annulation ici. Le client doit rejeter les commandes reçues après `expires_at`, ne jamais rejouer un identifiant de commande et ne pas déclarer « terminé » à la simple acceptation locale. La politique d'arrêt physique à la déconnexion reste à convenir avec le connecteur AETHER. Ne pas réessayer automatiquement un mouvement dont le résultat est inconnu.
+IMPORTANT: expiry and session loss mean the result is unknown, not that the physical move stopped. There is no cancel command here. The client must reject commands received after `expires_at`, never replay a command id, and never report "completed" on mere local acceptance. The stop-on-disconnect policy is still to be agreed with the AETHER connector. Never automatically retry a move whose result is unknown.
 
-# Déploiement et suite
+# Deployment and next steps
 
-1. Relire ces changements et sauvegarder la base avant la migration. Conserver un seul worker/processus du relais : les connexions et futures sont en mémoire, comme pour Android. Pas de répartition de charge multi-workers.
-2. Aucune nouvelle variable d'environnement. Conserver la terminaison TLS, le proxy WebSocket et la configuration de confiance des proxys existants (`FORWARDED_ALLOW_IPS`). Aucun nouveau port n'est requis.
-3. Déployer uniquement après instruction explicite du propriétaire ; rafraîchir les outils MCP des profils concernés.
-4. Dans AETHER : appairage `start`/`poll` avec affichage du texte pour l'agent, enregistrer le jeton dans le coffre du système, ouvrir WSS en sortie, implémenter validation/déduplication/expiration, reconnexion et retour de télémétrie. L'API AETHER locale reste une API REST privée ; elle n'est pas soudain devenue un serveur MCP.
-5. Tester le vrai parcours Hermes → relais → avatar natif macOS, avec deux profils distincts, puis les pertes réseau, rotation du jeton et reconnexion sans rejeu. Ces essais ne sont pas effectués ici.
+1. Review these changes and back up the database before the migration. Keep a single relay worker/process: connections and futures live in memory, as for Android. No multi-worker load balancing.
+2. No new environment variable. Keep the existing TLS termination, WebSocket proxy and proxy-trust configuration (`FORWARDED_ALLOW_IPS`). No new port is required.
+3. Deploy only on the owner's explicit instruction; refresh the MCP tools of the profiles involved.
+4. In AETHER: `start`/`poll` pairing showing the text for the agent, store the token in the system credential store, open outbound WSS, implement validation/deduplication/expiry, reconnection and telemetry. AETHER's local API stays a private REST API; it has not become an MCP server.
+5. Test the real Hermes → relay → native macOS avatar path with two distinct profiles, then network loss, token rotation and reconnection without replay. None of these tests have been run here.
 
-Ne pas toucher aux changements préexistants : suppression de `compose-hermes-openbao.yaml`, fichiers/dossiers non suivis `AGENTS.md`, `compose-hermes-openbao-mobile-relay.yaml`, `dashboard-web/`, `design&refonte/`, `feature/`.
+Do not touch the pre-existing changes: deletion of `compose-hermes-openbao.yaml`, untracked `AGENTS.md`, `compose-hermes-openbao-mobile-relay.yaml`, `dashboard-web/`, `design&refonte/`, `feature/`.
 
-# Validation TDD
+# TDD validation
 
-Base avant changements : 258 tests du relais passants. Première tranche : 273 tests passants (15 nouveaux). Tranche multi-profils du 2026-10-24 : 286 tests passants, documentation OKF conforme et `git diff --check` sans erreur. Les tests AETHER ont été ajoutés en échec avant implémentation (typage d'appareils, migration, routage, révocation, lien d'appairage et résultat terminal). Tests ciblés : jetons refusés dans les deux sens, profil refusé, payload privé rejeté, résultat corrélé, acceptation distincte de la fin, position finale incorrecte, déconnexion/remplacement, expiration et ancien schéma SQLite.
+Baseline before changes: 258 relay tests passing. First slice: 273 passing (15 new). Multi-profile slice of 2026-10-24: 286 passing, OKF documentation compliant and `git diff --check` clean. The AETHER tests were written failing before the implementation (device kinds, migration, routing, revocation, per-profile ownership, agent-driven pairing and terminal result). Targeted tests: tokens refused in both directions, other profile's avatar unreachable, ownerless avatar unreachable, single-use and expiring claim codes, device token delivered once and never to the agent, private payload rejected, correlated result, acceptance distinct from completion, wrong final position, disconnect/replacement, expiry and legacy SQLite schema.
 
-Commande utilisée (aucune construction Docker/Android) :
+Command used (no Docker or Android build):
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=mobile-relay /Users/yoann/Developer/project-aether/aether-brain/.venv/bin/python -m pytest -q mobile-relay/tests
 ```
 
-Cet environnement satisfait les dépendances du relais ; pour un autre poste, utiliser l'environnement Python du dépôt avec `mobile-relay/requirements.txt`. Avertissement existant : dépréciation Starlette/httpx du TestClient.
+This environment satisfies the relay's dependencies; on another machine, use the repository's Python environment with `mobile-relay/requirements.txt`. Existing warning: Starlette/httpx TestClient deprecation.
