@@ -16,10 +16,14 @@ def client(tmp_path, monkeypatch):
         yield client
 
 
-def pair(client, kind):
-    response = client.post('/api/pair/generate', headers={'Authorization': 'Bearer admin-test'}, json={'device_kind': kind})
+def pair(client, kind, profile_token='john-test'):
+    if kind == 'aether':
+        started = client.post('/api/aether/pair/start', json={'device_id': kind, 'device_name': 'Avatar'}).json()
+        assert not mcp(client, 'aether_claim_avatar', {'code': started['claim_code']}, token=profile_token).get('isError')
+        return client.post('/api/aether/pair/poll', json={'poll_token': started['poll_token']}).json()['device_token']
+    response = client.post('/api/pair/generate', headers={'Authorization': 'Bearer admin-test'}, json={})
     assert response.status_code == 200
-    response = client.post('/api/pair/verify', json={'code': response.json()['code'], 'device_id': kind, 'device_kind': kind})
+    response = client.post('/api/pair/verify', json={'code': response.json()['code'], 'device_id': kind})
     assert response.status_code == 200
     return response.json()['device_token']
 
@@ -58,15 +62,11 @@ def test_aether_mcp_round_trip_and_profile_boundary(client):
             assert result['status'] == 'completed'
 
 
-def test_pairing_link_contains_only_relay_and_one_time_code(client, monkeypatch):
-    from urllib.parse import urlsplit, parse_qs
-    monkeypatch.setenv('AETHER_PUBLIC_URL', 'https://relay.example.test')
+def test_admin_pairing_cannot_create_an_ownerless_aether_avatar(client):
     response = client.post('/api/pair/generate', headers={'Authorization': 'Bearer admin-test'}, json={'device_kind': 'aether'})
-    data = response.json()
-    link = urlsplit(data['pairing_uri'])
-    assert link.scheme == 'aether' and link.netloc == 'pair'
-    assert parse_qs(link.query) == {'relay': ['https://relay.example.test'], 'code': [data['code']]}
-    assert data['expires_in_seconds'] == 300
+    assert response.status_code == 422
+    response = client.post('/api/pair/verify', json={'code': 'ABC123', 'device_id': 'avatar', 'device_kind': 'aether'})
+    assert response.status_code == 422
 
 
 def test_aether_token_cannot_authenticate_android_socket(client):

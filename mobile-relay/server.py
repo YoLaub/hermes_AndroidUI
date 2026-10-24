@@ -12,7 +12,6 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
-from aether_pairing import pairing_uri
 from aether_protocol import TOOLS as AETHER_TOOLS
 from aether_protocol import Claim as AetherClaim
 from aether_relay import AetherRelay
@@ -597,7 +596,7 @@ def memory_mandate_revoke(request: Request, mandate_id: str):
     return _profile_answer(source, status, payload)
 
 
-@app.post("/api/pair/generate", response_model=PairingGenerateResponse, response_model_exclude_none=True)
+@app.post("/api/pair/generate", response_model=PairingGenerateResponse)
 def generate_pairing_code(request: Request, req: PairingGenerateRequest):
     # Requirement 2: Authentifier /api/pair/generate
     authenticate_admin_request(request)
@@ -607,16 +606,10 @@ def generate_pairing_code(request: Request, req: PairingGenerateRequest):
         raise HTTPException(status_code=429, detail="Too many active pairing codes. Please wait or use existing codes.")
 
     code = secrets.token_hex(3).upper() # 6 characters
-    link = None
-    if req.device_kind == "aether" and os.environ.get("AETHER_PUBLIC_URL"):
-        try:
-            link = pairing_uri(os.environ["AETHER_PUBLIC_URL"], code)
-        except ValueError:
-            raise HTTPException(status_code=503, detail="AETHER public URL is not configured correctly") from None
     save_pairing_code(code, req.user_id or "admin", expires_in_seconds=300, device_kind=req.device_kind)
     # Requirement 2: Ne jamais journaliser ce code
     logger.info("Generated pairing code for user: %s (expires in 300s)", req.user_id or "admin")
-    return PairingGenerateResponse(code=code, expires_in_seconds=300, pairing_uri=link)
+    return PairingGenerateResponse(code=code, expires_in_seconds=300)
 
 @app.post("/api/pair/verify", response_model=PairingVerifyResponse)
 def verify_pairing_code(request: Request, req: PairingVerifyRequest):
@@ -654,8 +647,6 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
         device_id=req.device_id,
         new_token=device_token,
         device_kind=req.device_kind,
-        # Admin-generated AETHER codes predate per-profile avatars and stay owned by john.
-        profile="john" if req.device_kind == "aether" else None,
         device_name=req.device_name or "Android Phone",
         current_token=candidate_device_token,
         is_admin_authorized=is_admin_auth
