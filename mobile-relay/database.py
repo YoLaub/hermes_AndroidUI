@@ -76,6 +76,16 @@ def init_db():
             columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
             if "device_kind" not in columns:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN device_kind TEXT NOT NULL DEFAULT 'android'")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS aether_claims (
+                code_hash TEXT PRIMARY KEY,
+                poll_hash TEXT UNIQUE NOT NULL,
+                device_id TEXT NOT NULL,
+                device_name TEXT NOT NULL,
+                profile TEXT,
+                expires_at REAL NOT NULL
+            )
+        """)
         # Owner profile of an AETHER avatar; Android devices keep NULL.
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(paired_devices)")}
         if "profile" not in columns:
@@ -253,6 +263,68 @@ def aether_device_profile(device_id: str) -> Optional[str]:
     row = conn.execute("SELECT profile FROM paired_devices WHERE device_id = ? AND device_kind = 'aether'", (device_id,)).fetchone()
     conn.close()
     return row["profile"] if row else None
+
+def normalize_claim_code(code: str) -> str:
+    return "".join(ch for ch in code.upper() if ch.isalnum())
+
+def start_aether_claim(device_id: str, device_name: str, code: str, poll_token: str,
+                       expires_in_seconds: int = 300) -> bool:
+    """Opens a pairing request for a new avatar. False if the avatar id is already paired."""
+    conn = get_db()
+    now = time.time()
+    try:
+        with conn:
+            conn.execute("DELETE FROM aether_claims WHERE expires_at < ? OR device_id = ?", (now, device_id))
+            if conn.execute("SELECT 1 FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone():
+                return False
+            conn.execute(
+                "INSERT INTO aether_claims (code_hash, poll_hash, device_id, device_name, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (hash_token(normalize_claim_code(code)), hash_token(poll_token), device_id, device_name,
+                 now + expires_in_seconds))
+        return True
+    finally:
+        conn.close()
+
+def count_active_aether_claims() -> int:
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) AS cnt FROM aether_claims WHERE expires_at >= ?", (time.time(),)).fetchone()
+    conn.close()
+    return row["cnt"]
+
+def claim_aether_avatar(code: str, profile: str) -> Optional[dict]:
+    """Binds a pending avatar to the claiming profile, once. None if unknown, expired or already claimed."""
+    conn = get_db()
+    try:
+        with conn:
+            row = conn.execute(
+                "UPDATE aether_claims SET profile = ? WHERE code_hash = ? AND profile IS NULL AND expires_at >= ? "
+                "RETURNING device_id, device_name",
+                (profile, hash_token(normalize_claim_code(code)), time.time())).fetchone()
+        return {"device_id": row["device_id"], "device_name": row["device_name"]} if row else None
+    finally:
+        conn.close()
+
+def finish_aether_claim(poll_token: str, new_token: str) -> Tuple[str, Optional[dict]]:
+    """Returns ("pending"|"paired"|"unknown"|"conflict", details). A claimed request is consumed by its
+    first successful poll, which registers the avatar under the claiming profile."""
+    conn = get_db()
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM aether_claims WHERE poll_hash = ? AND expires_at >= ?",
+                           (hash_token(poll_token), time.time())).fetchone()
+        if row is None or row["profile"] is None:
+            conn.execute("ROLLBACK")
+            return ("unknown", None) if row is None else ("pending", None)
+        conn.execute("DELETE FROM aether_claims WHERE code_hash = ?", (row["code_hash"],))
+        conn.execute("COMMIT")
+    finally:
+        conn.close()
+    ok, _ = atomic_register_or_update_device(row["device_id"], new_token, row["device_name"],
+                                             device_kind="aether", profile=row["profile"])
+    if not ok:
+        return ("conflict", None)
+    return ("paired", {"device_id": row["device_id"], "profile": row["profile"]})
 
 def register_device(device_id: str, token: str, name: str, allow_overwrite: bool = True) -> bool:
     success, _ = atomic_register_or_update_device(

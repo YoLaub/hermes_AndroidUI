@@ -34,6 +34,16 @@ class Result(StrictModel):
     avatar: Avatar | None = None
     code: Literal['invalid_payload', 'unsupported_capability', 'avatar_unavailable', 'command_expired', 'command_rejected', 'execution_failed', 'session_lost', 'unauthorized', 'protocol_error'] | None = None
 
+class ClaimStart(StrictModel):
+    device_id: str = Field(min_length=1, max_length=128)
+    device_name: str = Field(min_length=1, max_length=64)
+
+class ClaimPoll(StrictModel):
+    poll_token: str = Field(min_length=1, max_length=128)
+
+class Claim(StrictModel):
+    code: str = Field(min_length=1, max_length=32)
+
 class Envelope(StrictModel):
     version: Literal['aether.v1']
     type: Literal['client.hello', 'telemetry.status', 'command.accepted', 'command.completed', 'command.error', 'heartbeat']
@@ -55,4 +65,6 @@ TOOLS = [
      'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
     {'name': 'aether_avatar_move_to', 'description': 'Move one connected AETHER avatar owned by your profile; waits for completion or an error. Never retries.',
      'inputSchema': Move.model_json_schema()},
+    {'name': 'aether_claim_avatar', 'description': 'Pair a new AETHER avatar to your profile with the one-time code it displays. Only use a code the user gave you.',
+     'inputSchema': Claim.model_json_schema()},
 ]
