@@ -51,8 +51,8 @@ def envelope(kind, payload):
             'sent_at': utc_now(), 'payload': payload}
 
 TOOLS = [
-    {'name': 'aether_get_status', 'description': 'List connected AETHER desktop avatars. No phone or screen data.',
+    {'name': 'aether_get_status', 'description': 'List the connected AETHER avatars owned by your profile. No phone or screen data.',
      'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
-    {'name': 'aether_avatar_move_to', 'description': 'Move one connected desktop avatar; waits for completion or an error. Never retries. Requires profile john.',
+    {'name': 'aether_avatar_move_to', 'description': 'Move one connected AETHER avatar owned by your profile; waits for completion or an error. Never retries.',
      'inputSchema': Move.model_json_schema()},
 ]

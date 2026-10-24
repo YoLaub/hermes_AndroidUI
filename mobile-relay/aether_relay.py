@@ -11,6 +11,7 @@ from aether_protocol import Move, envelope
 class Connection:
     device_id: str
     socket: object
+    profile: str | None = None
     session_id: str = field(default_factory=lambda: uuid4().hex)
     status: dict | None = None
     seen: float = field(default_factory=time.monotonic)
@@ -21,10 +22,10 @@ class Connection:
 class AetherRelay:
     def __init__(self): self.connections = {}
 
-    async def connect(self, device_id, socket, can_move=True, authorized=lambda: True):
+    async def connect(self, device_id, socket, can_move=True, authorized=lambda: True, profile=None):
         old = self.connections.get(device_id)
         if old: self.disconnect(old)
-        connection = Connection(device_id, socket, can_move=can_move, authorized=authorized)
+        connection = Connection(device_id, socket, profile=profile, can_move=can_move, authorized=authorized)
         self.connections[device_id] = connection
         if old:
             try:
@@ -40,25 +41,27 @@ class AetherRelay:
             cid, future, args = connection.pending
             if not future.done(): future.set_result(self.error(cid, 'session_lost'))
 
-    @staticmethod
-    def authorize(profile):
-        if profile != 'john': raise ValueError('AETHER requires profile john')
+    def owned(self, profile, device_id):
+        """A profile reaches only the avatars it owns; an ownerless avatar is reachable by nobody."""
+        connection = self.connections.get(device_id)
+        if connection and connection.profile is not None and connection.profile == profile:
+            return connection
+        return None
 
     def status(self, profile):
-        self.authorize(profile)
         return {'devices': [{'device_id': c.device_id, 'connected': True,
                              'status': c.status if time.monotonic() - c.seen < 40 else None}
-                            for c in self.connections.values()]}
+                            for c in self.connections.values() if self.owned(profile, c.device_id)]}
 
     @staticmethod
     def error(cid, code):
         return {'command_id': cid, 'status': 'failed', 'error': {'code': code, 'retryable': False}}
 
     async def move(self, profile, arguments):
-        self.authorize(profile)
         args = Move.model_validate(arguments)
         cid = uuid4().hex
-        connection = self.connections.get(args.device_id)
+        # Someone else's avatar answers exactly like a missing one, so its existence is not revealed.
+        connection = self.owned(profile, args.device_id)
         if not connection: return self.error(cid, 'avatar_unavailable')
         if not connection.authorized():
             self.disconnect(connection)

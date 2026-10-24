@@ -76,6 +76,10 @@ def init_db():
             columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
             if "device_kind" not in columns:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN device_kind TEXT NOT NULL DEFAULT 'android'")
+        # Owner profile of an AETHER avatar; Android devices keep NULL.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(paired_devices)")}
+        if "profile" not in columns:
+            conn.execute("ALTER TABLE paired_devices ADD COLUMN profile TEXT")
     conn.close()
 
 def _env_number(name: str, default: float) -> float:
@@ -173,7 +177,8 @@ def atomic_register_or_update_device(
     device_name: str,
     current_token: Optional[str] = None,
     is_admin_authorized: bool = False,
-    device_kind: str = "android"
+    device_kind: str = "android",
+    profile: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
     Rend atomiques la vérification d'existence, l'autorisation de remplacement et l'enregistrement:
@@ -216,18 +221,18 @@ def atomic_register_or_update_device(
             # Remplacement autorisé: UPDATE atomique dans la même transaction
             conn.execute("""
                 UPDATE paired_devices
-                SET token_hash = ?, device_name = ?, last_seen = ?
+                SET token_hash = ?, device_name = ?, last_seen = ?, profile = ?
                 WHERE device_id = ?
-            """, (new_hash, device_name, now, device_id))
+            """, (new_hash, device_name, now, profile, device_id))
             conn.execute("COMMIT")
             result = (True, "updated")
         else:
             # Nouvel appareil: INSERT strict (échoue atomiquement si doublon inséré en concurrence)
             try:
                 conn.execute("""
-                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen, device_kind)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (device_id, new_hash, device_name, now, now, device_kind))
+                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen, device_kind, profile)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (device_id, new_hash, device_name, now, now, device_kind, profile))
                 conn.execute("COMMIT")
                 result = (True, "created")
             except sqlite3.IntegrityError:
@@ -242,6 +247,12 @@ def atomic_register_or_update_device(
     finally:
         conn.close()
     return result
+
+def aether_device_profile(device_id: str) -> Optional[str]:
+    conn = get_db()
+    row = conn.execute("SELECT profile FROM paired_devices WHERE device_id = ? AND device_kind = 'aether'", (device_id,)).fetchone()
+    conn.close()
+    return row["profile"] if row else None
 
 def register_device(device_id: str, token: str, name: str, allow_overwrite: bool = True) -> bool:
     success, _ = atomic_register_or_update_device(

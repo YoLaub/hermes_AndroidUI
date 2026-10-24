@@ -45,7 +45,7 @@ def test_aether_mcp_round_trip_and_profile_boundary(client):
     with client.websocket_connect('/ws/aether', headers={'Authorization': 'Bearer ' + token}, subprotocols=['aether.v1']) as ws:
         ws.send_json(hello())
         assert ws.receive_json()['type'] == 'server.ready'
-        assert mcp(client, 'aether_get_status', token='mario-test')['isError']
+        assert json.loads(mcp(client, 'aether_get_status', token='mario-test')['content'][0]['text']) == {'devices': []}
         status = json.loads(mcp(client, 'aether_get_status')['content'][0]['text'])
         assert status['devices'][0]['device_id'] == 'aether'
         with ThreadPoolExecutor() as executor:
@@ -82,3 +82,17 @@ def test_private_data_is_rejected_on_aether_telemetry(client):
         ws.send_json(hello()); ws.receive_json()
         ws.send_json(envelope('telemetry.status', {'availability': 'ready', 'avatar': {'screen_x': .2, 'screen_y': .6, 'posture': 'walk', 'moving': False}, 'screenshot': 'not-allowed'}))
         with pytest.raises(WebSocketDisconnect): ws.receive_json()
+
+
+def test_aether_tools_are_listed_for_every_profile(client):
+    response = client.post('/mcp', headers={'Authorization': 'Bearer mario-test'}, json={'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'})
+    names = {tool['name'] for tool in response.json()['result']['tools']}
+    assert {'aether_get_status', 'aether_avatar_move_to'} <= names
+
+
+def test_other_profile_cannot_move_owned_avatar(client):
+    token = pair(client, 'aether')
+    with client.websocket_connect('/ws/aether', headers={'Authorization': 'Bearer ' + token}, subprotocols=['aether.v1']) as ws:
+        ws.send_json(hello()); ws.receive_json()
+        result = json.loads(mcp(client, 'aether_avatar_move_to', {'device_id': 'aether', 'screen_x': .2, 'screen_y': .6}, token='mario-test')['content'][0]['text'])
+        assert result['error']['code'] == 'avatar_unavailable'

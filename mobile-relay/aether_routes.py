@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
-from database import verify_device_token
+from database import aether_device_profile, verify_device_token
 from aether_protocol import Envelope, Hello, Result, Status, envelope
 
 
@@ -39,6 +39,7 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
                 await ws.close(code=1008)
                 return
             connection = await relay.connect(hello.device_id, ws, 'avatar.move_to' in hello.capabilities,
+                profile=aether_device_profile(hello.device_id),
                 authorized=lambda: verify_device_token(hello.device_id, token, device_kind='aether'))
             await ws.send_json(envelope('server.ready', {'session_id': connection.session_id,
                 'heartbeat_interval_seconds': 20, 'max_command_ttl_seconds': 30}))

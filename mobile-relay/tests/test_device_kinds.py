@@ -39,3 +39,11 @@ def test_legacy_devices_and_codes_remain_android(tmp_path, monkeypatch):
     assert not database.verify_device_token('phone', 'old', device_kind='aether')
     assert database.consume_pairing_code('ABC123', device_kind='aether') is None
     assert database.consume_pairing_code('ABC123') == 'admin'
+
+
+def test_aether_avatar_records_its_owner_profile(db):
+    assert db.atomic_register_or_update_device('avatar', 'secret', 'Avatar', device_kind='aether', profile='mario')[0]
+    assert db.aether_device_profile('avatar') == 'mario'
+    assert db.atomic_register_or_update_device('phone', 'secret', 'Phone')[0]
+    assert db.aether_device_profile('phone') is None
+    assert db.aether_device_profile('missing') is None
