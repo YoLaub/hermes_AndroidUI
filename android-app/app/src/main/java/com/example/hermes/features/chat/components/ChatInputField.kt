@@ -1,5 +1,7 @@
 package com.example.hermes.features.chat.components
 
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -37,6 +39,7 @@ import com.example.hermes.theme.*
 @Composable
 fun ChatInputField(
     inputText: String,
+    profileName: String,
     onInputTextChanged: (String) -> Unit,
     onSendMessage: () -> Unit,
     onCancelStream: () -> Unit,
@@ -85,7 +88,7 @@ fun ChatInputField(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Text(
-                            text = "COMMANDES DISPONIBLES",
+                            text = stringResource(R.string.chat_commands),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = HermesTextMuted,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -171,10 +174,9 @@ fun ChatInputField(
                             label = { Text(att.filename, maxLines = 1) },
                             trailingIcon = {
                                 IconButton(
-                                    onClick = { onRemoveAttachment(att) },
-                                    modifier = Modifier.size(16.dp)
+                                    onClick = { onRemoveAttachment(att) }
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Remove")
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.chat_remove))
                                 }
                             },
                             shape = RoundedCornerShape(8.dp)
@@ -190,12 +192,11 @@ fun ChatInputField(
                 // Attach button
                 IconButton(
                     onClick = onAttachClicked,
-                    enabled = !isStreaming,
-                    modifier = Modifier.size(44.dp)
+                    enabled = !isStreaming
                 ) {
                     Icon(
                         imageVector = Icons.Default.AttachFile,
-                        contentDescription = "Attach file",
+                        contentDescription = stringResource(R.string.chat_attach_file),
                         tint = HermesTextSecondary
                     )
                 }
@@ -208,7 +209,8 @@ fun ChatInputField(
                     onValueChange = onInputTextChanged,
                     placeholder = {
                         Text(
-                            text = if (isStreaming) "Agent is responding..." else "Message Hermes...",
+                            text = if (isStreaming) stringResource(R.string.chat_input_answering, profileName)
+                            else stringResource(R.string.chat_input_placeholder, profileName),
                             color = HermesTextMuted
                         )
                     },
@@ -242,7 +244,7 @@ fun ChatInputField(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "Cancel stream",
+                            contentDescription = stringResource(R.string.chat_cancel_stream),
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
@@ -260,7 +262,7 @@ fun ChatInputField(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Send,
-                            contentDescription = "Send message",
+                            contentDescription = stringResource(R.string.chat_send_message),
                             tint = if (canSend) Color.Black else HermesTextMuted,
                             modifier = Modifier.size(20.dp)
                         )

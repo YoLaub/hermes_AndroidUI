@@ -27,13 +27,25 @@ import com.example.hermes.features.workspace.notes.components.DictaphoneModal
 import com.example.hermes.features.workspace.notes.components.NoteCard
 import com.example.hermes.features.workspace.notes.components.NoteEditorDialog
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.Persona
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
+import com.example.hermes.ui.components.AppFab
+import com.example.hermes.ui.components.ConfirmDialog
 
 @Composable
 fun NotesScreen(
     viewModel: NotesViewModel,
+    personas: List<Persona> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // A note is a file of the server's workspace: deleting it is asked first.
+    var pendingDelete by remember { mutableStateOf<com.example.hermes.core.model.AgentNote?>(null) }
+
+    // Agents may have written notes since the last visit.
+    LaunchedEffect(Unit) { viewModel.loadNotes() }
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -68,7 +80,7 @@ fun NotesScreen(
                 OutlinedTextField(
                     value = state.searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
-                    placeholder = { Text("Rechercher une note, un tag, un agent...") },
+                    placeholder = { Text(stringResource(R.string.notes_rechercher_une_note_un_tag)) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -81,7 +93,7 @@ fun NotesScreen(
                             IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Effacer",
+                                    contentDescription = stringResource(R.string.auth_clear),
                                     tint = HermesTextMuted
                                 )
                             }
@@ -110,7 +122,7 @@ fun NotesScreen(
                             FilterChip(
                                 selected = state.selectedTag == null,
                                 onClick = { viewModel.onTagSelected(null) },
-                                label = { Text("Tous (${state.notes.size})") },
+                                label = { Text(stringResource(R.string.notes_tous, state.notes.size)) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = HermesPrimaryContainer,
                                     selectedLabelColor = HermesPrimary
@@ -134,6 +146,19 @@ fun NotesScreen(
                 }
             }
 
+            state.messageNotice?.let { notice ->
+                LaunchedEffect(notice) {
+                    kotlinx.coroutines.delay(4000)
+                    viewModel.clearNotice()
+                }
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = HermesWarning,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
             // Notes List or Empty State
             if (state.filteredNotes.isEmpty()) {
                 Box(
@@ -154,13 +179,18 @@ fun NotesScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (state.searchQuery.isNotBlank() || state.selectedTag != null) "Aucune note correspondante" else "Aucune note pour le moment",
+                            text = when {
+                                state.unavailable -> stringResource(R.string.notes_unavailable)
+                                state.searchQuery.isNotBlank() || state.selectedTag != null -> stringResource(R.string.notes_aucune_note_correspondante)
+                                else -> stringResource(R.string.notes_aucune_note_pour_le_moment)
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             color = HermesTextSecondary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Enregistrez un audio ou écrivez une note partagée avec vos agents.",
+                            text = stringResource(if (state.unavailable) R.string.notes_unavailable_hint else R.string.notes_enregistrez_un_audio_ou_ecrivez),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             style = MaterialTheme.typography.bodySmall,
                             color = HermesTextMuted
                         )
@@ -183,7 +213,7 @@ fun NotesScreen(
                             onSeekAudio = { viewModel.seekAudio(it) },
                             onTogglePin = { viewModel.togglePin(note.id) },
                             onEditNote = { viewModel.openEditNote(note) },
-                            onDeleteNote = { viewModel.deleteNote(note.id) }
+                            onDeleteNote = { pendingDelete = note }
                         )
                     }
                 }
@@ -207,19 +237,15 @@ fun NotesScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Mic,
-                    contentDescription = "Dictaphone",
+                    contentDescription = stringResource(R.string.notes_dictaphone),
                     modifier = Modifier.size(24.dp)
                 )
             }
 
             // New Note Button
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.openNewNote() },
-                containerColor = HermesPrimary,
-                contentColor = OnyxDarkBackground,
-                shape = RoundedCornerShape(16.dp),
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Note", fontWeight = FontWeight.Bold) }
+            AppFab(
+                label = stringResource(R.string.notes_new),
+                onClick = { viewModel.openNewNote() }
             )
         }
 
@@ -237,12 +263,27 @@ fun NotesScreen(
             )
         }
 
+        pendingDelete?.let { note ->
+            ConfirmDialog(
+                title = stringResource(R.string.notes_delete_title),
+                message = stringResource(R.string.notes_delete_message, note.title),
+                confirmLabel = stringResource(R.string.notes_delete_confirm),
+                destructive = true,
+                onConfirm = {
+                    viewModel.deleteNote(note.id)
+                    pendingDelete = null
+                },
+                onDismiss = { pendingDelete = null }
+            )
+        }
+
         // Note Editor Dialog
         if (state.isEditingNote && state.activeEditingNote != null) {
             NoteEditorDialog(
                 note = state.activeEditingNote!!,
-                onSave = { title, content, author, tags ->
-                    viewModel.saveEditingNote(title, content, author, tags)
+                personas = personas,
+                onSave = { title, content, author, role, tags ->
+                    viewModel.saveEditingNote(title, content, author, role, tags)
                 },
                 onDismiss = { viewModel.closeNoteEditor() }
             )

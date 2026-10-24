@@ -24,6 +24,8 @@ import com.example.hermes.core.model.AgentNote
 import com.example.hermes.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun NoteCard(
@@ -38,7 +40,8 @@ fun NoteCard(
     modifier: Modifier = Modifier
 ) {
     val isPlayingThis = playerState.isPlaying && playerState.currentPath == note.audioFilePath
-    val formattedDate = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(note.updatedAt))
+    // 0: a workspace file, whose date the server does not give.
+    val formattedDate = note.updatedAt.takeIf { it > 0 }?.let { SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(it)) }
 
     Card(
         modifier = modifier
@@ -87,32 +90,32 @@ fun NoteCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formattedDate,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = HermesTextMuted,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
+                    formattedDate?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = HermesTextMuted,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
 
                     IconButton(
-                        onClick = onTogglePin,
-                        modifier = Modifier.size(28.dp)
+                        onClick = onTogglePin
                     ) {
                         Icon(
                             imageVector = if (note.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                            contentDescription = "Épingler",
+                            contentDescription = stringResource(R.string.notes_epingler),
                             tint = if (note.isPinned) HermesPrimary else HermesTextMuted,
                             modifier = Modifier.size(16.dp)
                         )
                     }
 
                     IconButton(
-                        onClick = onDeleteNote,
-                        modifier = Modifier.size(28.dp)
+                        onClick = onDeleteNote
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Supprimer",
+                            contentDescription = stringResource(R.string.action_delete),
                             tint = HermesTextMuted,
                             modifier = Modifier.size(16.dp)
                         )
@@ -157,12 +160,11 @@ fun NoteCard(
                     IconButton(
                         onClick = {
                             if (isPlayingThis) onPauseAudio() else onPlayAudio(audioPath)
-                        },
-                        modifier = Modifier.size(32.dp)
+                        }
                     ) {
                         Icon(
                             imageVector = if (isPlayingThis) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                            contentDescription = if (isPlayingThis) "Pause" else "Play",
+                            contentDescription = if (isPlayingThis) stringResource(R.string.notes_pause) else stringResource(R.string.notes_play),
                             tint = HermesPrimary,
                             modifier = Modifier.size(24.dp)
                         )
@@ -193,7 +195,7 @@ fun NoteCard(
                         )
                     } else {
                         Text(
-                            text = "Enregistrement vocal",
+                            text = stringResource(R.string.notes_enregistrement_vocal),
                             style = MaterialTheme.typography.labelSmall,
                             color = HermesTextSecondary,
                             modifier = Modifier.weight(1f)
@@ -227,7 +229,7 @@ fun NoteCard(
                                 text = "#$tag",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = HermesPrimary,
-                                fontSize = 11.sp
+                                fontSize = 12.sp
                             )
                         }
                     }

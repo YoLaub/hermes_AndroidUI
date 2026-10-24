@@ -1,27 +1,35 @@
 package com.example.hermes
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.ui.NavDisplay
 import com.example.hermes.core.audio.AudioPlayerManager
 import com.example.hermes.core.audio.SpeechRecognitionManager
 import com.example.hermes.features.auth.AuthScreen
 import com.example.hermes.features.auth.AuthViewModel
-import com.example.hermes.features.chat.ChatScreen
 import com.example.hermes.features.chat.ChatViewModel
-import com.example.hermes.features.kanban.KanbanScreen
 import com.example.hermes.features.kanban.KanbanViewModel
-import com.example.hermes.features.workspace.WorkspaceHubScreen
-import com.example.hermes.features.workspace.calendar.CalendarViewModel
-import com.example.hermes.features.workspace.forum.ForumViewModel
-import com.example.hermes.features.mobilecontrol.MobileControlScreen
 import com.example.hermes.features.mobilecontrol.MobileControlViewModel
+import com.example.hermes.core.data.FileForumStore
+import com.example.hermes.core.data.FileNoteAudioIndex
+import com.example.hermes.core.data.HermesForumServer
+import com.example.hermes.ui.components.personasOf
+import com.example.hermes.core.data.NotesRepository
+import com.example.hermes.core.data.SessionWorkspaceFiles
+import com.example.hermes.features.workspace.calendar.CalendarViewModel
+import com.example.hermes.features.workspace.calendar.DevicePhoneCalendar
+import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
+import com.example.hermes.nav.AppScaffold
+import com.example.hermes.nav.AppViewModels
 
 @Composable
 fun MainNavigation() {
@@ -42,14 +50,28 @@ fun MainNavigation() {
     val notesViewModel: NotesViewModel = viewModel(factory = viewModelFactory {
         initializer {
             // The ViewModel destroys these in onCleared(), so they are created with it.
-            NotesViewModel(container.notesRepository, SpeechRecognitionManager(appContext), AudioPlayerManager(appContext))
+            // Notes are files of the open session's workspace, or of the profile's latest session.
+            val files = SessionWorkspaceFiles(container.repository) {
+                chatViewModel.uiState.value.let { it.sessionId ?: it.sessions.firstOrNull()?.sessionId }
+            }
+            NotesViewModel(
+                NotesRepository(files, FileNoteAudioIndex(appContext)),
+                SpeechRecognitionManager(appContext),
+                AudioPlayerManager(appContext),
+            )
         }
     })
     val calendarViewModel: CalendarViewModel = viewModel(factory = viewModelFactory {
-        initializer { CalendarViewModel(container.calendarRepository) }
+        initializer { CalendarViewModel(DevicePhoneCalendar(appContext), loadRuns = { container.repository.getCrons().map { it.jobs } }) }
     })
     val forumViewModel: ForumViewModel = viewModel(factory = viewModelFactory {
-        initializer { ForumViewModel(container.forumRepository) }
+        initializer {
+            ForumViewModel(
+                HermesForumServer(container.repository),
+                FileForumStore(appContext),
+                displayName = { id -> personasOf(chatViewModel.uiState.value.profiles).firstOrNull { it.id == id }?.name ?: id },
+            )
+        }
     })
     val mobileControlViewModel: MobileControlViewModel = viewModel(factory = viewModelFactory {
         initializer {
@@ -57,69 +79,31 @@ fun MainNavigation() {
         }
     })
 
-    val backStack = rememberNavBackStack(AuthRoute)
+    // Connexion stays outside the tabs until an instance is validated.
+    var connected by rememberSaveable { mutableStateOf(false) }
 
-    NavDisplay(
-        backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
-        entryProvider = entryProvider {
-            entry<AuthRoute> {
-                AuthScreen(
-                    viewModel = authViewModel,
-                    onNavigateToChat = {
-                        backStack.add(ChatRoute)
-                        chatViewModel.loadInitialData()
-                    }
-                )
-            }
-            entry<ChatRoute> {
-                ChatScreen(
-                    viewModel = chatViewModel,
-                    onNavigateToSettings = {
-                        backStack.removeLastOrNull()
-                    },
-                    onNavigateToKanban = {
-                        backStack.add(KanbanRoute)
-                        kanbanViewModel.loadData()
-                    },
-                    onNavigateToWorkspace = {
-                        backStack.add(WorkspaceRoute)
-                        notesViewModel.loadNotes()
-                        calendarViewModel.loadCalendarData()
-                        forumViewModel.loadData()
-                    },
-                    onNavigateToMobileControl = {
-                        backStack.add(MobileControlRoute)
-                    }
-                )
-            }
-            entry<KanbanRoute> {
-                KanbanScreen(
-                    viewModel = kanbanViewModel,
-                    onNavigateBack = {
-                        backStack.removeLastOrNull()
-                    }
-                )
-            }
-            entry<WorkspaceRoute> {
-                WorkspaceHubScreen(
-                    notesViewModel = notesViewModel,
-                    calendarViewModel = calendarViewModel,
-                    forumViewModel = forumViewModel,
-                    onNavigateBack = {
-                        backStack.removeLastOrNull()
-                    }
-                )
-            }
-            entry<MobileControlRoute> {
-                MobileControlScreen(
-                    viewModel = mobileControlViewModel,
-                    onNavigateBack = {
-                        backStack.removeLastOrNull()
-                    }
-                )
-            }
+    // A still valid saved session skips the sign-in screen.
+    val auth by authViewModel.uiState.collectAsState()
+    LaunchedEffect(auth.isConnected) {
+        if (auth.isConnected && !connected) {
+            connected = true
+            chatViewModel.loadInitialData()
         }
-    )
-}
+    }
 
+        if (!connected) {
+        AuthScreen(
+            viewModel = authViewModel,
+            onNavigateToChat = {
+                connected = true
+                chatViewModel.loadInitialData()
+            }
+        )
+    } else {
+        AppScaffold(
+            vm = AppViewModels(chatViewModel, kanbanViewModel, notesViewModel, calendarViewModel, forumViewModel, mobileControlViewModel),
+            avatarStore = container.avatarStore,
+            onDisconnect = { connected = false },
+        )
+    }
+}

@@ -11,56 +11,43 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.hermes.core.model.CalendarEvent
-import com.example.hermes.core.model.EventStatus
+import com.example.hermes.R
+import com.example.hermes.features.workspace.calendar.EventEditorState
+import com.example.hermes.features.workspace.eventFormError
 import com.example.hermes.theme.*
-import java.time.LocalDate
 
+/** Writes one event of the phone's calendar: title, times of the selected day, place. */
 @Composable
 fun EventEditorDialog(
-    event: CalendarEvent,
-    onSave: (
-        title: String,
-        description: String,
-        date: LocalDate,
-        startTime: String,
-        endTime: String,
-        organizer: String,
-        assignedProfiles: List<String>,
-        status: EventStatus,
-        location: String
-    ) -> Unit,
+    editor: EventEditorState,
+    onSave: (title: String, start: String, end: String, location: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var title by remember { mutableStateOf(event.title) }
-    var description by remember { mutableStateOf(event.description) }
-    var startTime by remember { mutableStateOf(event.startTime) }
-    var endTime by remember { mutableStateOf(event.endTime) }
-    var location by remember { mutableStateOf(event.locationOrLink) }
-    var organizer by remember { mutableStateOf(event.organizer) }
-    var assignedProfiles by remember { mutableStateOf(event.assignedProfiles) }
-    var status by remember { mutableStateOf(event.status) }
+    var title by remember { mutableStateOf(editor.draft.title) }
+    var startTime by remember { mutableStateOf(editor.draft.start) }
+    var endTime by remember { mutableStateOf(editor.draft.end) }
+    var location by remember { mutableStateOf(editor.draft.location) }
 
-    val availableProfiles = listOf("Yoann", "Mario", "Gaston", "Hermes")
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = HermesPrimary,
+        unfocusedBorderColor = OnyxBorder,
+        focusedLabelColor = HermesPrimary
+    )
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .padding(vertical = 16.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = OnyxDarkSurface),
-            border = CardDefaults.outlinedCardBorder().copy(
-                brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
-            )
+            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(OnyxBorder))
         ) {
             Column(
                 modifier = Modifier
@@ -68,198 +55,85 @@ fun EventEditorDialog(
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (event.title.isBlank()) "Nouvel Événement / RDV" else "Modifier le créneau",
+                        text = if (editor.eventId == null) stringResource(R.string.agenda_nouvel_evenement_rdv) else stringResource(R.string.agenda_modifier_le_creneau),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fermer", tint = HermesTextMuted)
+                        Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = HermesTextMuted)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Title
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titre de l'événement") },
+                    label = { Text(stringResource(R.string.agenda_titre_de_l_evenement)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HermesPrimary,
-                        unfocusedBorderColor = OnyxBorder,
-                        focusedLabelColor = HermesPrimary
-                    )
+                    colors = fieldColors
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Time Pickers Row
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = startTime,
                         onValueChange = { startTime = it },
-                        label = { Text("Début (HH:mm)") },
+                        label = { Text(stringResource(R.string.agenda_debut_hh_mm)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HermesPrimary,
-                            unfocusedBorderColor = OnyxBorder
-                        )
+                        colors = fieldColors
                     )
                     OutlinedTextField(
                         value = endTime,
                         onValueChange = { endTime = it },
-                        label = { Text("Fin (HH:mm)") },
+                        label = { Text(stringResource(R.string.agenda_fin_hh_mm)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HermesPrimary,
-                            unfocusedBorderColor = OnyxBorder
-                        )
+                        colors = fieldColors
                     )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Location or Link
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it },
-                    label = { Text("Lieu ou Lien (ex: Telegram / Call / Bureau)") },
+                    label = { Text(stringResource(R.string.agenda_location)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HermesPrimary,
-                        unfocusedBorderColor = OnyxBorder
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Organizer
-                Text(text = "Organisateur / Porteur :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    availableProfiles.forEach { p ->
-                        FilterChip(
-                            selected = organizer == p,
-                            onClick = { organizer = p },
-                            label = { Text(p, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = if (p == "Yoann") HermesPrimaryContainer else HermesTertiaryContainer,
-                                selectedLabelColor = if (p == "Yoann") HermesPrimary else HermesTertiary
-                            ),
-                            modifier = Modifier.height(32.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Participants / Assigned Profiles
-                Text(text = "Participants / Agents impliqués :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    availableProfiles.forEach { p ->
-                        val isAssigned = assignedProfiles.contains(p)
-                        FilterChip(
-                            selected = isAssigned,
-                            onClick = {
-                                assignedProfiles = if (isAssigned) {
-                                    assignedProfiles.filter { it != p }
-                                } else {
-                                    assignedProfiles + p
-                                }
-                            },
-                            label = { Text(p, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = HermesPrimaryContainer,
-                                selectedLabelColor = HermesPrimary
-                            ),
-                            modifier = Modifier.height(32.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Status selection
-                Text(text = "Statut :", style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EventStatus.entries.forEach { st ->
-                        FilterChip(
-                            selected = status == st,
-                            onClick = { status = st },
-                            label = {
-                                Text(
-                                    text = when (st) {
-                                        EventStatus.CONFIRMED -> "Confirmé"
-                                        EventStatus.PENDING_AGENT -> "En attente"
-                                        EventStatus.COMPLETED -> "Terminé"
-                                        EventStatus.CANCELLED -> "Annulé"
-                                    },
-                                    fontSize = 11.sp
-                                )
-                            },
-                            modifier = Modifier.height(32.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Description
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description & Notes de réunion") },
-                    minLines = 3,
-                    maxLines = 6,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HermesPrimary,
-                        unfocusedBorderColor = OnyxBorder
-                    )
+                    colors = fieldColors
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Action Buttons
+                // Off with the reason shown, never a silent no-op.
+                val formError = eventFormError(title, startTime, endTime) ?: editor.error
+                formError?.let {
+                    Text(it.message, style = MaterialTheme.typography.bodySmall, color = HermesWarning, modifier = Modifier.padding(bottom = 8.dp))
+                }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) {
-                        Text("Annuler", color = HermesTextMuted)
+                        Text(stringResource(R.string.action_cancel), color = HermesTextMuted)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = {
-                            onSave(
-                                title,
-                                description,
-                                LocalDate.ofEpochDay(event.dateEpochDay),
-                                startTime,
-                                endTime,
-                                organizer,
-                                assignedProfiles,
-                                status,
-                                location
-                            )
-                        },
+                        onClick = { onSave(title, startTime, endTime, location) },
+                        enabled = eventFormError(title, startTime, endTime) == null,
                         colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enregistrer", color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.action_save), color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
                     }
                 }
             }

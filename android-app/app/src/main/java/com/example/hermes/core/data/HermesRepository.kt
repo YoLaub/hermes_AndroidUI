@@ -59,7 +59,12 @@ class HermesRepository(
         return apiClient.checkHealth(getBaseUrl())
     }
 
-    suspend fun checkAuthStatus(): Result<AuthStatusResponse> {
+    /** Puts the saved session cookie on the requests now, without waiting for the start-up wiring. */
+    suspend fun restoreSessionCookie() {
+        if (authInterceptor.sessionCookie == null) authInterceptor.sessionCookie = preferences.sessionCookie.first()
+    }
+
+        suspend fun checkAuthStatus(): Result<AuthStatusResponse> {
         return apiClient.checkAuthStatus(getBaseUrl())
     }
 
@@ -348,6 +353,12 @@ class HermesRepository(
         return apiClient.listFiles(getBaseUrl(), sessionId, path)
     }
 
+    suspend fun readFile(sessionId: String, path: String) = apiClient.readFile(getBaseUrl(), sessionId, path)
+    suspend fun createFile(sessionId: String, path: String, content: String) = apiClient.createFile(getBaseUrl(), sessionId, path, content)
+    suspend fun saveFile(sessionId: String, path: String, content: String) = apiClient.saveFile(getBaseUrl(), sessionId, path, content)
+    suspend fun renameFile(sessionId: String, path: String, newName: String) = apiClient.renameFile(getBaseUrl(), sessionId, path, newName)
+    suspend fun deleteFile(sessionId: String, path: String) = apiClient.deleteFile(getBaseUrl(), sessionId, path)
+
     suspend fun uploadFile(
         sessionId: String,
         filename: String,
@@ -358,6 +369,8 @@ class HermesRepository(
     }
 
     // ── Kanban ────────────────────────────────────────────────────────────────
+
+    suspend fun getCrons(): Result<CronsResponse> = apiClient.getCrons(getBaseUrl())
 
     suspend fun getKanbanBoards(): Result<KanbanBoardsResponse> {
         return apiClient.getKanbanBoards(getBaseUrl())

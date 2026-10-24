@@ -35,6 +35,8 @@ data class ChatUiState(
     val sessions: List<SessionSummary> = emptyList(),
     val skills: List<SkillSummary> = emptyList(),
     val selectedSkillDetail: SkillDetailResponse? = null,
+    /** Raw error of the last skill detail load (Hermes WebUI, not agent-memory). */
+    val skillDetailError: String? = null,
     val isSkillsLoading: Boolean = false,
     val memoryData: MemoryResponse? = null,
     val isMemoryLoading: Boolean = false,
@@ -50,6 +52,8 @@ data class ChatUiState(
     val mandatesError: String? = null,
     val isValidationsLoading: Boolean = false,
     val validationsError: String? = null,
+    /** When the memory list last loaded (epoch ms), for "Vérifié à". */
+    val memoryCheckedAt: Long? = null,
     val hasMemoryOwnerToken: Boolean = false,
     val workspaces: List<WorkspaceInfo> = emptyList(),
     val activeWorkspace: String? = null,
@@ -952,18 +956,19 @@ class ChatViewModel(
 
     fun loadSkillDetail(name: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSkillsLoading = true) }
+            _uiState.update { it.copy(isSkillsLoading = true, skillDetailError = null) }
             val res = repository.getSkillContent(name)
             if (res.isSuccess) {
                 _uiState.update { it.copy(selectedSkillDetail = res.getOrThrow(), isSkillsLoading = false) }
             } else {
-                _uiState.update { it.copy(isSkillsLoading = false) }
+                val err = res.exceptionOrNull()
+                _uiState.update { it.copy(isSkillsLoading = false, skillDetailError = err?.message ?: err?.javaClass?.simpleName) }
             }
         }
     }
 
     fun clearSkillDetail() {
-        _uiState.update { it.copy(selectedSkillDetail = null) }
+        _uiState.update { it.copy(selectedSkillDetail = null, skillDetailError = null) }
     }
 
     fun deleteSkill(name: String) {
@@ -983,7 +988,7 @@ class ChatViewModel(
             _uiState.update { it.copy(isValidationsLoading = true) }
             val res = repository.getMemoryValidations()
             _uiState.update {
-                if (res.isSuccess) it.copy(memoryValidations = res.getOrThrow().items, isValidationsLoading = false)
+                if (res.isSuccess) it.copy(memoryValidations = res.getOrThrow().items, isValidationsLoading = false, memoryCheckedAt = System.currentTimeMillis())
                 else it.copy(isValidationsLoading = false, validationsError = validationErrorMessage(res.exceptionOrNull()!!))
             }
         }

@@ -1,5 +1,8 @@
 package com.example.hermes.features.auth
 
+import androidx.compose.foundation.clickable
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,7 +61,7 @@ fun AuthScreen(
             // App Icon & Brand
             androidx.compose.foundation.Image(
                 painter = androidx.compose.ui.res.painterResource(id = com.example.hermes.R.drawable.hermes_logo),
-                contentDescription = "Hermes Logo",
+                contentDescription = stringResource(R.string.auth_logo),
                 modifier = Modifier
                     .size(88.dp)
                     .clip(RoundedCornerShape(22.dp))
@@ -68,7 +71,7 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Hermes Mobile",
+                text = stringResource(R.string.auth_title),
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.5).sp
@@ -77,7 +80,7 @@ fun AuthScreen(
             )
 
             Text(
-                text = "Connect to your self-hosted Hermes WebUI instance",
+                text = stringResource(R.string.auth_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -91,12 +94,12 @@ fun AuthScreen(
             ) {
                 SuggestionChip(
                     onClick = { viewModel.onServerUrlChanged("http://10.0.2.2:8000") },
-                    label = { Text("Emulator (10.0.2.2)") },
+                    label = { Text(stringResource(R.string.auth_emulator)) },
                     shape = RoundedCornerShape(8.dp)
                 )
                 SuggestionChip(
                     onClick = { viewModel.onServerUrlChanged("http://192.168.1.100:8000") },
-                    label = { Text("LAN IP") },
+                    label = { Text(stringResource(R.string.auth_lan)) },
                     shape = RoundedCornerShape(8.dp)
                 )
             }
@@ -107,15 +110,15 @@ fun AuthScreen(
             OutlinedTextField(
                 value = state.serverUrl,
                 onValueChange = { viewModel.onServerUrlChanged(it) },
-                label = { Text("Server Instance URL") },
-                placeholder = { Text("http://192.168.1.x:8000") },
+                label = { Text(stringResource(R.string.auth_server_url)) },
+                placeholder = { Text(stringResource(R.string.auth_http_192_168_1_x)) },
                 leadingIcon = {
                     Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 },
                 trailingIcon = {
                     if (state.serverUrl.isNotEmpty()) {
                         IconButton(onClick = { viewModel.onServerUrlChanged("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.auth_clear))
                         }
                     }
                 },
@@ -134,8 +137,8 @@ fun AuthScreen(
             OutlinedTextField(
                 value = state.password,
                 onValueChange = { viewModel.onPasswordChanged(it) },
-                label = { Text("Password (HERMES_WEBUI_PASSWORD)") },
-                placeholder = { Text("Leave blank if authentication is disabled") },
+                label = { Text(stringResource(R.string.auth_password)) },
+                placeholder = { Text(stringResource(R.string.auth_password_hint)) },
                 leadingIcon = {
                     Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 },
@@ -143,7 +146,7 @@ fun AuthScreen(
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                            contentDescription = stringResource(if (passwordVisible) R.string.auth_hide_password else R.string.auth_show_password)
                         )
                     }
                 },
@@ -192,7 +195,7 @@ fun AuthScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("Probing Hermes instance...", style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.auth_probing), style = MaterialTheme.typography.bodyMedium)
                             }
                             is ConnectionStatus.Success -> {
                                 Box(
@@ -204,12 +207,12 @@ fun AuthScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Online (${s.health.status.uppercase()})",
+                                        text = stringResource(R.string.auth_online, s.health.status.uppercase()),
                                         fontWeight = FontWeight.Bold,
                                         color = HermesSecondary
                                     )
                                     Text(
-                                        text = "Uptime: ${s.health.uptimeSeconds.toInt()}s | Active streams: ${s.health.activeStreams} | Auth: ${if (s.authRequired) "Required" else "None"}",
+                                        text = stringResource(R.string.auth_health, s.health.uptimeSeconds.toInt(), s.health.activeStreams, stringResource(if (s.authRequired) R.string.auth_required else R.string.auth_none)),
                                         style = MaterialTheme.typography.bodySmall,
                                         fontFamily = FontFamily.Monospace,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -226,7 +229,7 @@ fun AuthScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Connection Failed",
+                                        text = stringResource(R.string.auth_failed),
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.error
                                     )
@@ -266,7 +269,7 @@ fun AuthScreen(
                 ) {
                     Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Test")
+                    Text(stringResource(R.string.auth_test))
                 }
 
                 Button(
@@ -286,7 +289,7 @@ fun AuthScreen(
                         Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    Text("Connect")
+                    Text(stringResource(R.string.auth_connect))
                 }
             }
 
@@ -298,20 +301,28 @@ fun AuthScreen(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
+                // Collapsed by default: needed once, when setting the server up.
+                var tipsOpen by remember { mutableStateOf(false) }
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { tipsOpen = !tipsOpen }.padding(vertical = 8.dp)
+                    ) {
                         Icon(Icons.Default.Info, contentDescription = null, tint = HermesPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Tips for local deployment", style = MaterialTheme.typography.labelLarge, color = HermesPrimary)
+                        Text(stringResource(R.string.auth_tips), style = MaterialTheme.typography.labelLarge, color = HermesPrimary, modifier = Modifier.weight(1f))
+                        Icon(if (tipsOpen) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, tint = HermesPrimary)
                     }
+                    if (tipsOpen) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "• Coolify / Reverse Proxy : Renseignez directement votre domaine HTTPS (ex: https://hermes.mondomaine.fr).\n" +
+                        stringResource(R.string.auth_coolify_reverse_proxy_renseignez_directement) +
                         "• En local (Docker) : Utilisez http://10.0.2.2:8000 sur émulateur ou l'IP locale Wi-Fi sur mobile.\n" +
                         "• Sécurité : Le mot de passe saisi est automatiquement mémorisé de façon sécurisée sur votre appareil.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    }
                 }
             }
         }

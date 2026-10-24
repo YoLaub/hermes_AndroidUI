@@ -1,5 +1,7 @@
 package com.example.hermes.features.chat.components
 
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,7 +57,7 @@ fun ReasoningCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Psychology,
-                        contentDescription = "Thinking",
+                        contentDescription = stringResource(R.string.chat_thinking_2),
                         tint = HermesTertiary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -64,7 +66,7 @@ fun ReasoningCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = if (isStreaming) "Thinking..." else "Thought process",
+                    text = stringResource(if (isStreaming) R.string.chat_thinking else R.string.chat_thought),
                     style = MaterialTheme.typography.labelMedium,
                     color = HermesTertiary
                 )
@@ -82,7 +84,7 @@ fun ReasoningCard(
 
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) stringResource(R.string.chat_collapse) else stringResource(R.string.chat_expand),
                     tint = HermesTextMuted,
                     modifier = Modifier.size(18.dp)
                 )
@@ -103,7 +105,7 @@ fun ReasoningCard(
                         text = reasoning,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             lineHeight = 16.sp
                         ),
                         color = HermesTextSecondary

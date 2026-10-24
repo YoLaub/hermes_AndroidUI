@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import com.example.hermes.core.model.ChatMessage
 import com.example.hermes.theme.*
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun MessageBubble(
@@ -58,7 +60,7 @@ fun MessageBubble(
             ) {
                 Icon(
                     imageVector = Icons.Default.SmartToy,
-                    contentDescription = "Agent",
+                    contentDescription = stringResource(R.string.nav_agent),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -155,12 +157,11 @@ fun MessageBubble(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(displayContent))
                                     isCopied = true
-                                },
-                                modifier = Modifier.size(24.dp)
+                                }
                             ) {
                                 Icon(
                                     imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
-                                    contentDescription = if (isCopied) "Copié" else "Copier le message",
+                                    contentDescription = if (isCopied) stringResource(R.string.memory_copied) else stringResource(R.string.chat_copier_le_message),
                                     tint = if (isCopied) HermesSuccess else HermesTextMuted.copy(alpha = 0.7f),
                                     modifier = Modifier.size(14.dp)
                                 )
@@ -184,7 +185,7 @@ fun MessageBubble(
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
-                    contentDescription = "User",
+                    contentDescription = stringResource(R.string.chat_user),
                     tint = HermesTextSecondary,
                     modifier = Modifier.size(18.dp)
                 )

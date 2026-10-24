@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
@@ -500,6 +501,10 @@ class HermesApiClient(
         executeEmptyResponse(request)
     }
 
+    suspend fun getCrons(baseUrl: String): Result<CronsResponse> = withContext(Dispatchers.IO) {
+        executeRequest(Request.Builder().url("$baseUrl/api/crons").get().build())
+    }
+
     suspend fun getWorkspaces(baseUrl: String): Result<WorkspacesResponse> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("$baseUrl/api/workspaces")
@@ -521,11 +526,35 @@ class HermesApiClient(
     }
 
     suspend fun listFiles(baseUrl: String, sessionId: String, path: String = "."): Result<DirectoryListingResponse> = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url("$baseUrl/api/list?session_id=$sessionId&path=$path")
-            .get()
+        executeRequest(Request.Builder().url(fileUrl(baseUrl, "/api/list", sessionId, path)).get().build())
+    }
+
+    suspend fun readFile(baseUrl: String, sessionId: String, path: String): Result<FileContentResponse> = withContext(Dispatchers.IO) {
+        executeRequest(Request.Builder().url(fileUrl(baseUrl, "/api/file", sessionId, path)).get().build())
+    }
+
+    suspend fun createFile(baseUrl: String, sessionId: String, path: String, content: String): Result<Boolean> =
+        postFile(baseUrl, "/api/file/create", mapOf("session_id" to sessionId, "path" to path, "content" to content))
+
+    suspend fun saveFile(baseUrl: String, sessionId: String, path: String, content: String): Result<Boolean> =
+        postFile(baseUrl, "/api/file/save", mapOf("session_id" to sessionId, "path" to path, "content" to content))
+
+    suspend fun renameFile(baseUrl: String, sessionId: String, path: String, newName: String): Result<Boolean> =
+        postFile(baseUrl, "/api/file/rename", mapOf("session_id" to sessionId, "path" to path, "new_name" to newName))
+
+    suspend fun deleteFile(baseUrl: String, sessionId: String, path: String): Result<Boolean> =
+        postFile(baseUrl, "/api/file/delete", mapOf("session_id" to sessionId, "path" to path))
+
+    /** File names may hold spaces and accents: the query is encoded, never concatenated. */
+    private fun fileUrl(baseUrl: String, route: String, sessionId: String, path: String): HttpUrl =
+        "$baseUrl$route".toHttpUrl().newBuilder()
+            .addQueryParameter("session_id", sessionId)
+            .addQueryParameter("path", path)
             .build()
-        executeRequest(request)
+
+    private suspend fun postFile(baseUrl: String, route: String, fields: Map<String, String>): Result<Boolean> = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(fields).toRequestBody(jsonMediaType)
+        executeEmptyResponse(Request.Builder().url("$baseUrl$route").post(body).build())
     }
 
     suspend fun uploadFile(

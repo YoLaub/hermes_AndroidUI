@@ -14,21 +14,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.hermes.core.model.ForumParticipant
-import com.example.hermes.core.model.ParticipantType
+import com.example.hermes.R
 import com.example.hermes.theme.*
 
+/** The owner's message to the room; @ chips address one member, no mention addresses them all. */
 @Composable
 fun ForumInputBar(
     inputText: String,
-    participants: List<ForumParticipant>,
+    members: List<String>,
     onInputTextChanged: (String) -> Unit,
     onAppendMention: (String) -> Unit,
     onSendMessage: () -> Unit,
-    isAgentTyping: Boolean,
-    typingAgentName: String?,
+    speakingName: String?,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -37,65 +37,46 @@ fun ForumInputBar(
             .background(OnyxDarkSurface)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        // Typing Indicator if any
-        if (isAgentTyping && typingAgentName != null) {
-            Row(
-                modifier = Modifier.padding(bottom = 4.dp, start = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = HermesTertiary
-                )
+        if (speakingName != null) {
+            Row(modifier = Modifier.padding(bottom = 4.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = HermesTertiary)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "$typingAgentName est en train de répondre...",
+                    text = stringResource(R.string.forum_speaking, speakingName),
                     style = MaterialTheme.typography.labelSmall,
                     color = HermesTertiary,
-                    fontSize = 11.sp
+                    fontSize = 12.sp
                 )
             }
         }
 
-        // Quick Mention Shortcuts Row
-        val agentParticipants = participants.filter { it.type != ParticipantType.USER }
-        if (agentParticipants.isNotEmpty()) {
+        if (members.isNotEmpty()) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
             ) {
-                items(agentParticipants) { p ->
-                    val isA2A = p.type == ParticipantType.EXTERNAL_A2A
+                items(members) { name ->
                     Box(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (isA2A) HermesSecondaryContainer else HermesTertiaryContainer)
-                            .clickable { onAppendMention(p.name) }
+                            .background(HermesTertiaryContainer)
+                            .clickable { onAppendMention(name) }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
-                        Text(
-                            text = "@${p.name}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isA2A) HermesSecondary else HermesTertiary,
-                            fontSize = 11.sp
-                        )
+                        Text(text = "@$name", style = MaterialTheme.typography.labelSmall, color = HermesTertiary, fontSize = 12.sp)
                     }
                 }
             }
         }
 
-        // Input Field & Send Button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = onInputTextChanged,
-                placeholder = { Text("Écrivez au groupe (ou @Agent)...", fontSize = 13.sp) },
+                placeholder = { Text(stringResource(R.string.forum_input_placeholder), fontSize = 13.sp) },
                 maxLines = 4,
                 modifier = Modifier
                     .weight(1f)
@@ -108,17 +89,16 @@ fun ForumInputBar(
                     unfocusedContainerColor = HermesCodeBackground
                 )
             )
-
             FloatingActionButton(
-                onClick = onSendMessage,
-                modifier = Modifier.size(46.dp),
-                containerColor = HermesPrimary,
+                onClick = { if (speakingName == null) onSendMessage() },
+                modifier = Modifier.size(48.dp),
+                containerColor = if (speakingName == null) HermesPrimary else OnyxBorder,
                 contentColor = OnyxDarkBackground,
                 shape = CircleShape
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Envoyer",
+                    contentDescription = stringResource(R.string.forum_send),
                     modifier = Modifier.size(20.dp)
                 )
             }

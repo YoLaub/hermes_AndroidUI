@@ -10,6 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.theme.*
+import com.example.hermes.ui.components.AppButton
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun CreateTaskDialog(
@@ -27,7 +30,7 @@ fun CreateTaskDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Nouvelle tâche Kanban",
+                text = stringResource(R.string.space_new_task),
                 style = MaterialTheme.typography.titleMedium,
                 color = HermesTextPrimary
             )
@@ -40,7 +43,7 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titre de la tâche *") },
+                    label = { Text(stringResource(R.string.kanban_titre_de_la_tache)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -55,7 +58,7 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = body,
                     onValueChange = { body = it },
-                    label = { Text("Détails / Instructions") },
+                    label = { Text(stringResource(R.string.kanban_details_instructions)) },
                     minLines = 2,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
@@ -69,7 +72,7 @@ fun CreateTaskDialog(
                 )
 
                 // Status Chips
-                Text("Colonne initiale :", fontSize = 12.sp, color = HermesTextMuted)
+                Text(stringResource(R.string.kanban_colonne_initiale), fontSize = 12.sp, color = HermesTextMuted)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -79,7 +82,7 @@ fun CreateTaskDialog(
                         FilterChip(
                             selected = isSelected,
                             onClick = { status = st },
-                            label = { Text(kanbanStatusLabel(st), fontSize = 10.sp) },
+                            label = { Text(kanbanStatusLabel(st), fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = kanbanStatusColor(st).copy(alpha = 0.25f),
                                 selectedLabelColor = kanbanStatusColor(st)
@@ -89,7 +92,7 @@ fun CreateTaskDialog(
                 }
 
                 // Priority
-                Text("Priorité :", fontSize = 12.sp, color = HermesTextMuted)
+                Text(stringResource(R.string.kanban_priorite_2), fontSize = 12.sp, color = HermesTextMuted)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -98,7 +101,7 @@ fun CreateTaskDialog(
                         FilterChip(
                             selected = priority == prio,
                             onClick = { priority = prio },
-                            label = { Text(label, fontSize = 11.sp) }
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -106,7 +109,7 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = assignee,
                     onValueChange = { assignee = it },
-                    label = { Text("Assigné à (optionnel)") },
+                    label = { Text(stringResource(R.string.kanban_assigne_a_optionnel)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -120,23 +123,17 @@ fun CreateTaskDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (title.isNotBlank()) {
-                        onCreate(title, body.ifBlank { null }, status, priority, assignee.ifBlank { null })
-                    }
-                },
+            AppButton(
+                "Créer",
+                onClick = { onCreate(title.trim(), body.ifBlank { null }, status, priority, assignee.ifBlank { null }) },
                 enabled = title.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Créer")
-            }
+                icon = Icons.Default.Add,
+                disabledReason = "Donnez un titre à la tâche"
+            )
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Annuler")
+                Text(stringResource(R.string.action_cancel))
             }
         },
         containerColor = OnyxDarkSurface

@@ -27,6 +27,8 @@ data class MobileControlUiState(
     val availableProfiles: List<String> = emptyList(),
     val activeProfile: String = "",
     val error: String? = null,
+    /** The relay socket's last low-level error, shown on demand under the relay's state. */
+    val relayErrorDetail: String? = null,
     val successMessage: String? = null
 )
 
@@ -63,7 +65,8 @@ class MobileControlViewModel(
 
         viewModelScope.launch {
             manager.wsClient.connectionError.collect { err ->
-                if (err != null) _uiState.update { it.copy(error = err) }
+                // One sentence for the user; the socket's own message stays as a detail on Contrôle.
+                if (err != null) _uiState.update { it.copy(error = relayError(err).message, relayErrorDetail = relayError(err).detail) }
             }
         }
 
@@ -141,10 +144,14 @@ class MobileControlViewModel(
             }
         }
 
-        loadProfiles()
+        refreshProfiles()
     }
 
-    private fun loadProfiles() {
+    /**
+     * Reads the profile list for the john gate. Also called once signed in and when Contrôle opens:
+     * at creation the session cookie may not be restored yet, and a failed read was never retried.
+     */
+    fun refreshProfiles() {
         viewModelScope.launch {
             val res = repository.getProfiles()
             if (res.isSuccess) {

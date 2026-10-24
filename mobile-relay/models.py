@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -114,6 +114,8 @@ class MobileAuthMsg(BaseModel):
     device_token: str
 
 class PairingGenerateRequest(BaseModel):
+    # AETHER avatars pair through /api/aether/pair/*, which binds them to a profile.
+    device_kind: Literal["android"] = "android"
     user_id: Optional[str] = "admin"
 
 class PairingGenerateResponse(BaseModel):
@@ -121,6 +123,7 @@ class PairingGenerateResponse(BaseModel):
     expires_in_seconds: int = 300
 
 class PairingVerifyRequest(BaseModel):
+    device_kind: Literal["android"] = "android"
     code: str
     device_id: str
     device_name: Optional[str] = "Android Phone"

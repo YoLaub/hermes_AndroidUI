@@ -27,16 +27,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.features.kanban.components.*
 import com.example.hermes.theme.*
+import com.example.hermes.core.model.KanbanTask
+import com.example.hermes.features.workspace.readyCount
+import com.example.hermes.ui.components.ConfirmDialog
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
+import com.example.hermes.ui.components.AppFab
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KanbanScreen(
     viewModel: KanbanViewModel,
     onNavigateBack: () -> Unit,
+    onOpenTask: (KanbanTask) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
+    var confirmLaunch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -72,7 +80,7 @@ fun KanbanScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Kanban",
+                            text = stringResource(R.string.space_tasks),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = HermesTextPrimary
                         )
@@ -111,7 +119,7 @@ fun KanbanScreen(
                             ) {
                                 if (state.boards.isEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text("default", color = HermesTextPrimary) },
+                                        text = { Text(stringResource(R.string.kanban_default), color = HermesTextPrimary) },
                                         onClick = {
                                             viewModel.switchBoard("default")
                                             showBoardDropdown = false
@@ -133,7 +141,7 @@ fun KanbanScreen(
                                                     )
                                                     Spacer(modifier = Modifier.width(12.dp))
                                                     Text(
-                                                        text = "${b.total} tâches",
+                                                        text = stringResource(R.string.kanban_taches, b.total),
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = HermesTextMuted
                                                     )
@@ -154,7 +162,7 @@ fun KanbanScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour au Chat",
+                            contentDescription = stringResource(R.string.action_back),
                             tint = HermesTextPrimary
                         )
                     }
@@ -162,7 +170,7 @@ fun KanbanScreen(
                 actions = {
                     // Dispatch agent action
                     FilledTonalButton(
-                        onClick = { viewModel.dispatch() },
+                        onClick = { confirmLaunch = true },
                         enabled = !state.isDispatching,
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -181,14 +189,14 @@ fun KanbanScreen(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dispatch", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.kanban_lancer), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     // Refresh
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Rafraîchir",
+                            contentDescription = stringResource(R.string.kanban_rafraichir),
                             tint = HermesTextMuted
                         )
                     }
@@ -199,13 +207,9 @@ fun KanbanScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.showCreateDialog(true) },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Nouvelle tâche", fontWeight = FontWeight.SemiBold) },
-                containerColor = HermesPrimary,
-                contentColor = OnyxDarkBackground,
-                shape = RoundedCornerShape(16.dp)
+            AppFab(
+                label = stringResource(R.string.space_new_task),
+                onClick = { viewModel.showCreateDialog(true) }
             )
         },
         containerColor = OnyxDarkBackground
@@ -219,14 +223,14 @@ fun KanbanScreen(
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Filtrer les tâches...", fontSize = 13.sp) },
+                placeholder = { Text(stringResource(R.string.kanban_filtrer_les_taches), fontSize = 13.sp) },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = HermesTextMuted, modifier = Modifier.size(18.dp))
                 },
                 trailingIcon = {
                     if (state.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = HermesTextMuted, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.auth_clear), tint = HermesTextMuted, modifier = Modifier.size(16.dp))
                         }
                     }
                 },
@@ -285,7 +289,7 @@ fun KanbanScreen(
                                 ) {
                                     Text(
                                         text = "$count",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                         color = if (isSelected) colColor else HermesTextMuted,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
@@ -329,7 +333,7 @@ fun KanbanScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Aucune tâche dans \"${kanbanStatusLabel(col.name)}\"",
+                                text = stringResource(R.string.kanban_aucune_tache_dans, kanbanStatusLabel(col.name)),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = HermesTextMuted
                             )
@@ -340,7 +344,7 @@ fun KanbanScreen(
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Ajouter ici")
+                                Text(stringResource(R.string.kanban_ajouter_ici))
                             }
                         }
                     }
@@ -353,7 +357,7 @@ fun KanbanScreen(
                         items(filteredTasks, key = { it.id }) { task ->
                             KanbanTaskCard(
                                 task = task,
-                                onClick = { viewModel.selectTask(task) },
+                                onClick = { onOpenTask(task) },
                                 onQuickMove = { nextStatus ->
                                     viewModel.moveTask(task.id, nextStatus)
                                 }
@@ -365,23 +369,18 @@ fun KanbanScreen(
         }
     }
 
-    // Task details modal bottom sheet
-    state.selectedTask?.let { task ->
-        KanbanTaskDetailSheet(
-            task = task,
-            onDismiss = { viewModel.selectTask(null) },
-            onSave = { title, body, status, priority, assignee ->
-                viewModel.updateTask(task.id, title, body, status, priority, assignee)
+    if (confirmLaunch) {
+        val ready = readyCount(state.columns)
+        ConfirmDialog(
+            title = if (ready == 0) stringResource(R.string.kanban_aucune_tache_prete) else stringResource(R.string.kanban_lancer_tache_s_prete_s, ready),
+            message = if (ready == 0) stringResource(R.string.kanban_seules_les_taches_de_la)
+            else stringResource(R.string.kanban_les_agents_assignes_commencent_a, state.currentBoard),
+            confirmLabel = stringResource(R.string.kanban_lancer),
+            onConfirm = {
+                confirmLaunch = false
+                viewModel.dispatch()
             },
-            onBlock = { reason ->
-                viewModel.blockTask(task.id, reason)
-            },
-            onUnblock = {
-                viewModel.unblockTask(task.id)
-            },
-            onArchive = {
-                viewModel.archiveTask(task.id)
-            }
+            onDismiss = { confirmLaunch = false }
         )
     }
 

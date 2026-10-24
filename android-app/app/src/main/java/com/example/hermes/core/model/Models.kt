@@ -713,7 +713,8 @@ data class SkillDetailResponse(
     val description: String? = null,
     val content: String = "",
     val path: String? = null,
-    @SerialName("linked_files") val linkedFiles: Map<String, String>? = null
+    /** Files beside SKILL.md, by kind ("references", "templates", "assets", "scripts"). */
+    @SerialName("linked_files") val linkedFiles: Map<String, List<String>>? = null
 )
 
 @Serializable
@@ -777,9 +778,14 @@ data class DirectoryEntry(
     val name: String,
     val path: String,
     @SerialName("is_dir") val isDir: Boolean = false,
+    /** "file", "dir" or "symlink". */
+    val type: String? = null,
     val size: Long = 0,
     val modified: Double = 0.0
 )
+
+@Serializable
+data class FileContentResponse(val path: String, val content: String = "")
 
 @Serializable
 data class DirectoryListingResponse(

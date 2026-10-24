@@ -1,5 +1,12 @@
 package com.example.hermes.features.mobilecontrol
 
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.ui.components.StopControlDialog
+import com.example.hermes.ui.components.LabeledSwitch
+import com.example.hermes.core.mobilecontrol.ConsentLevel
+import com.example.hermes.core.mobilecontrol.consentLevel
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,12 +45,13 @@ import java.util.*
 @Composable
 fun MobileControlScreen(
     viewModel: MobileControlViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: (() -> Unit)? = null,
+    onOpenRelaySettings: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     var showStartSessionDialog by remember { mutableStateOf(false) }
-    var showPairingDialog by remember { mutableStateOf(false) }
     var showAddAppDialog by remember { mutableStateOf(false) }
+    var showStopDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -71,7 +79,7 @@ fun MobileControlScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Contrôle par Hermes",
+                            stringResource(R.string.control_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = HermesTextPrimary
@@ -79,12 +87,14 @@ fun MobileControlScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour",
-                            tint = HermesTextPrimary
-                        )
+                    if (onNavigateBack != null) {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.action_back),
+                                tint = HermesTextPrimary
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -130,14 +140,14 @@ fun MobileControlScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        "SESSION ACTIVE",
+                                        stringResource(R.string.control_session_active),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = HermesError
                                     )
                                 }
                                 Text(
-                                    "Temps restant : ${session.remainingSeconds / 60}m ${session.remainingSeconds % 60}s",
+                                    stringResource(R.string.control_temps_restant_m_s, session.remainingSeconds / 60, session.remainingSeconds % 60),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontFamily = FontFamily.Monospace,
                                     color = HermesTextPrimary
@@ -147,20 +157,20 @@ fun MobileControlScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
-                                text = "Application : ${session.targetAppName} (${session.targetPackage})",
+                                text = stringResource(R.string.control_application, session.targetAppName, session.targetPackage),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = HermesTextPrimary
                             )
                             Text(
-                                text = "Profil autorisé : John (${session.allowedProfile}) • Mode : ${session.mode.name.lowercase()}" +
-                                    (if (session.allowScreenshots) " • Captures autorisées" else "") +
-                                    (if (session.allowCalendar) " • Calendrier autorisé" else "") +
-                                    (if (session.allows(Consent.SMS_READ)) " • SMS autorisés" else "") +
-                                    (if (session.allows(Consent.CALL_LOG_READ)) " • Journal d'appels autorisé" else "") +
-                                    (if (session.allows(Consent.SMS_SEND)) " • Envoi de SMS autorisé" else "") +
-                                    (if (session.allows(Consent.CALL_PLACE)) " • Appels autorisés" else "") +
-                                    (if (session.allows(Consent.CALENDAR_WRITE)) " • Écriture du calendrier autorisée" else ""),
+                                text = stringResource(R.string.control_profil_autorise_john_mode, session.allowedProfile, session.mode.name.lowercase()) +
+                                    (if (session.allowScreenshots) stringResource(R.string.control_captures_autorisees) else "") +
+                                    (if (session.allowCalendar) stringResource(R.string.control_calendrier_autorise) else "") +
+                                    (if (session.allows(Consent.SMS_READ)) stringResource(R.string.control_sms_autorises) else "") +
+                                    (if (session.allows(Consent.CALL_LOG_READ)) stringResource(R.string.control_journal_d_appels_autorise) else "") +
+                                    (if (session.allows(Consent.SMS_SEND)) stringResource(R.string.control_envoi_de_sms_autorise) else "") +
+                                    (if (session.allows(Consent.CALL_PLACE)) stringResource(R.string.control_appels_autorises) else "") +
+                                    (if (session.allows(Consent.CALENDAR_WRITE)) stringResource(R.string.control_ecriture_du_calendrier_autorisee) else ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesTextSecondary
                             )
@@ -168,14 +178,14 @@ fun MobileControlScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Button(
-                                onClick = { viewModel.stopSession() },
+                                onClick = { showStopDialog = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = HermesError),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(Icons.Default.StopCircle, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("ARRÊTER LE CONTRÔLE", fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.control_stop), fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
@@ -194,7 +204,7 @@ fun MobileControlScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "État du système",
+                            stringResource(R.string.control_etat_du_systeme),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = HermesTextPrimary
@@ -210,12 +220,12 @@ fun MobileControlScreen(
                         ) {
                             Column {
                                 Text(
-                                    "Service d'accessibilité Hermes",
+                                    stringResource(R.string.control_a11y),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = HermesTextPrimary
                                 )
                                 Text(
-                                    if (state.isAccessibilityEnabled) "Actif et prêt" else "Inactif (requis pour le contrôle)",
+                                    stringResource(if (state.isAccessibilityEnabled) R.string.control_a11y_on else R.string.control_a11y_off),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.isAccessibilityEnabled) HermesSuccess else HermesError
                                 )
@@ -225,7 +235,7 @@ fun MobileControlScreen(
                                     onClick = { viewModel.openAccessibilitySettings() },
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("Activer", fontSize = 12.sp)
+                                    Text(stringResource(R.string.yolo_confirm), fontSize = 12.sp)
                                 }
                             } else {
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = HermesSuccess)
@@ -242,20 +252,31 @@ fun MobileControlScreen(
                         ) {
                             Column {
                                 Text(
-                                    "Relais VPS (WebSocket)",
+                                    stringResource(R.string.relay_short),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = HermesTextPrimary
                                 )
                                 Text(
-                                    if (state.isRelayConnected) "Connecté (${state.relayUrl})" else "Déconnecté (${state.relayUrl})",
+                                    if (state.isRelayConnected) stringResource(R.string.control_connecte, state.relayUrl) else stringResource(R.string.control_deconnecte, state.relayUrl),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.isRelayConnected) HermesSuccess else HermesTextMuted
                                 )
+                                // The socket's own message, on demand ("détail technique").
+                                if (!state.isRelayConnected && state.relayErrorDetail != null) {
+                                    var showDetail by remember { mutableStateOf(false) }
+                                    TextButton(onClick = { showDetail = !showDetail }) {
+                                        Text(stringResource(if (showDetail) R.string.control_hide_detail else R.string.control_show_detail))
+                                    }
+                                    if (showDetail) {
+                                        Text(state.relayErrorDetail!!, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = HermesTextSecondary)
+                                    }
+                                }
                             }
-                            IconButton(onClick = { showPairingDialog = true }) {
+                            // Address and pairing live in Réglages › Relais mobile.
+                            IconButton(onClick = onOpenRelaySettings) {
                                 Icon(
                                     Icons.Default.Settings,
-                                    contentDescription = "Réglages appairage",
+                                    contentDescription = stringResource(R.string.control_relais_mobile_et_appairage),
                                     tint = HermesPrimary
                                 )
                             }
@@ -283,7 +304,7 @@ fun MobileControlScreen(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                "Démarrer une session de contrôle",
+                                stringResource(R.string.control_demarrer_une_session_de_controle),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Black
@@ -293,7 +314,7 @@ fun MobileControlScreen(
                         if (!isJohnAvailable) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Profil John ('john') indisponible : démarrage du contrôle mobile désactivé (aucun fallback autorisé).",
+                                text = stringResource(R.string.control_profil_john_john_indisponible_demarrage),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = HermesError
                             )
@@ -310,7 +331,7 @@ fun MobileControlScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Applications autorisées",
+                        stringResource(R.string.control_applications_autorisees),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = HermesTextPrimary
@@ -318,7 +339,7 @@ fun MobileControlScreen(
                     TextButton(onClick = { showAddAppDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ajouter", fontSize = 12.sp)
+                        Text(stringResource(R.string.workspaces_add_confirm), fontSize = 12.sp)
                     }
                 }
             }
@@ -353,13 +374,10 @@ fun MobileControlScreen(
                                 color = HermesTextSecondary
                             )
                         }
-                        Switch(
+                        LabeledSwitch(
                             checked = app.isEnabled,
                             onCheckedChange = { viewModel.toggleApp(app.packageName) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = HermesPrimary,
-                                checkedTrackColor = HermesPrimary.copy(alpha = 0.3f)
-                            )
+                            label = app.appName
                         )
                     }
                 }
@@ -373,14 +391,14 @@ fun MobileControlScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Journal d'activité et audits",
+                        stringResource(R.string.control_journal),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = HermesTextPrimary
                     )
                     if (state.auditLogs.isNotEmpty()) {
                         TextButton(onClick = { viewModel.clearAuditLogs() }) {
-                            Text("Effacer", fontSize = 12.sp, color = HermesTextMuted)
+                            Text(stringResource(R.string.auth_clear), fontSize = 12.sp, color = HermesTextMuted)
                         }
                     }
                 }
@@ -389,7 +407,7 @@ fun MobileControlScreen(
             if (state.auditLogs.isEmpty()) {
                 item {
                     Text(
-                        "Aucune action enregistrée pour le moment.",
+                        stringResource(R.string.control_aucune_action_enregistree_pour_le),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextMuted,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -404,6 +422,16 @@ fun MobileControlScreen(
     }
 
     // ── Dialogs ─────────────────────────────────────────────────────────────
+
+    if (showStopDialog) {
+        StopControlDialog(
+            onConfirm = {
+                showStopDialog = false
+                viewModel.stopSession()
+            },
+            onDismiss = { showStopDialog = false }
+        )
+    }
 
     if (showStartSessionDialog) {
         StartSessionDialog(
@@ -422,18 +450,6 @@ fun MobileControlScreen(
                     consents = consents
                 )
             }
-        )
-    }
-
-    if (showPairingDialog) {
-        PairingDialog(
-            currentUrl = state.relayUrl,
-            deviceId = state.deviceId,
-            isPaired = state.isPaired,
-            onDismiss = { showPairingDialog = false },
-            onUpdateUrl = { viewModel.updateRelayUrl(it) },
-            onPair = { code -> viewModel.pairDevice(code) },
-            onUnpair = { viewModel.unpairDevice() }
         )
     }
 
@@ -479,7 +495,7 @@ private fun AuditLogRow(log: AuditLogEntry) {
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = log.status,
+                        text = auditStatusLabel(log.status),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isSuccess) HermesSuccess else HermesError,
                         fontWeight = FontWeight.SemiBold
@@ -490,7 +506,7 @@ private fun AuditLogRow(log: AuditLogEntry) {
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesTextSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -558,6 +574,30 @@ private val CONSENT_ROWS = listOf(
 )
 
 @Composable
+private fun ConsentGroupHeader(level: ConsentLevel) {
+    val (number, title, subtitle) = when (level) {
+        ConsentLevel.Read -> Triple("1", "Lecture", "Consulter, sans rien modifier")
+        ConsentLevel.ConfirmedWrite -> Triple("2", "Écriture avec confirmation", "Chaque action vous est demandée")
+        ConsentLevel.CallsAndSms -> Triple("3", "Appels & SMS", "Confirmation + permission Android")
+    }
+    val (container, content) = when (level) {
+        ConsentLevel.Read -> HermesColors.PrimaryContainer to HermesColors.OnPrimaryContainer
+        ConsentLevel.ConfirmedWrite -> HermesColors.WarningContainer to HermesColors.OnWarningContainer
+        ConsentLevel.CallsAndSms -> HermesColors.DangerContainer to HermesColors.OnDangerContainer
+    }
+    HorizontalDivider()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(28.dp).background(container, CircleShape), contentAlignment = Alignment.Center) {
+            Text(number, color = content, style = MaterialTheme.typography.labelLarge)
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = HermesTextSecondary)
+        }
+    }
+}
+
+@Composable
 private fun StartSessionDialog(
     allowedApps: List<AllowedApp>,
     availableProfiles: List<String>,
@@ -596,10 +636,10 @@ private fun StartSessionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Démarrer le contrôle mobile") },
+        title = { Text(stringResource(R.string.control_demarrer_le_controle_mobile)) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Application cible :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_application_cible), style = MaterialTheme.typography.labelMedium)
                 allowedApps.forEach { app ->
                     Row(
                         modifier = Modifier
@@ -616,58 +656,76 @@ private fun StartSessionDialog(
                     }
                 }
 
-                Text("Profil Hermes autorisé :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_profil_hermes_autorise), style = MaterialTheme.typography.labelMedium)
                 if (isJohnAvailable) {
                     FilterChip(
                         selected = true,
                         onClick = { /* John est le seul profil autorisé pour le contrôle mobile */ },
-                        label = { Text("John (john)") },
+                        label = { Text(stringResource(R.string.control_john_john)) },
                         leadingIcon = {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                     )
                 } else {
                     Text(
-                        "Le profil John ('john') est introuvable. Démarrage impossible.",
+                        stringResource(R.string.control_le_profil_john_john_est),
                         style = MaterialTheme.typography.bodySmall,
                         color = HermesError
                     )
                 }
 
-                Text("Mode de contrôle :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_mode_de_controle), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = selectedMode == MobileControlMode.INTERACTION,
                         onClick = { selectedMode = MobileControlMode.INTERACTION },
-                        label = { Text("Interaction") }
+                        label = { Text(stringResource(R.string.control_interaction)) }
                     )
                     FilterChip(
                         selected = selectedMode == MobileControlMode.OBSERVATION,
                         onClick = { selectedMode = MobileControlMode.OBSERVATION },
-                        label = { Text("Observation seule") }
+                        label = { Text(stringResource(R.string.control_observation_seule)) }
                     )
                 }
 
-                Text("Durée maximale :", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.control_duree_maximale), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 15, 30).forEach { dur ->
                         FilterChip(
                             selected = selectedDuration == dur,
                             onClick = { selectedDuration = dur },
-                            label = { Text("$dur min") }
+                            label = { Text(stringResource(R.string.control_min, dur)) }
                         )
                     }
                 }
 
-                CONSENT_ROWS.forEach { row ->
-                    HorizontalDivider()
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(row.title, style = MaterialTheme.typography.labelMedium)
-                            Text(row.description, style = MaterialTheme.typography.bodySmall, color = HermesTextSecondary)
+                // Grouped by sensitivity; each consent is still given for this session only.
+                ConsentLevel.entries.forEach { level ->
+                    ConsentGroupHeader(level)
+                    CONSENT_ROWS.filter { consentLevel(it.consent) == level }.forEach { row ->
+                        val on = row.consent in consents
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(row.title, style = MaterialTheme.typography.labelLarge)
+                                // State as icon + text, not colour alone.
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(
+                                        if (on) Icons.Default.Check else Icons.Default.Block,
+                                        contentDescription = null,
+                                        tint = if (on) HermesColors.OnSuccessContainer else HermesTextSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        if (on) stringResource(R.string.control_autorise_pour_cette_session) else stringResource(R.string.control_refuse),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (on) HermesColors.OnSuccessContainer else HermesTextSecondary
+                                    )
+                                }
+                                Text(row.description, style = MaterialTheme.typography.bodySmall, color = HermesTextSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            LabeledSwitch(checked = on, onCheckedChange = { toggle(row.consent, it) }, label = row.title)
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(checked = row.consent in consents, onCheckedChange = { toggle(row.consent, it) })
                     }
                 }
             }
@@ -682,85 +740,11 @@ private fun StartSessionDialog(
                 },
                 enabled = selectedApp != null && isJohnAvailable
             ) {
-                Text("Démarrer")
+                Text(stringResource(R.string.control_demarrer))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler") }
-        }
-    )
-}
-
-@Composable
-private fun PairingDialog(
-    currentUrl: String,
-    deviceId: String,
-    isPaired: Boolean,
-    onDismiss: () -> Unit,
-    onUpdateUrl: (String) -> Unit,
-    onPair: (String) -> Unit,
-    onUnpair: () -> Unit
-) {
-    var urlText by remember { mutableStateOf(currentUrl) }
-    var codeText by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Configuration du Relais") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = urlText,
-                    onValueChange = { urlText = it },
-                    label = { Text("URL du Relais VPS") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    "Identifiant de l'appareil : $deviceId",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = HermesTextSecondary
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                if (isPaired) {
-                    Text("Cet appareil est appairé avec le serveur.", color = HermesSuccess)
-                    Button(
-                        onClick = {
-                            onUnpair()
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = HermesError)
-                    ) {
-                        Text("Dissocier l'appareil")
-                    }
-                } else {
-                    OutlinedTextField(
-                        value = codeText,
-                        onValueChange = { codeText = it },
-                        label = { Text("Code d'appairage à usage unique") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                onUpdateUrl(urlText)
-                if (codeText.isNotBlank()) {
-                    onPair(codeText)
-                }
-                onDismiss()
-            }) {
-                Text("Enregistrer")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Fermer") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -775,20 +759,20 @@ private fun AddAppDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Autoriser une application") },
+        title = { Text(stringResource(R.string.control_autoriser_une_application)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = nameText,
                     onValueChange = { nameText = it },
-                    label = { Text("Nom d'affichage (ex: LinkedIn)") },
+                    label = { Text(stringResource(R.string.control_nom_d_affichage_ex_linkedin)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = pkgText,
                     onValueChange = { pkgText = it },
-                    label = { Text("Nom du package (ex: com.linkedin.android)") },
+                    label = { Text(stringResource(R.string.control_nom_du_package_ex_com)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -799,11 +783,11 @@ private fun AddAppDialog(
                 onClick = { onAdd(pkgText.trim(), nameText.trim()) },
                 enabled = pkgText.isNotBlank() && nameText.isNotBlank()
             ) {
-                Text("Ajouter")
+                Text(stringResource(R.string.workspaces_add_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

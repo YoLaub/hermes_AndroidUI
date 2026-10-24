@@ -20,12 +20,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.hermes.core.model.AgentNote
+import com.example.hermes.core.model.OWNER_NAME
+import com.example.hermes.core.model.isOwnerName
+import com.example.hermes.ui.components.Persona
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditorDialog(
     note: AgentNote,
-    onSave: (title: String, content: String, author: String, tags: List<String>) -> Unit,
+    personas: List<Persona>,
+    onSave: (title: String, content: String, author: String, authorRole: String, tags: List<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
     var title by remember { mutableStateOf(note.title) }
@@ -34,7 +41,8 @@ fun NoteEditorDialog(
     var tagInput by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf(note.tags) }
 
-    val authorOptions = listOf("Yoann", "Mario", "Gaston", "Hermes")
+    // The owner first, then the agents from the profile list.
+    val authorOptions = listOf(OWNER_NAME) + personas.map { it.name }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -63,14 +71,14 @@ fun NoteEditorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (note.title.isBlank() && note.content.isBlank()) "Nouvelle Note" else "Modifier la Note",
+                        text = if (note.title.isBlank() && note.content.isBlank()) stringResource(R.string.notes_nouvelle_note) else stringResource(R.string.notes_modifier_la_note),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = HermesTextPrimary
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Fermer",
+                            contentDescription = stringResource(R.string.action_close),
                             tint = HermesTextMuted
                         )
                     }
@@ -80,23 +88,20 @@ fun NoteEditorDialog(
 
                 // Author selection chips
                 Text(
-                    text = "Auteur / Profil :",
+                    text = stringResource(R.string.notes_auteur_profil),
                     style = MaterialTheme.typography.labelMedium,
                     color = HermesTextSecondary
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     authorOptions.forEach { opt ->
                         FilterChip(
-                            selected = author == opt,
+                            selected = author == opt || (opt == OWNER_NAME && isOwnerName(author)),
                             onClick = { author = opt },
                             label = { Text(opt, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = if (opt == "Yoann") HermesPrimaryContainer else HermesTertiaryContainer,
-                                selectedLabelColor = if (opt == "Yoann") HermesPrimary else HermesTertiary
+                                selectedContainerColor = if (opt == OWNER_NAME) HermesPrimaryContainer else HermesTertiaryContainer,
+                                selectedLabelColor = if (opt == OWNER_NAME) HermesPrimary else HermesTertiary
                             ),
                             modifier = Modifier.height(32.dp)
                         )
@@ -109,7 +114,7 @@ fun NoteEditorDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titre de la note") },
+                    label = { Text(stringResource(R.string.notes_titre_de_la_note)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -125,7 +130,7 @@ fun NoteEditorDialog(
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("Contenu (Markdown supporté)") },
+                    label = { Text(stringResource(R.string.notes_contenu_markdown_supporte)) },
                     minLines = 6,
                     maxLines = 14,
                     modifier = Modifier.fillMaxWidth(),
@@ -140,7 +145,7 @@ fun NoteEditorDialog(
 
                 // Tags Input & List
                 Text(
-                    text = "Tags :",
+                    text = stringResource(R.string.notes_tags),
                     style = MaterialTheme.typography.labelMedium,
                     color = HermesTextSecondary
                 )
@@ -152,7 +157,7 @@ fun NoteEditorDialog(
                     OutlinedTextField(
                         value = tagInput,
                         onValueChange = { tagInput = it },
-                        placeholder = { Text("Ex: Prospection, Client...", fontSize = 12.sp) },
+                        placeholder = { Text(stringResource(R.string.notes_ex_prospection_client), fontSize = 12.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -175,7 +180,7 @@ fun NoteEditorDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Ajouter tag",
+                            contentDescription = stringResource(R.string.notes_ajouter_tag),
                             tint = HermesPrimary
                         )
                     }
@@ -191,11 +196,11 @@ fun NoteEditorDialog(
                             InputChip(
                                 selected = false,
                                 onClick = { tags = tags.filter { it != t } },
-                                label = { Text("#$t", fontSize = 11.sp) },
+                                label = { Text("#$t", fontSize = 12.sp) },
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Supprimer",
+                                        contentDescription = stringResource(R.string.action_delete),
                                         modifier = Modifier.size(14.dp)
                                     )
                                 },
@@ -216,17 +221,17 @@ fun NoteEditorDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Annuler", color = HermesTextMuted)
+                        Text(stringResource(R.string.action_cancel), color = HermesTextMuted)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { onSave(title, content, author, tags) },
+                        onClick = { onSave(title, content, author, if (isOwnerName(author)) "user" else "agent", tags) },
                         colors = ButtonDefaults.buttonColors(containerColor = HermesPrimary),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Enregistrer", color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.action_save), color = OnyxDarkBackground, fontWeight = FontWeight.Bold)
                     }
                 }
             }

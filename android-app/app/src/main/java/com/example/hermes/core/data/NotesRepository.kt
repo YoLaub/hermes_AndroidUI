@@ -1,114 +1,89 @@
 package com.example.hermes.core.data
 
-import android.content.Context
 import com.example.hermes.core.model.AgentNote
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.File
 
-class NotesRepository(private val context: Context) {
-    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
-    private val notesFile = File(context.filesDir, "agent_notes.json")
+/** Files of the workspace the notes live in, by workspace-relative path. */
+interface WorkspaceFiles {
+    /** Names of the files in [dir]; empty when the folder does not exist yet. */
+    suspend fun list(dir: String): Result<List<String>>
+    suspend fun read(path: String): Result<String>
+    suspend fun create(path: String, content: String): Result<Unit>
+    suspend fun save(path: String, content: String): Result<Unit>
+    suspend fun rename(path: String, newName: String): Result<Unit>
+    suspend fun delete(path: String): Result<Unit>
+}
+
+/** Where a dictated note's recording sits on this phone; the recording itself is never uploaded. */
+interface NoteAudioIndex {
+    fun get(notePath: String): String?
+    fun set(notePath: String, audioPath: String?)
+}
+
+private const val MAX_NOTES = 100
+
+/**
+ * The notes shared with the agents: Markdown files of the workspace's [NOTES_DIR] folder, which the agents read
+ * and write with their usual file tools. A note's id is its file path.
+ */
+class NotesRepository(private val files: WorkspaceFiles, private val audio: NoteAudioIndex) {
 
     private val _notes = MutableStateFlow<List<AgentNote>>(emptyList())
     val notes: StateFlow<List<AgentNote>> = _notes.asStateFlow()
 
-    suspend fun loadNotes(): List<AgentNote> = withContext(Dispatchers.IO) {
-        try {
-            if (notesFile.exists()) {
-                val content = notesFile.readText()
-                if (content.isNotBlank()) {
-                    val list = json.decodeFromString<List<AgentNote>>(content)
-                    _notes.value = list.sortedWith(compareByDescending<AgentNote> { it.isPinned }.thenByDescending { it.updatedAt })
-                    return@withContext _notes.value
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+    suspend fun loadNotes(): Result<List<AgentNote>> = runCatching {
+        val names = files.list(NOTES_DIR).getOrThrow().filter(::isNoteFile).take(MAX_NOTES)
+        val loaded = names.map { name ->
+            val path = "$NOTES_DIR/$name"
+            parseNote(path, files.read(path).getOrThrow()).copy(audioFilePath = audio.get(path))
         }
-
-        // Seed with sample collaborative notes if empty
-        if (_notes.value.isEmpty()) {
-            val defaultNotes = listOf(
-                AgentNote(
-                    title = "🎯 Objectifs Prospection Morbihan",
-                    content = "Points validés avec **Mario** :\n- Recherche de 6 PME cibles (secteur agro & nautisme)\n- Collecte documentaire sans prise de contact directe\n- Restitution dans le Kanban *growth-commercial*",
-                    author = "Yoann",
-                    authorRole = "user",
-                    tags = listOf("Prospection", "Mario", "Morbihan"),
-                    isPinned = true
-                ),
-                AgentNote(
-                    title = "⚙️ Notes d'intégration & CRM",
-                    content = "Rappels pour **Gaston** :\n- Synchronisation des accès API\n- Automatisation des exports fiches entreprises\n- Vérification des droits d'écriture",
-                    author = "Gaston",
-                    authorRole = "agent",
-                    tags = listOf("CRM", "Gaston", "Technique"),
-                    isPinned = false
-                )
-            )
-            _notes.value = defaultNotes
-            saveToFile(defaultNotes)
-        }
-        return@withContext _notes.value
+        loaded.sortedWith(compareByDescending<AgentNote> { it.isPinned }.thenBy { it.title.lowercase() })
+            .also { _notes.value = it }
     }
 
-    suspend fun saveNote(note: AgentNote): AgentNote = withContext(Dispatchers.IO) {
-        val current = _notes.value.toMutableList()
-        val index = current.indexOfFirst { it.id == note.id }
-        val updatedNote = note.copy(updatedAt = System.currentTimeMillis())
-
-        if (index != -1) {
-            current[index] = updatedNote
+    /** Creates the note's file, or renames then rewrites it; reloads the list. */
+    suspend fun saveNote(note: AgentNote): Result<Unit> = runCatching {
+        val existing = _notes.value.firstOrNull { it.id == note.id }
+        val wanted = noteFileName(note.title)
+        val path = if (existing == null) {
+            freePath(wanted).also { files.create(it, renderNote(note)).getOrThrow() }
         } else {
-            current.add(0, updatedNote)
+            var current = existing.id
+            if (current.substringAfterLast('/') != wanted) {
+                val target = freePath(wanted)
+                files.rename(current, target.substringAfterLast('/')).getOrThrow()
+                audio.get(current)?.let { audio.set(target, it); audio.set(current, null) }
+                current = target
+            }
+            files.save(current, renderNote(note)).getOrThrow()
+            current
         }
-
-        val sorted = current.sortedWith(compareByDescending<AgentNote> { it.isPinned }.thenByDescending { it.updatedAt })
-        _notes.value = sorted
-        saveToFile(sorted)
-        return@withContext updatedNote
+        note.audioFilePath?.let { audio.set(path, it) }
+        loadNotes().getOrThrow()
+        Unit
     }
 
-    suspend fun deleteNote(noteId: String) = withContext(Dispatchers.IO) {
-        val current = _notes.value.toMutableList()
-        val note = current.find { it.id == noteId }
-        // Clean audio file if present
-        note?.audioFilePath?.let { path ->
-            try {
-                val f = File(path)
-                if (f.exists()) f.delete()
-            } catch (_: Exception) {}
-        }
-        current.removeAll { it.id == noteId }
-        _notes.value = current
-        saveToFile(current)
+    suspend fun deleteNote(noteId: String): Result<Unit> = runCatching {
+        files.delete(noteId).getOrThrow()
+        audio.get(noteId)?.let { File(it).delete() }
+        audio.set(noteId, null)
+        _notes.value = _notes.value.filterNot { it.id == noteId }
     }
 
-    suspend fun togglePin(noteId: String) = withContext(Dispatchers.IO) {
-        val current = _notes.value.toMutableList()
-        val index = current.indexOfFirst { it.id == noteId }
-        if (index != -1) {
-            val item = current[index]
-            current[index] = item.copy(isPinned = !item.isPinned, updatedAt = System.currentTimeMillis())
-            val sorted = current.sortedWith(compareByDescending<AgentNote> { it.isPinned }.thenByDescending { it.updatedAt })
-            _notes.value = sorted
-            saveToFile(sorted)
-        }
+    suspend fun togglePin(noteId: String): Result<Unit> = runCatching {
+        val note = _notes.value.first { it.id == noteId }
+        saveNote(note.copy(isPinned = !note.isPinned)).getOrThrow()
     }
 
-    private fun saveToFile(notes: List<AgentNote>) {
-        try {
-            val text = json.encodeToString(notes)
-            notesFile.writeText(text)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+    /** "notes/Title.md", or "notes/Title 2.md" and so on when that name is taken. */
+    private fun freePath(fileName: String): String {
+        val taken = _notes.value.map { it.id.lowercase() }.toSet()
+        val base = fileName.removeSuffix(".md")
+        return generateSequence(1) { it + 1 }
+            .map { n -> "$NOTES_DIR/" + (if (n == 1) fileName else "$base $n.md") }
+            .first { it.lowercase() !in taken }
     }
 }

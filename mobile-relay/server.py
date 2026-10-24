@@ -13,9 +13,14 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
 import memory_validations
+from aether_protocol import TOOLS as AETHER_TOOLS
+from aether_protocol import Claim as AetherClaim
+from aether_relay import AetherRelay
+from aether_routes import router_for
 from database import (
     atomic_register_or_update_device,
     check_and_record_pairing_attempt,
+    claim_aether_avatar,
     consume_pairing_code,
     count_active_pairing_codes,
     init_db,
@@ -330,6 +335,7 @@ class DeviceConnectionManager:
             future.set_result(result)
 
 manager = DeviceConnectionManager()
+aether = AetherRelay()
 
 # ── Authentication Helpers ───────────────────────────────────────────────────
 
@@ -600,7 +606,7 @@ def generate_pairing_code(request: Request, req: PairingGenerateRequest):
         raise HTTPException(status_code=429, detail="Too many active pairing codes. Please wait or use existing codes.")
 
     code = secrets.token_hex(3).upper() # 6 characters
-    save_pairing_code(code, req.user_id or "admin", expires_in_seconds=300)
+    save_pairing_code(code, req.user_id or "admin", expires_in_seconds=300, device_kind=req.device_kind)
     # Requirement 2: Ne jamais journaliser ce code
     logger.info("Generated pairing code for user: %s (expires in 300s)", req.user_id or "admin")
     return PairingGenerateResponse(code=code, expires_in_seconds=300)
@@ -631,7 +637,7 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     is_admin_auth = bool(candidate_admin_token and verify_admin_token(candidate_admin_token))
 
     # 2. Consume pairing code atomically FIRST
-    user_id = consume_pairing_code(req.code.strip().upper())
+    user_id = consume_pairing_code(req.code.strip().upper(), device_kind=req.device_kind)
     if not user_id:
         raise HTTPException(status_code=400, detail="Code d'appairage invalide ou expiré.")
 
@@ -640,6 +646,7 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     success, reason = atomic_register_or_update_device(
         device_id=req.device_id,
         new_token=device_token,
+        device_kind=req.device_kind,
         device_name=req.device_name or "Android Phone",
         current_token=candidate_device_token,
         is_admin_authorized=is_admin_auth
@@ -1146,7 +1153,7 @@ async def mcp_stream_endpoint(request: Request):
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "tools": MCP_TOOLS
+                    "tools": MCP_TOOLS + AETHER_TOOLS
                 }
             }
         )
@@ -1154,6 +1161,25 @@ async def mcp_stream_endpoint(request: Request):
     elif method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
+
+        if isinstance(tool_name, str) and tool_name in {tool["name"] for tool in AETHER_TOOLS}:
+            try:
+                if tool_name == "aether_get_status":
+                    if arguments != {}:
+                        raise ValueError("Status takes no arguments")
+                    result = aether.status(authenticated_profile)
+                elif tool_name == "aether_claim_avatar":
+                    claimed = claim_aether_avatar(AetherClaim.model_validate(arguments).code, authenticated_profile)
+                    if claimed is None:
+                        return format_mcp_error(req_id, "AETHER: claim code invalid, expired or already used",
+                                                protocol_version=negotiated_version)
+                    log_event("aether_claimed", profile=authenticated_profile, device_id=claimed["device_id"])
+                    result = {"status": "claimed", **claimed}
+                else:
+                    result = await aether.move(authenticated_profile, arguments)
+                return format_mcp_response(req_id, json.dumps(result), protocol_version=negotiated_version)
+            except ValueError:
+                return format_mcp_error(req_id, "AETHER: arguments rejected", protocol_version=negotiated_version)
 
         # 1. mobile_control_status
         if tool_name == "mobile_control_status":
@@ -1622,3 +1648,6 @@ def format_mcp_error(req_id: Any, message: str, protocol_version: str = DEFAULT_
         }
     )
 
+
+
+app.include_router(router_for(aether, client_ip, enforce_not_blocked, note_auth_failure))

@@ -22,10 +22,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.ChatMessage
+import com.example.hermes.core.model.ProfileInfo
+import com.example.hermes.R
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.ui.components.AlertBanner
+import com.example.hermes.ui.components.AlertTone
+import com.example.hermes.ui.components.ConfirmDialog
+import com.example.hermes.ui.components.personaOf
 import com.example.hermes.features.chat.components.*
-import com.example.hermes.features.profiles.*
 import com.example.hermes.features.sessions.SessionsDrawerContent
-import com.example.hermes.features.settings.SettingsDialog
 import com.example.hermes.theme.*
 import kotlinx.coroutines.launch
 
@@ -33,10 +38,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToKanban: () -> Unit = {},
-    onNavigateToWorkspace: () -> Unit = {},
-    onNavigateToMobileControl: () -> Unit = {},
+    tools: AgentToolsState,
+    snackbarHostState: SnackbarHostState,
+    onOpenAgent: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -44,19 +48,9 @@ fun ChatScreen(
     val listState = rememberLazyListState()
 
     val sessionsDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    var showProfilesSheet by remember { mutableStateOf(false) }
-    var showCreateProfileDialog by remember { mutableStateOf(false) }
-    var showProfileEnvDialog by remember { mutableStateOf(false) }
-    var showOpenBaoDialog by remember { mutableStateOf(false) }
-    var showSkillsDialog by remember { mutableStateOf(false) }
-    var showMemoryDialog by remember { mutableStateOf(false) }
-    var showValidationsDialog by remember { mutableStateOf(false) }
-    var showMemoryProfilesDialog by remember { mutableStateOf(false) }
-    var showMandatesDialog by remember { mutableStateOf(false) }
-    var showWorkspaceDialog by remember { mutableStateOf(false) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    // What to run once the user confirms enabling auto-approval (shield, or "YOLO" on an approval card).
+    var pendingYoloEnable by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
 
     // Detect if user is currently near the bottom of the conversation
     val isNearBottom by remember {
@@ -136,167 +130,30 @@ fun ChatScreen(
         }
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                TopAppBar(
-                    title = {},
-                    navigationIcon = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 4.dp)
-                        ) {
-                            IconButton(onClick = { scope.launch { sessionsDrawerState.open() } }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Conversations",
-                                    tint = HermesTextPrimary
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (state.isStreaming) HermesWarning else HermesSecondary)
-                            )
+                ChatTopBar(
+                    title = chatSessionTitle(state.sessions, state.sessionId),
+                    profileName = profileDisplayName(state.activeProfile),
+                    isStreaming = state.isStreaming,
+                    yoloEnabled = state.yoloEnabled,
+                    canDeleteSession = state.sessionId != null,
+                    onOpenDrawer = { scope.launch { sessionsDrawerState.open() } },
+                    onOpenProfiles = { tools.profilesSheet = true },
+                    onToggleYolo = {
+                        when (yoloTap(state.yoloEnabled)) {
+                            YoloTap.Disable -> viewModel.toggleYolo()
+                            YoloTap.AskToEnable -> pendingYoloEnable = { viewModel.toggleYolo() }
                         }
                     },
-                    actions = {
-                        // Profile Switcher Chip / Avatar
-                        AssistChip(
-                            onClick = { showProfilesSheet = true },
-                            label = {
-                                Text(
-                                    text = state.activeProfile.replaceFirstChar { it.uppercase() },
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(HermesPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = state.activeProfile.take(1).uppercase(),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black
-                                    )
-                                }
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = OnyxDarkSurfaceVariant,
-                                labelColor = HermesTextPrimary
-                            ),
-                            border = BorderStroke(1.dp, OnyxBorder),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-
-                        // YOLO Mode Quick Toggle Pill
-                        AssistChip(
-                            onClick = { viewModel.toggleYolo() },
-                            label = {
-                                Text(
-                                    text = "YOLO",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = if (state.yoloEnabled) Color.Black else HermesPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = if (state.yoloEnabled) HermesPrimary else OnyxDarkSurfaceVariant,
-                                labelColor = if (state.yoloEnabled) Color.Black else HermesTextSecondary
-                            ),
-                            border = BorderStroke(1.dp, if (state.yoloEnabled) HermesPrimary else OnyxBorder),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-
-                        // New Chat
-                        IconButton(
-                            onClick = { viewModel.createNewSession() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AddComment,
-                                contentDescription = "New Chat",
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Kanban Board
-                        IconButton(
-                            onClick = onNavigateToKanban,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ViewKanban,
-                                contentDescription = "Tableau Kanban",
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Zone Commune (Notes & Audio, Calendrier, Forum)
-                        IconButton(
-                            onClick = onNavigateToWorkspace,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Hub,
-                                contentDescription = "Zone Commune (Notes, Audio, Forum)",
-                                tint = HermesTertiary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Contrôle d'applications Android par Hermes
-                        IconButton(
-                            onClick = onNavigateToMobileControl,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhoneAndroid,
-                                contentDescription = "Contrôle par Hermes",
-                                tint = HermesPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Settings / Server Config & Tools
-                        IconButton(
-                            onClick = { showSettingsDialog = true },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Paramètres & Outils",
-                                tint = HermesTextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    },
-                    windowInsets = WindowInsets.statusBars,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = OnyxDarkSurface
-                    )
+                    onNewSession = { viewModel.createNewSession() },
+                    onDeleteSession = { state.sessionId?.let { viewModel.deleteSession(it) } },
+                    onOpenAgentSettings = onOpenAgent,
                 )
             },
             bottomBar = {
                 ChatInputField(
                     inputText = state.inputText,
+                    profileName = profileDisplayName(state.activeProfile),
                     onInputTextChanged = { viewModel.onInputTextChanged(it) },
                     onSendMessage = { viewModel.sendMessage() },
                     onCancelStream = { viewModel.cancelStream() },
@@ -320,6 +177,18 @@ fun ChatScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
+                // Stays while auto-approval is on, with a one-tap way out.
+                if (state.yoloEnabled) {
+                    AlertBanner(
+                        title = stringResource(R.string.yolo_banner_title),
+                        text = stringResource(R.string.yolo_banner_text),
+                        tone = AlertTone.Warning,
+                        actionLabel = stringResource(R.string.yolo_disable),
+                        onAction = { viewModel.toggleYolo() },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
                 // Warning / Compressing inline notice
                 AnimatedVisibility(visible = state.compressingNotice != null || state.warningNotice != null) {
                     val notice = state.compressingNotice ?: state.warningNotice ?: ""
@@ -376,75 +245,12 @@ fun ChatScreen(
 
                 // Messages List
                 if (state.messages.isEmpty() && !state.isStreaming && !state.isLoading) {
-                    // Empty State Hero
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(HermesPrimaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SmartToy,
-                                    contentDescription = null,
-                                    tint = HermesPrimary,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "How can Hermes help you today?",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = HermesTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Running as profile '${state.activeProfile}'",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = HermesSecondary
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Suggestion chips
-                            val suggestions = listOf(
-                                "Inspect project files and structure",
-                                "Run git status and summarize changes",
-                                "Explain the architecture of this server"
-                            )
-                            suggestions.forEach { prompt ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clickable {
-                                            viewModel.onInputTextChanged(prompt)
-                                        },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = CardDefaults.cardColors(containerColor = OnyxDarkSurfaceVariant),
-                                    border = CardDefaults.outlinedCardBorder().copy(
-                                        brush = androidx.compose.ui.graphics.SolidColor(OnyxBorder)
-                                    )
-                                ) {
-                                    Text(
-                                        text = prompt,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = HermesTextPrimary,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    val activeInfo = state.profiles.firstOrNull { it.name == state.activeProfile }
+                    ChatEmptyState(
+                        persona = personaOf(activeInfo ?: ProfileInfo(name = state.activeProfile)),
+                        skillCount = activeInfo?.skillCount ?: 0,
+                        onSuggestion = { viewModel.onInputTextChanged(it) },
+                    )
                 } else {
                     LazyColumn(
                         state = listState,
@@ -476,11 +282,11 @@ fun ChatScreen(
 
                                     StreamingIndicator(
                                         statusText = if (state.streamingToolCalls.any { it.output == null && !it.isError }) {
-                                            "Executing tool..."
+                                            stringResource(R.string.chat_status_tool)
                                         } else if (state.streamingReasoning.isNotBlank() && state.streamingTokens.isBlank()) {
-                                            "Reasoning..."
+                                            stringResource(R.string.chat_status_reasoning)
                                         } else {
-                                            "Generating response..."
+                                            stringResource(R.string.chat_status_generating)
                                         }
                                     )
                                 }
@@ -493,7 +299,7 @@ fun ChatScreen(
                                 ApprovalCard(
                                     approval = appr,
                                     onRespond = { approved -> viewModel.respondApproval(approved) },
-                                    onApproveAndYolo = { viewModel.enableYoloAndApprove(appr.id) }
+                                    onApproveAndYolo = { pendingYoloEnable = { viewModel.enableYoloAndApprove(appr.id) } }
                                 )
                             }
                         }
@@ -512,337 +318,19 @@ fun ChatScreen(
             }
         }
 
-        // Profiles Bottom Sheet
-        if (showProfilesSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showProfilesSheet = false },
-                containerColor = OnyxDarkSurface
-            ) {
-                ProfileDrawerContent(
-                    profiles = state.profiles,
-                    activeProfile = state.activeProfile,
-                    onSelectProfile = { name -> viewModel.switchProfile(name) },
-                    onCreateProfile = {
-                        showProfilesSheet = false
-                        showCreateProfileDialog = true
-                    },
-                    onDeleteProfile = { name ->
-                        viewModel.deleteProfile(name) { success, err ->
-                            scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    if (success) "Profil \"$name\" supprimé"
-                                    else "Erreur : ${err ?: "Impossible de supprimer"}"
-                                )
-                            }
-                        }
-                    },
-                    onOpenSkills = {
-                        showProfilesSheet = false
-                        viewModel.loadSkills()
-                        showSkillsDialog = true
-                    },
-                    onOpenMemory = {
-                        showProfilesSheet = false
-                        viewModel.loadMemory()
-                        showMemoryDialog = true
-                    },
-                    onOpenWorkspaces = {
-                        showProfilesSheet = false
-                        viewModel.loadWorkspaces()
-                        showWorkspaceDialog = true
-                    },
-                    onOpenEnv = {
-                        showProfilesSheet = false
-                        viewModel.loadProviders()
-                        showProfileEnvDialog = true
-                    },
-                    onOpenMemoryProfiles = {
-                        showProfilesSheet = false
-                        viewModel.loadMemoryProfiles()
-                        showMemoryProfilesDialog = true
-                    },
-                    onOpenMandates = {
-                        showProfilesSheet = false
-                        viewModel.loadMemoryMandates()
-                        showMandatesDialog = true
-                    },
-                    onOpenValidations = {
-                        showProfilesSheet = false
-                        viewModel.loadMemoryValidations()
-                        viewModel.loadMemoryActions()
-                        showValidationsDialog = true
-                    },
-                    onOpenOpenbao = {
-                        showProfilesSheet = false
-                        viewModel.loadOpenbaoSecrets()
-                        showOpenBaoDialog = true
-                    },
-                    onRestartGateway = {
-                        showProfilesSheet = false
-                        viewModel.restartGateway()
-                    },
-                    onDismiss = { showProfilesSheet = false },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
+    }
 
-        // Create Profile Dialog
-        if (showCreateProfileDialog) {
-            CreateProfileDialog(
-                existingProfiles = state.profiles,
-                onDismiss = { showCreateProfileDialog = false },
-                onCreate = { name, cloneFrom, model, provider, apiKey ->
-                    viewModel.createProfile(name, cloneFrom, model, provider, apiKey) { success, err ->
-                        if (success) {
-                            showCreateProfileDialog = false
-                            scope.launch { snackbarHostState.showSnackbar("Profil \"$name\" créé et activé !") }
-                        } else {
-                            scope.launch { snackbarHostState.showSnackbar("Erreur : ${err ?: "Échec de création"}") }
-                        }
-                    }
-                }
-            )
-        }
-
-        // Profile Env Dialog (.env variables & API keys)
-        if (showProfileEnvDialog) {
-            ProfileEnvDialog(
-                activeProfile = state.activeProfile,
-                envEntries = state.envEntries,
-                providers = state.providers,
-                isLoading = state.isProvidersLoading || state.isEnvLoading,
-                isEnvFallback = state.isEnvFallback,
-                onSaveEnvVar = { key, value, onFinished ->
-                    viewModel.setProfileEnvVar(key, value) { success, errorMsg ->
-                        onFinished(success, errorMsg)
-                        if (success) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Variable $key enregistrée dans le .env du profil ${state.activeProfile}")
-                            }
-                        }
-                    }
-                },
-                onDeleteEnvVar = { key, onFinished ->
-                    viewModel.deleteProfileEnvVar(key) { success, errorMsg ->
-                        onFinished?.invoke(success, errorMsg)
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                if (success) "Variable $key supprimée du .env"
-                                else "Échec de la suppression de $key : ${errorMsg ?: ""}"
-                            )
-                        }
-                    }
-                },
-                onSaveProviderKey = { providerId, apiKey, onFinished ->
-                    viewModel.setProviderKey(providerId, apiKey) { success, errorMsg ->
-                        onFinished(success, errorMsg)
-                        if (success) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Clé $providerId enregistrée dans le .env du profil ${state.activeProfile}")
-                            }
-                        }
-                    }
-                },
-                onDeleteProviderKey = { providerId, onFinished ->
-                    viewModel.deleteProviderKey(providerId) { success, errorMsg ->
-                        onFinished?.invoke(success, errorMsg)
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                if (success) "Clé $providerId supprimée du .env"
-                                else "Échec de la suppression : ${errorMsg ?: ""}"
-                            )
-                        }
-                    }
-                },
-                onRefresh = {
-                    viewModel.loadProfileEnv()
-                    viewModel.loadProviders()
-                },
-                onOpenOpenbao = {
-                    viewModel.loadOpenbaoSecrets()
-                    showOpenBaoDialog = true
-                },
-                onDismiss = { showProfileEnvDialog = false }
-            )
-        }
-
-        // OpenBao Vault Dialog (HashiCorp / OpenBao Secrets Management)
-        if (showOpenBaoDialog) {
-            OpenBaoVaultDialog(
-                activeProfile = state.activeProfile,
-                openbaoUrl = state.openbaoUrl,
-                openbaoToken = state.openbaoToken,
-                openbaoMount = state.openbaoMount,
-                health = state.openbaoHealth,
-                secrets = state.openbaoSecrets,
-                isLoading = state.isOpenbaoLoading,
-                errorMessage = state.openbaoError,
-                onSaveConfig = { url, token, mount, onFinished ->
-                    viewModel.saveOpenbaoConfig(url, token, mount, onFinished)
-                },
-                onSaveSecret = { key, value, onFinished ->
-                    viewModel.saveOpenbaoSecret(key, value, state.activeProfile) { success, err ->
-                        onFinished(success, err)
-                        if (success) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Secret $key enregistré dans OpenBao. Redémarrez le conteneur ${state.activeProfile} pour appliquer.")
-                            }
-                        }
-                    }
-                },
-                onDeleteSecret = { key, onFinished ->
-                    viewModel.deleteOpenbaoSecret(key, state.activeProfile) { success, err ->
-                        onFinished(success, err)
-                        if (success) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Secret $key supprimé d'OpenBao. Redémarrez le conteneur ${state.activeProfile} pour appliquer.")
-                            }
-                        }
-                    }
-                },
-                onRefresh = {
-                    viewModel.loadOpenbaoHealth()
-                    viewModel.loadOpenbaoSecrets()
-                },
-                onRestartGateway = {
-                    viewModel.restartGateway()
-                },
-                isRestartingGateway = state.isRestartingGateway,
-                onDismiss = { showOpenBaoDialog = false }
-            )
-        }
-
-        // Skills Dialog
-        if (showSkillsDialog) {
-            SkillsDialog(
-                profileName = state.activeProfile,
-                skills = state.skills,
-                isLoading = state.isSkillsLoading,
-                selectedSkillDetail = state.selectedSkillDetail,
-                onSelectSkill = { name -> viewModel.loadSkillDetail(name) },
-                onBackToList = { viewModel.clearSkillDetail() },
-                onDeleteSkill = { name -> viewModel.deleteSkill(name) },
-                onDismiss = {
-                    showSkillsDialog = false
-                    viewModel.clearSkillDetail()
-                }
-            )
-        }
-
-        if (showMemoryProfilesDialog) {
-            MemoryProfilesDialog(
-                profiles = state.memoryProfiles,
-                created = state.createdProfile,
-                isLoading = state.isProfilesLoading,
-                error = state.profilesError,
-                hasToken = state.hasMemoryOwnerToken,
-                onRefresh = { viewModel.loadMemoryProfiles() },
-                onCreate = { name, read, write -> viewModel.createMemoryProfile(name, read, write) },
-                onSaveGrants = { name, read, write -> viewModel.setMemoryProfileGrants(name, read, write) },
-                onRevoke = { viewModel.revokeMemoryProfile(it) },
-                onDismissCreated = { viewModel.dismissCreatedProfileToken() },
-                onDismiss = {
-                    viewModel.dismissCreatedProfileToken()
-                    showMemoryProfilesDialog = false
-                }
-            )
-        }
-
-        if (showMandatesDialog) {
-            MemoryMandatesDialog(
-                mandates = state.memoryMandates,
-                profiles = state.memoryProfiles,
-                isLoading = state.isMandatesLoading,
-                error = state.mandatesError,
-                hasToken = state.hasMemoryOwnerToken,
-                onRefresh = { viewModel.loadMemoryMandates() },
-                onCreate = { profile, label, hosts, folders, expiresAt, onDone ->
-                    viewModel.createMemoryMandate(profile, label, hosts, folders, expiresAt, onDone)
-                },
-                onRevoke = { viewModel.revokeMemoryMandate(it) },
-                onDismiss = { showMandatesDialog = false }
-            )
-        }
-
-        if (showValidationsDialog) {
-            MemoryValidationsDialog(
-                items = state.memoryValidations,
-                actions = state.memoryActions,
-                isLoading = state.isValidationsLoading,
-                error = state.validationsError,
-                hasToken = state.hasMemoryOwnerToken,
-                onSaveToken = { viewModel.saveMemoryOwnerToken(it) },
-                onRefresh = {
-                    viewModel.loadMemoryValidations()
-                    viewModel.loadMemoryActions()
-                },
-                onDecideAction = { id, approve -> viewModel.decideMemoryAction(id, approve) },
-                onDecide = { id, confirm -> viewModel.decideMemoryValidation(id, confirm) },
-                onDismiss = { showValidationsDialog = false }
-            )
-        }
-
-        // Memory Dialog
-        if (showMemoryDialog) {
-            MemoryDialog(
-                profileName = state.activeProfile,
-                memoryData = state.memoryData,
-                isLoading = state.isMemoryLoading,
-                onSaveSection = { section, content -> viewModel.saveMemory(section, content) },
-                onDismiss = { showMemoryDialog = false }
-            )
-        }
-
-        // Workspaces Dialog
-        if (showWorkspaceDialog) {
-            WorkspaceDialog(
-                workspaces = state.workspaces,
-                activeWorkspace = state.activeWorkspace,
-                isLoading = state.isWorkspacesLoading,
-                onSelectWorkspace = { path ->
-                    viewModel.selectWorkspace(path)
-                    showWorkspaceDialog = false
-                },
-                onAddWorkspace = { path, name -> viewModel.addWorkspace(path, name) },
-                onRemoveWorkspace = { path -> viewModel.removeWorkspace(path) },
-                onDismiss = { showWorkspaceDialog = false }
-            )
-        }
-
-        // Settings & Tools Dialog
-        if (showSettingsDialog) {
-            SettingsDialog(
-                serverUrl = state.serverUrl.ifBlank { "Hermes Server" },
-                activeProfile = state.activeProfile,
-                sessionId = state.sessionId,
-                yoloEnabled = state.yoloEnabled,
-                onToggleYolo = { viewModel.toggleYolo() },
-                onOpenSkills = {
-                    showSettingsDialog = false
-                    viewModel.loadSkills()
-                    showSkillsDialog = true
-                },
-                onOpenMemory = {
-                    showSettingsDialog = false
-                    viewModel.loadMemory()
-                    showMemoryDialog = true
-                },
-                onOpenWorkspaces = {
-                    showSettingsDialog = false
-                    viewModel.loadWorkspaces()
-                    showWorkspaceDialog = true
-                },
-                onOpenProfiles = {
-                    showSettingsDialog = false
-                    showProfilesSheet = true
-                },
-                onDisconnect = {
-                    showSettingsDialog = false
-                    onNavigateToSettings()
-                },
-                onDismiss = { showSettingsDialog = false }
-            )
-        }
+    pendingYoloEnable?.let { enable ->
+        ConfirmDialog(
+            title = stringResource(R.string.yolo_confirm_title),
+            message = stringResource(R.string.yolo_confirm_message),
+            confirmLabel = stringResource(R.string.yolo_confirm),
+            destructive = true,
+            onConfirm = {
+                pendingYoloEnable = null
+                enable()
+            },
+            onDismiss = { pendingYoloEnable = null }
+        )
     }
 }

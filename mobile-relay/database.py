@@ -71,6 +71,25 @@ def init_db():
                 last_attempt REAL NOT NULL
             )
         """)
+        # Additive migration: existing clients and outstanding codes remain Android.
+        for table in ("paired_devices", "pairing_codes"):
+            columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "device_kind" not in columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN device_kind TEXT NOT NULL DEFAULT 'android'")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS aether_claims (
+                code_hash TEXT PRIMARY KEY,
+                poll_hash TEXT UNIQUE NOT NULL,
+                device_id TEXT NOT NULL,
+                device_name TEXT NOT NULL,
+                profile TEXT,
+                expires_at REAL NOT NULL
+            )
+        """)
+        # Owner profile of an AETHER avatar; Android devices keep NULL.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(paired_devices)")}
+        if "profile" not in columns:
+            conn.execute("ALTER TABLE paired_devices ADD COLUMN profile TEXT")
     conn.close()
 
 def _env_number(name: str, default: float) -> float:
@@ -142,10 +161,10 @@ def purge_old_records(now: Optional[float] = None, audit_retention_days: Optiona
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
-def verify_device_token(device_id: str, token: str) -> bool:
+def verify_device_token(device_id: str, token: str, device_kind: str = "android") -> bool:
     conn = get_db()
     h = hash_token(token)
-    row = conn.execute("SELECT token_hash FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone()
+    row = conn.execute("SELECT token_hash FROM paired_devices WHERE device_id = ? AND device_kind = ?", (device_id, device_kind)).fetchone()
     if not row:
         conn.close()
         return False
@@ -167,7 +186,9 @@ def atomic_register_or_update_device(
     new_token: str,
     device_name: str,
     current_token: Optional[str] = None,
-    is_admin_authorized: bool = False
+    is_admin_authorized: bool = False,
+    device_kind: str = "android",
+    profile: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
     Rend atomiques la vérification d'existence, l'autorisation de remplacement et l'enregistrement:
@@ -177,6 +198,8 @@ def atomic_register_or_update_device(
     Retourne (True, "created" | "updated") en cas de succès,
     ou (False, "UNAUTHORIZED_OVERWRITE" | "INTEGRITY_ERROR") en cas de refus.
     """
+    if device_kind not in ("android", "aether"):
+        raise ValueError("Unknown device kind")
     conn = get_db()
     conn.isolation_level = None # Allows explicit BEGIN IMMEDIATE transaction
     new_hash = hash_token(new_token)
@@ -186,11 +209,14 @@ def atomic_register_or_update_device(
         conn.execute("BEGIN IMMEDIATE")
         # 1. Vérification d'existence sous verrou transactionnel immédiat SQLite
         row = conn.execute(
-            "SELECT token_hash FROM paired_devices WHERE device_id = ?",
+            "SELECT token_hash, device_kind FROM paired_devices WHERE device_id = ?",
             (device_id,)
         ).fetchone()
 
         if row:
+            if row["device_kind"] != device_kind:
+                conn.execute("ROLLBACK")
+                return (False, "UNAUTHORIZED_OVERWRITE")
             # Appareil existant: remplacement
             existing_hash = row["token_hash"]
             token_matches = False
@@ -205,18 +231,18 @@ def atomic_register_or_update_device(
             # Remplacement autorisé: UPDATE atomique dans la même transaction
             conn.execute("""
                 UPDATE paired_devices
-                SET token_hash = ?, device_name = ?, last_seen = ?
+                SET token_hash = ?, device_name = ?, last_seen = ?, profile = ?
                 WHERE device_id = ?
-            """, (new_hash, device_name, now, device_id))
+            """, (new_hash, device_name, now, profile, device_id))
             conn.execute("COMMIT")
             result = (True, "updated")
         else:
             # Nouvel appareil: INSERT strict (échoue atomiquement si doublon inséré en concurrence)
             try:
                 conn.execute("""
-                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (device_id, new_hash, device_name, now, now))
+                    INSERT INTO paired_devices (device_id, token_hash, device_name, created_at, last_seen, device_kind, profile)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (device_id, new_hash, device_name, now, now, device_kind, profile))
                 conn.execute("COMMIT")
                 result = (True, "created")
             except sqlite3.IntegrityError:
@@ -231,6 +257,74 @@ def atomic_register_or_update_device(
     finally:
         conn.close()
     return result
+
+def aether_device_profile(device_id: str) -> Optional[str]:
+    conn = get_db()
+    row = conn.execute("SELECT profile FROM paired_devices WHERE device_id = ? AND device_kind = 'aether'", (device_id,)).fetchone()
+    conn.close()
+    return row["profile"] if row else None
+
+def normalize_claim_code(code: str) -> str:
+    return "".join(ch for ch in code.upper() if ch.isalnum())
+
+def start_aether_claim(device_id: str, device_name: str, code: str, poll_token: str,
+                       expires_in_seconds: int = 300) -> bool:
+    """Opens a pairing request for a new avatar. False if the avatar id is already paired."""
+    conn = get_db()
+    now = time.time()
+    try:
+        with conn:
+            conn.execute("DELETE FROM aether_claims WHERE expires_at < ? OR device_id = ?", (now, device_id))
+            if conn.execute("SELECT 1 FROM paired_devices WHERE device_id = ?", (device_id,)).fetchone():
+                return False
+            conn.execute(
+                "INSERT INTO aether_claims (code_hash, poll_hash, device_id, device_name, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (hash_token(normalize_claim_code(code)), hash_token(poll_token), device_id, device_name,
+                 now + expires_in_seconds))
+        return True
+    finally:
+        conn.close()
+
+def count_active_aether_claims() -> int:
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) AS cnt FROM aether_claims WHERE expires_at >= ?", (time.time(),)).fetchone()
+    conn.close()
+    return row["cnt"]
+
+def claim_aether_avatar(code: str, profile: str) -> Optional[dict]:
+    """Binds a pending avatar to the claiming profile, once. None if unknown, expired or already claimed."""
+    conn = get_db()
+    try:
+        with conn:
+            row = conn.execute(
+                "UPDATE aether_claims SET profile = ? WHERE code_hash = ? AND profile IS NULL AND expires_at >= ? "
+                "RETURNING device_id, device_name",
+                (profile, hash_token(normalize_claim_code(code)), time.time())).fetchone()
+        return {"device_id": row["device_id"], "device_name": row["device_name"]} if row else None
+    finally:
+        conn.close()
+
+def finish_aether_claim(poll_token: str, new_token: str) -> Tuple[str, Optional[dict]]:
+    """Returns ("pending"|"paired"|"unknown"|"conflict", details). A claimed request is consumed by its
+    first successful poll, which registers the avatar under the claiming profile."""
+    conn = get_db()
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM aether_claims WHERE poll_hash = ? AND expires_at >= ?",
+                           (hash_token(poll_token), time.time())).fetchone()
+        if row is None or row["profile"] is None:
+            conn.execute("ROLLBACK")
+            return ("unknown", None) if row is None else ("pending", None)
+        conn.execute("DELETE FROM aether_claims WHERE code_hash = ?", (row["code_hash"],))
+        conn.execute("COMMIT")
+    finally:
+        conn.close()
+    ok, _ = atomic_register_or_update_device(row["device_id"], new_token, row["device_name"],
+                                             device_kind="aether", profile=row["profile"])
+    if not ok:
+        return ("conflict", None)
+    return ("paired", {"device_id": row["device_id"], "profile": row["profile"]})
 
 def register_device(device_id: str, token: str, name: str, allow_overwrite: bool = True) -> bool:
     success, _ = atomic_register_or_update_device(
@@ -279,16 +373,16 @@ def count_active_pairing_codes() -> int:
     conn.close()
     return count
 
-def save_pairing_code(code: str, user_id: str, expires_in_seconds: int = 300):
+def save_pairing_code(code: str, user_id: str, expires_in_seconds: int = 300, device_kind: str = "android"):
     conn = get_db()
     expires_at = time.time() + expires_in_seconds
     with conn:
         conn.execute("DELETE FROM pairing_codes WHERE expires_at < ?", (time.time(),))
-        conn.execute("INSERT OR REPLACE INTO pairing_codes (code, user_id, expires_at) VALUES (?, ?, ?)",
-                     (code, user_id, expires_at))
+        conn.execute("INSERT OR REPLACE INTO pairing_codes (code, user_id, expires_at, device_kind) VALUES (?, ?, ?, ?)",
+                     (code, user_id, expires_at, device_kind))
     conn.close()
 
-def consume_pairing_code(code: str) -> Optional[str]:
+def consume_pairing_code(code: str, device_kind: str = "android") -> Optional[str]:
     conn = get_db()
     now = time.time()
     clean_code = code.strip().upper()
@@ -296,8 +390,8 @@ def consume_pairing_code(code: str) -> Optional[str]:
     try:
         # SQLite 3.35+ supports DELETE ... RETURNING user_id, expires_at as a single atomic execution
         cursor = conn.execute(
-            "DELETE FROM pairing_codes WHERE code = ? RETURNING user_id, expires_at",
-            (clean_code,)
+            "DELETE FROM pairing_codes WHERE code = ? AND device_kind = ? RETURNING user_id, expires_at",
+            (clean_code, device_kind)
         )
         row = cursor.fetchone()
         conn.commit()
@@ -308,7 +402,7 @@ def consume_pairing_code(code: str) -> Optional[str]:
         try:
             conn.isolation_level = None
             conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ?", (clean_code,)).fetchone()
+            row = conn.execute("SELECT user_id, expires_at FROM pairing_codes WHERE code = ? AND device_kind = ?", (clean_code, device_kind)).fetchone()
             if row:
                 conn.execute("DELETE FROM pairing_codes WHERE code = ?", (clean_code,))
                 if row["expires_at"] >= now:

@@ -59,8 +59,8 @@ internal val MANDATE_DURATIONS = listOf(
     MandateDuration("1 h", 1),
     MandateDuration("8 h", 8),
     MandateDuration("24 h", 24),
-    MandateDuration("7 jours", 24 * 7),
-    MandateDuration("30 jours", 24 * 30)
+    MandateDuration("7 j", 24 * 7),
+    MandateDuration("30 j", 24 * 30)
 )
 
 private fun utcFormat(pattern: String) = SimpleDateFormat(pattern, Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }

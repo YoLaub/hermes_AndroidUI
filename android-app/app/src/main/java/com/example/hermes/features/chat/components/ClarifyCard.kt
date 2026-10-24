@@ -14,6 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.hermes.core.model.ClarifyPayload
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -52,7 +54,7 @@ fun ClarifyCard(
                 Spacer(modifier = Modifier.width(10.dp))
 
                 Text(
-                    text = "Clarification Needed",
+                    text = stringResource(R.string.chat_clarification_needed),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = HermesPrimary
                 )

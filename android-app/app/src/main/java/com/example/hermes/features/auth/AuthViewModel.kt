@@ -3,6 +3,7 @@ package com.example.hermes.features.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hermes.core.data.HermesRepository
+import com.example.hermes.core.model.AuthStatusResponse
 import com.example.hermes.core.model.HealthResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,9 @@ data class AuthUiState(
     val errorMessage: String? = null
 )
 
+/** Whether the app may skip the sign-in screen: no password on the server, or the saved session still valid. */
+fun canResume(status: AuthStatusResponse?): Boolean = status != null && (!status.authEnabled || status.loggedIn)
+
 class AuthViewModel(
     private val repository: HermesRepository
 ) : ViewModel() {
@@ -44,7 +48,13 @@ class AuthViewModel(
                     password = savedPassword ?: ""
                 ) 
             }
-            testConnection()
+            // The saved session cookie must be in place before the server is asked about it.
+            repository.restoreSessionCookie()
+            if (canResume(repository.checkAuthStatus().getOrNull())) {
+                _uiState.update { it.copy(isConnected = true) }
+            } else {
+                testConnection()
+            }
         }
     }
 

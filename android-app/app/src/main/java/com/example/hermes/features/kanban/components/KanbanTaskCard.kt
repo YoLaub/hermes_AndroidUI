@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.hermes.core.model.KanbanTask
 import com.example.hermes.theme.*
+import androidx.compose.ui.res.stringResource
+import com.example.hermes.R
 
 @Composable
 fun kanbanStatusColor(status: String): Color = when (status.lowercase()) {
@@ -36,13 +38,13 @@ fun kanbanStatusColor(status: String): Color = when (status.lowercase()) {
 
 @Composable
 fun kanbanStatusLabel(status: String): String = when (status.lowercase()) {
-    "triage" -> "Triage"
-    "todo" -> "À faire"
-    "ready" -> "Prêt"
-    "running" -> "En cours"
-    "blocked" -> "Bloqué"
-    "done" -> "Terminé"
-    "archived" -> "Archivé"
+    "triage" -> stringResource(R.string.kanban_triage)
+    "todo" -> stringResource(R.string.kanban_a_faire)
+    "ready" -> stringResource(R.string.kanban_pret)
+    "running" -> stringResource(R.string.kanban_en_cours)
+    "blocked" -> stringResource(R.string.kanban_bloque)
+    "done" -> stringResource(R.string.agenda_termine)
+    "archived" -> stringResource(R.string.kanban_archive)
     else -> status.replaceFirstChar { it.uppercase() }
 }
 
@@ -128,7 +130,7 @@ fun KanbanTaskCard(
                         ) {
                             Text(
                                 text = prioText,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                 color = prioColor,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -153,7 +155,7 @@ fun KanbanTaskCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = assignee,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                 color = HermesTextPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -220,7 +222,7 @@ fun KanbanTaskCard(
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.height(28.dp)
                             ) {
-                                Text("À faire", fontSize = 11.sp)
+                                Text(stringResource(R.string.kanban_a_faire), fontSize = 12.sp)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(12.dp))
                             }
@@ -236,14 +238,14 @@ fun KanbanTaskCard(
                                     contentColor = Color(0xFFFBBF24)
                                 )
                             ) {
-                                Text("Prêt", fontSize = 11.sp)
+                                Text(stringResource(R.string.kanban_pret), fontSize = 12.sp)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp))
                             }
                         }
                         "ready" -> {
                             Text(
-                                text = "En attente dispatch",
+                                text = stringResource(R.string.kanban_en_attente_dispatch),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFFFBBF24)
                             )
@@ -257,7 +259,7 @@ fun KanbanTaskCard(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Agent actif",
+                                    text = stringResource(R.string.kanban_agent_actif),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color(0xFFA855F7)
                                 )
@@ -274,7 +276,7 @@ fun KanbanTaskCard(
                                     contentColor = Color(0xFF10B981)
                                 )
                             ) {
-                                Text("Débloquer", fontSize = 11.sp)
+                                Text(stringResource(R.string.kanban_debloquer), fontSize = 12.sp)
                             }
                         }
                         "done" -> {
