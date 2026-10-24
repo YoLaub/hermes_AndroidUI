@@ -6,10 +6,10 @@ stored, logged or echoed back. Everything coming from the service is data for di
 """
 import json
 import os
-from datetime import datetime
 import re
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 PREVIEW_MAX = 500
 LABEL_MAX = 2000

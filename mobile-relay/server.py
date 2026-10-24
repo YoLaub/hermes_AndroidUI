@@ -12,11 +12,11 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
+import memory_validations
 from aether_protocol import TOOLS as AETHER_TOOLS
 from aether_protocol import Claim as AetherClaim
 from aether_relay import AetherRelay
 from aether_routes import router_for
-import memory_validations
 from database import (
     atomic_register_or_update_device,
     check_and_record_pairing_attempt,
@@ -1165,7 +1165,8 @@ async def mcp_stream_endpoint(request: Request):
         if isinstance(tool_name, str) and tool_name in {tool["name"] for tool in AETHER_TOOLS}:
             try:
                 if tool_name == "aether_get_status":
-                    if arguments != {}: raise ValueError("Status takes no arguments")
+                    if arguments != {}:
+                        raise ValueError("Status takes no arguments")
                     result = aether.status(authenticated_profile)
                 elif tool_name == "aether_claim_avatar":
                     claimed = claim_aether_avatar(AetherClaim.model_validate(arguments).code, authenticated_profile)
