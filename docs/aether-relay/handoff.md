@@ -2,9 +2,29 @@
 type: Handoff
 title: AETHER relay integration for the next developer
 description: Implemented server-side AETHER pairing and MCP routing, per-profile avatars, wire contract and remaining client work.
-timestamp: 2026-10-24
+timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
+# Latest handoff: explicit avatar gesture (2026-10-26)
+
+The owner explicitly authorized this intervention after being asked because the repository was previously read-only. Authorization covers this gesture feature; ask again before a later intervention in this repository. Keep the work on the existing `dev` branch. No push, image build or deployment was performed. Existing unrelated files/deletions were preserved.
+
+The user approved the current AETHER wave and requires it to be an agent tool, never an automatic idle gesture. Added `aether_avatar_gesture` to the MCP tools with strict arguments `{device_id, gesture: "wave", ttl_seconds?: 15}`; TTL range is 1–30 seconds. Other gestures are rejected. Ownership, authorization/revocation, one active command per avatar, correlation, timeout and no replay use the same command path as movement. A gesture completion still requires the client to report a stationary avatar. The renderer is responsible for confirming the final rendered pose, not just elapsed time or command receipt.
+
+## Backwards-compatible negotiation
+
+The AETHER client reports `client_version: "0.2.0"` but preserves the old two-item hello capability list, so old relays still accept it. Only for that explicitly supported client version, this relay adds `optional_capabilities: ["avatar.gesture"]` to `server.ready`. The updated client then sends `client.capabilities` with `{capabilities: ["avatar.gesture"]}`. Until that message arrives, `can_gesture` is false and the tool returns `unsupported_capability`. Old clients receive the original ready payload; a new client connected to an old relay keeps movement working and does not negotiate gestures. When changing client versions, update this explicit negotiation gate or introduce a separately agreed extension-version scheme.
+
+The gesture command is `command.avatar_gesture`, payload `{command_id, expires_at, gesture: "wave"}`. Result messages remain `command.accepted`, `command.completed` with stationary avatar, or `command.error` using existing codes. Acceptance is not completion. Movement interruption fails the greeting. Expiry/disconnection stop tracking and never cause retries; an already-started physical animation may finish locally after tracking ends.
+
+## AETHER side and verification
+
+AETHER now implements the full renderer/Objective-C/Rust/Python path. Its bounded native mailbox reports queued/playing/completed/failed; only the promise resolved after a final rendered neutral frame can succeed. A local eight-second guard fails stalled gestures. This is unrelated to Android control, chat or capture.
+
+Tests: 288 relay tests pass, including authenticated MCP/WebSocket gesture routing, legacy-client compatibility, owner boundaries, capability gating and shared move/gesture exclusion. AETHER frontend, Rust and native tests also pass, including a real rendered wave and movement interruption. The test environments use temporary SQLite databases and synthetic credentials, never the production store. Deploy the changed relay through the owner's usual process and refresh/reconnect AETHER before asking John to use the tool. No new pairing or manual token configuration is required for existing credentials.
+
+# Historical handoff (2026-10-24; superseded where noted above)
+
 # Message for the development agent
 
 The owner authorized extending the existing relay to connect their AETHER avatars to Hermes on the VPS. AETHER targets every platform; priority: finish and test macOS with Hermes before Windows. Each Hermes profile can own its own avatars (owner decision, 2026-10-24). The user pastes a text shown by AETHER to the agent of the chosen profile, with no terminal and no client-side configuration. No push, Docker build or deployment has been done. The owner explicitly asked to keep the commits on the current `dev` branch, despite the `main` mention in AGENTS.md. No production secret was read or changed.
@@ -13,7 +33,7 @@ The server-side relay is implemented and tested with a simulated WebSocket clien
 
 # Layout and compatibility
 
-- `aether_protocol.py`: strict schemas and the definitions of the three MCP tools.
+- `aether_protocol.py`: strict schemas and the definitions of the four MCP tools.
 - `aether_relay.py`: connections, commands, timeouts and correlation, with no Android operation.
 - `aether_routes.py`: the `/ws/aether` WebSocket, its authentication and validation, plus the `/api/aether/pair/start` and `/api/aether/pair/poll` pairing routes.
 - `server.py`: short hooks into the existing MCP endpoint; profile authentication is reused.
@@ -99,3 +119,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=mobile-relay /Users/yoann/Developer/project
 ```
 
 This environment satisfies the relay's dependencies; on another machine, use the repository's Python environment with `mobile-relay/requirements.txt`. Existing warning: Starlette/httpx TestClient deprecation.
+
+## Combined local acceptance (2026-10-26)
+
+An isolated actual Uvicorn relay, temporary pairing/SQLite state, real authenticated MCP call, AETHER WebSocket session and native engine were exercised together: `aether_avatar_gesture` returned completed only after the visible VRM wave finished. This used synthetic credentials and local processes, not John or the deployed VPS. The relay process used an environment containing its declared WebSocket dependency (`websockets`); the AETHER-only environment does not include a WebSocket server backend.

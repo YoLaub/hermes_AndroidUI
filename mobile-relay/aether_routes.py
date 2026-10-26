@@ -4,7 +4,7 @@ import secrets
 import time
 from datetime import datetime, timedelta
 
-from aether_protocol import ClaimPoll, ClaimStart, Envelope, Hello, Result, Status, envelope
+from aether_protocol import Capabilities, ClaimPoll, ClaimStart, Envelope, Hello, Result, Status, envelope
 from database import (
     aether_device_profile,
     check_and_record_pairing_attempt,
@@ -95,15 +95,21 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
             connection = await relay.connect(hello.device_id, ws, 'avatar.move_to' in hello.capabilities,
                 profile=aether_device_profile(hello.device_id),
                 authorized=lambda: verify_device_token(hello.device_id, token, device_kind='aether'))
-            await ws.send_json(envelope('server.ready', {'session_id': connection.session_id,
-                'heartbeat_interval_seconds': 20, 'max_command_ttl_seconds': 30}))
+            ready = {'session_id': connection.session_id, 'heartbeat_interval_seconds': 20, 'max_command_ttl_seconds': 30}
+            extensions = hello.client_version == '0.2.0'
+            if extensions: ready['optional_capabilities'] = ['avatar.gesture']
+            await ws.send_json(envelope('server.ready', ready))
             while True:
                 message = await receive(ws, 40)
                 # Rotation/revocation applies to existing connections on their next message.
                 if not verify_device_token(hello.device_id, token, device_kind='aether'):
                     await ws.close(code=1008)
                     return
-                if message.type == 'telemetry.status':
+                if message.type == 'client.capabilities':
+                    if not extensions: raise ValueError('Extensions not negotiated')
+                    capabilities = Capabilities.model_validate(message.payload)
+                    connection.can_gesture = 'avatar.gesture' in capabilities.capabilities
+                elif message.type == 'telemetry.status':
                     connection.status = Status.model_validate(message.payload).model_dump()
                     connection.seen = time.monotonic()
                 elif message.type.startswith('command.'):

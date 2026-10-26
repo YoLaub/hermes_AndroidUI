@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
-from aether_protocol import Move, envelope
+from aether_protocol import Move, Gesture, envelope
 
 
 @dataclass(eq=False)
@@ -19,6 +19,7 @@ class Connection:
     seen: float = field(default_factory=time.monotonic)
     pending: tuple | None = None
     can_move: bool = True
+    can_gesture: bool = False
     authorized: Callable[[], bool] = lambda: True
 
 class AetherRelay:
@@ -62,7 +63,13 @@ class AetherRelay:
         return {'command_id': cid, 'status': 'failed', 'error': {'code': code, 'retryable': False}}
 
     async def move(self, profile, arguments):
-        args = Move.model_validate(arguments)
+        return await self._command(profile, Move.model_validate(arguments))
+
+    async def gesture(self, profile, arguments):
+        return await self._command(profile, Gesture.model_validate(arguments))
+
+    async def _command(self, profile, args):
+        gesture = isinstance(args, Gesture)
         cid = uuid4().hex
         # Someone else's avatar answers exactly like a missing one, so its existence is not revealed.
         connection = self.owned(profile, args.device_id)
@@ -71,7 +78,7 @@ class AetherRelay:
         if not connection.authorized():
             self.disconnect(connection)
             return self.error(cid, 'unauthorized')
-        if not connection.can_move:
+        if not (connection.can_gesture if gesture else connection.can_move):
             return self.error(cid, 'unsupported_capability')
         if connection.pending:
             return self.error(cid, 'command_rejected')
@@ -81,9 +88,9 @@ class AetherRelay:
         try:
             # One total deadline includes both socket send and device execution.
             async def exchange():
-                await connection.socket.send_json(envelope('command.avatar_move_to', {
+                await connection.socket.send_json(envelope('command.avatar_gesture' if gesture else 'command.avatar_move_to', {
                     'command_id': cid, 'expires_at': expires,
-                    'screen_x': args.screen_x, 'screen_y': args.screen_y, 'posture': args.posture}))
+                    **args.model_dump(exclude={'device_id', 'ttl_seconds'})}))
                 return await future
             return await asyncio.wait_for(exchange(), args.ttl_seconds)
         except asyncio.TimeoutError:
@@ -102,9 +109,10 @@ class AetherRelay:
             return
         if kind == 'command.completed':
             avatar = payload.get('avatar')
-            if (not avatar or avatar.get('moving') is not False or avatar.get('posture') != args.posture
+            if (not avatar or avatar.get('moving') is not False or (isinstance(args, Move) and (
+                    avatar.get('posture') != args.posture
                     or abs(avatar['screen_x'] - args.screen_x) > .01
-                    or abs(avatar['screen_y'] - args.screen_y) > .01):
+                    or abs(avatar['screen_y'] - args.screen_y) > .01))):
                 future.set_result(self.error(cid, 'execution_failed'))
                 return
             future.set_result({'command_id': cid, 'status': 'completed', 'avatar': payload.get('avatar')})

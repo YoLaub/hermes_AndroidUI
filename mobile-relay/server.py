@@ -1175,6 +1175,8 @@ async def mcp_stream_endpoint(request: Request):
                                                 protocol_version=negotiated_version)
                     log_event("aether_claimed", profile=authenticated_profile, device_id=claimed["device_id"])
                     result = {"status": "claimed", **claimed}
+                elif tool_name == "aether_avatar_gesture":
+                    result = await aether.gesture(authenticated_profile, arguments)
                 else:
                     result = await aether.move(authenticated_profile, arguments)
                 return format_mcp_response(req_id, json.dumps(result), protocol_version=negotiated_version)

@@ -16,6 +16,14 @@ class Move(StrictModel):
     posture: Literal['walk', 'run', 'sneak', 'cautious'] = 'walk'
     ttl_seconds: int = Field(default=20, ge=1, le=30)
 
+class Gesture(StrictModel):
+    device_id: str = Field(min_length=1, max_length=128)
+    gesture: Literal['wave']
+    ttl_seconds: int = Field(default=15, ge=1, le=30)
+
+class Capabilities(StrictModel):
+    capabilities: list[Literal['avatar.gesture']] = Field(max_length=1)
+
 class Avatar(StrictModel):
     screen_x: float = Field(ge=0, le=1, allow_inf_nan=False)
     screen_y: float = Field(ge=0, le=1, allow_inf_nan=False)
@@ -48,7 +56,7 @@ class Claim(StrictModel):
 
 class Envelope(StrictModel):
     version: Literal['aether.v1']
-    type: Literal['client.hello', 'telemetry.status', 'command.accepted', 'command.completed', 'command.error', 'heartbeat']
+    type: Literal['client.hello', 'client.capabilities', 'telemetry.status', 'command.accepted', 'command.completed', 'command.error', 'heartbeat']
     message_id: str = Field(min_length=1, max_length=128)
     sent_at: str = Field(max_length=40)
     payload: dict
@@ -63,6 +71,8 @@ def envelope(kind, payload):
             'sent_at': utc_now(), 'payload': payload}
 
 TOOLS = [
+    {'name': 'aether_avatar_gesture', 'description': 'Make an owned AETHER avatar wave (coucou). Requires negotiated gesture support. Waits for the final rendered pose; movement interrupts it. Never retries.',
+     'inputSchema': Gesture.model_json_schema()},
     {'name': 'aether_get_status', 'description': 'List the connected AETHER avatars owned by your profile. No phone or screen data.',
      'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
     {'name': 'aether_avatar_move_to', 'description': 'Move one connected AETHER avatar owned by your profile; waits for completion or an error. Never retries.',
