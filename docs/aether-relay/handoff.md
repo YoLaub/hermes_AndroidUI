@@ -5,6 +5,41 @@ description: Implemented server-side AETHER pairing and MCP routing, per-profile
 timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
+# Latest handoff: native AETHER conversation (2026-10-26)
+
+The owner explicitly authorized this new intervention on `dev`, with a developer note. Ask again before any later intervention. No push, Docker build or deployment was performed. Existing unrelated deletions, Compose changes and untracked projects were preserved.
+
+## Activation for the deployment agent
+
+The relay gains a server-to-server adapter to the existing Hermes WebUI API. Configure **on the relay service only**:
+
+* `AETHER_HERMES_ORIGIN`: the WebUI origin. Prefer the existing private Compose service `http://hermes-webui:8787` when reachable; public service origins must use HTTPS. No path, query or embedded credentials.
+* `AETHER_HERMES_PASSWORD`: the existing WebUI password, injected through Coolify's secret mechanism. Do not paste it into AETHER, source files or chat. Reuse the existing secret rather than creating a user-facing setup step.
+
+Do not edit or replace the owner's untracked Compose file blindly. Confirm relay-to-WebUI network reachability in the deployment environment; this session only checked local simulated upstream HTTP. Both settings must exist or conversation remains disabled. `/api/aether/chat/status` reports configuration availability, not an upstream login/agent health guarantee. The existing avatar pairing credential is reused; no new pairing or permanent token transfer to the UI is needed. Movement/gesture WebSocket negotiation is unchanged.
+
+The adapter logs in through `/api/auth/login`, creates a dedicated `/api/session/new` session with the device's stored profile, starts `/api/chat/start`, and consumes `/api/chat/stream`. This uses the WebUI's existing non-browser service-client authentication path, without changing WebUI security or bypassing cookie authentication. No WebUI source was changed.
+
+## Implemented HTTP contract
+
+All routes require `Authorization: Bearer <paired-avatar-token>` and `X-Aether-Device: <device-id>`. Android credentials are rejected. Authentication/revocation checks and profile binding use existing database functions; clients cannot choose a profile, session or upstream URL.
+
+* `GET /api/aether/chat/status` → `{available: boolean}`.
+* `POST /api/aether/chat/send` with exactly `{request_id: canonical-UUID, message: text}` → `{request_id, state, text}`. Text is nonblank, at most 4,000 characters. Repeating an ID returns its stored outcome and never sends again, even if the supplied text differs.
+* `GET /api/aether/chat/turn/{request_id}` → same snapshot, scoped to the device. AETHER polls; WebUI SSE remains internal to the relay.
+* `POST /api/aether/chat/cancel/{request_id}` requests best-effort upstream cancellation; an interrupted outcome remains `uncertain`, not fake success.
+* `POST /api/aether/chat/new` → `{reset: true}`. Explicitly starts a separate conversation after the active task stops; marks uncertain outcomes abandoned but retains request IDs. It does not undo actions or delete WebUI conversations.
+
+States: `pending`, `running`, `completed`, `needs_action`, `uncertain`, `abandoned`. SQLite stores device/profile/session binding and request IDs. One active or uncertain turn blocks another until completion or explicit new discussion. Restart marks interrupted work uncertain; no replay. Up to 10,000 retained IDs per device; only the latest turn retains response text (64 KiB maximum). This is not a conversation-history API; Hermes retains session history. Native UI keeps a bounded in-memory recent transcript. Relay stays single-worker, as its existing connection/task routing already requires.
+
+The adapter has a 180-second turn deadline, bounded JSON/SSE buffers, and excludes reasoning/tool payloads and raw provider errors. `approval` or `clarify` stops this client's turn, requests cancellation and tells the user to continue in WebUI; no approval is answered automatically. Cancellation/revocation cannot undo already executed tools. A network error after submission is intentionally uncertain and requires checking Hermes before beginning a separate discussion.
+
+## AETHER implementation and acceptance
+
+AETHER adds bearer-protected local `/relay/chat/*` routes. Only Brain holds the permanent relay credential. AppKit uses the launcher's owner-only local session-token file and contacts only the fixed loopback Brain origin. The separate native panel accepts keyboard input, follows the avatar within visible screen bounds, renders text without HTML and hides its launcher button while open. Closing the panel does not disconnect John or automatically cancel an agent turn. Packaged engine was rebuilt.
+
+Validation: 299 relay tests pass; AETHER has 102 Python/native tests passing (one isolated Keychain opt-in skip), plus passing Rust tests. Tests cover per-device isolation, profile binding, persistent deduplication, one active turn, cancellation/restart uncertainty, response bounds and plain-text native input/focus. The composed local check exercised native panel → authenticated real Brain → actual paired relay → a synthetic Hermes HTTP/SSE server → native answer, with exactly one upstream turn. **No real John message was sent.** After deployment, restart AETHER, click “Parler à John” and send a harmless greeting; verify the response and continued avatar control. Upstream model availability, real tool approvals, server network access and production latency remain deployment acceptance items.
+
 # Latest handoff: explicit avatar gesture (2026-10-26)
 
 The owner explicitly authorized this intervention after being asked because the repository was previously read-only. Authorization covers this gesture feature; ask again before a later intervention in this repository. Keep the work on the existing `dev` branch. No push, image build or deployment was performed. Existing unrelated files/deletions were preserved.

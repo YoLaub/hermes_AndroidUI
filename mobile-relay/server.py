@@ -17,6 +17,7 @@ from aether_protocol import TOOLS as AETHER_TOOLS
 from aether_protocol import Claim as AetherClaim
 from aether_relay import AetherRelay
 from aether_routes import router_for
+import aether_chat
 from database import (
     atomic_register_or_update_device,
     check_and_record_pairing_attempt,
@@ -82,6 +83,8 @@ async def _purge_loop(interval: float) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    aether_chat.initialize()
+    app.state.aether_chat = aether_chat.configured_service()
     result = purge_old_records()
     if any(result.values()):
         log_event("records_purged", **result)
@@ -112,6 +115,8 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         purge_task.cancel()
+        if app.state.aether_chat is not None:
+            await app.state.aether_chat.close()
 
 app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
 
@@ -1653,3 +1658,5 @@ def format_mcp_error(req_id: Any, message: str, protocol_version: str = DEFAULT_
 
 
 app.include_router(router_for(aether, client_ip, enforce_not_blocked, note_auth_failure))
+
+app.include_router(aether_chat.router_for(client_ip, enforce_not_blocked, note_auth_failure))

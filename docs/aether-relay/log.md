@@ -2,6 +2,8 @@
 
 ## 2026-10-26
 
+* **Update**: Added authenticated per-avatar conversation routing to Hermes WebUI, persistent request deduplication and bounded text streaming; documented activation secrets, native client integration and deployment acceptance in the [handoff](/handoff.md).
+
 * **Update**: Added the explicit wave MCP tool, optional capability negotiation and shared command lifecycle; recorded tests, deployment status and owner authorization boundaries in the [handoff](/handoff.md).
 
 ## 2026-10-24
