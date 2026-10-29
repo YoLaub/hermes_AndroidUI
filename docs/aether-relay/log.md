@@ -1,5 +1,21 @@
 # Change log
 
+## 2026-10-30
+
+* **Fix**: Corrected PR #15 test imports/fixture re-export; whole tracked-repository Ruff and 11 focused tests pass. See [handoff](/handoff.md).
+
+## 2026-10-29
+
+* **Update**: Added the newly authorized `aether_desktop_open` MCP tool, backward-compatible capability negotiation and desktop-specific completion checks; see [handoff](/handoff.md). No deployment.
+
+* **Update**: Added owner-authorized explicit screen attachments, negotiated status compatibility, bounded upload validation and deduplication; see [handoff](/handoff.md). Local tests only, no deployment.
+
+## 2026-10-26
+
+* **Update**: Added authenticated per-avatar conversation routing to Hermes WebUI, persistent request deduplication and bounded text streaming; documented activation secrets, native client integration and deployment acceptance in the [handoff](/handoff.md).
+
+* **Update**: Added the explicit wave MCP tool, optional capability negotiation and shared command lifecycle; recorded tests, deployment status and owner authorization boundaries in the [handoff](/handoff.md).
+
 ## 2026-10-24
 
 * **Update**: AETHER avatars are owned per profile and pair through the agent-driven `/api/aether/pair` flow with the `aether_claim_avatar` tool; admin pairing links and `AETHER_PUBLIC_URL` removed. No push or deployment.

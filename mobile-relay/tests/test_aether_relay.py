@@ -100,3 +100,20 @@ async def test_avatar_without_owner_is_unreachable():
     assert relay.status('john')['devices'] == []
     result = await relay.move('john', {'device_id': 'orphan', 'screen_x': .4, 'screen_y': .7})
     assert result['error']['code'] == 'avatar_unavailable'
+
+@pytest.mark.asyncio
+async def test_gesture_requires_owner_and_capability_and_waits_for_completion():
+    relay = AetherRelay(); ws = Socket()
+    connection = await relay.connect('mac', ws, profile='john')
+    args = {'device_id': 'mac', 'gesture': 'wave'}
+    assert (await relay.gesture('other', args))['error']['code'] == 'avatar_unavailable'
+    assert (await relay.gesture('john', args))['error']['code'] == 'unsupported_capability'
+    connection.can_gesture = True
+    task = asyncio.create_task(relay.gesture('john', args))
+    message = await ws.messages.get(); cid = message['payload']['command_id']
+    assert message['type'] == 'command.avatar_gesture'
+    relay.result(connection, 'command.accepted', {'command_id': cid})
+    assert not task.done()
+    assert (await relay.move('john', {'device_id': 'mac', 'screen_x': .5, 'screen_y': .5}))['error']['code'] == 'command_rejected'
+    relay.result(connection, 'command.completed', {'command_id': cid, 'avatar': {'screen_x': .4, 'screen_y': .7, 'posture': 'walk', 'moving': False}})
+    assert (await task)['status'] == 'completed'

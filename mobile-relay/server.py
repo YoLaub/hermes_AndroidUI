@@ -12,7 +12,9 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
+import aether_chat
 import memory_validations
+from aether_observation import ObservationBodyLimit
 from aether_protocol import TOOLS as AETHER_TOOLS
 from aether_protocol import Claim as AetherClaim
 from aether_relay import AetherRelay
@@ -82,6 +84,8 @@ async def _purge_loop(interval: float) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    aether_chat.initialize()
+    app.state.aether_chat = aether_chat.configured_service()
     result = purge_old_records()
     if any(result.values()):
         log_event("records_purged", **result)
@@ -112,8 +116,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         purge_task.cancel()
+        if app.state.aether_chat is not None:
+            await app.state.aether_chat.close()
 
 app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
+app.add_middleware(ObservationBodyLimit)
 
 # No CORS middleware on purpose: the only clients are the Android app and MCP clients, never a
 # browser, and a wildcard origin with credentials would let any web page talk to the relay.
@@ -1175,6 +1182,10 @@ async def mcp_stream_endpoint(request: Request):
                                                 protocol_version=negotiated_version)
                     log_event("aether_claimed", profile=authenticated_profile, device_id=claimed["device_id"])
                     result = {"status": "claimed", **claimed}
+                elif tool_name == "aether_desktop_open":
+                    result = await aether.open_desktop(authenticated_profile, arguments)
+                elif tool_name == "aether_avatar_gesture":
+                    result = await aether.gesture(authenticated_profile, arguments)
                 else:
                     result = await aether.move(authenticated_profile, arguments)
                 return format_mcp_response(req_id, json.dumps(result), protocol_version=negotiated_version)
@@ -1651,3 +1662,5 @@ def format_mcp_error(req_id: Any, message: str, protocol_version: str = DEFAULT_
 
 
 app.include_router(router_for(aether, client_ip, enforce_not_blocked, note_auth_failure))
+
+app.include_router(aether_chat.router_for(client_ip, enforce_not_blocked, note_auth_failure))

@@ -98,3 +98,25 @@ def test_other_profile_cannot_move_owned_avatar(client):
         ws.send_json(hello()); ws.receive_json()
         result = json.loads(mcp(client, 'aether_avatar_move_to', {'device_id': 'aether', 'screen_x': .2, 'screen_y': .6}, token='mario-test')['content'][0]['text'])
         assert result['error']['code'] == 'avatar_unavailable'
+
+
+def test_gesture_mcp_negotiation_preserves_old_clients(client):
+    token = pair(client, 'aether')
+    with client.websocket_connect('/ws/aether', headers={'Authorization': 'Bearer ' + token}, subprotocols=['aether.v1']) as ws:
+        ws.send_json(hello())
+        assert 'optional_capabilities' not in ws.receive_json()['payload']
+        result = json.loads(mcp(client, 'aether_avatar_gesture', {'device_id': 'aether', 'gesture': 'wave'})['content'][0]['text'])
+        assert result['error']['code'] == 'unsupported_capability'
+    with client.websocket_connect('/ws/aether', headers={'Authorization': 'Bearer ' + token}, subprotocols=['aether.v1']) as ws:
+        message = hello(); message['payload']['client_version'] = '0.2.0'; ws.send_json(message)
+        assert ws.receive_json()['payload']['optional_capabilities'] == ['avatar.gesture']
+        ws.send_json(envelope('client.capabilities', {'capabilities': ['avatar.gesture']}))
+        ws.send_json(envelope('heartbeat', {})); assert ws.receive_json()['type'] == 'heartbeat'
+        with ThreadPoolExecutor() as executor:
+            task = executor.submit(mcp, client, 'aether_avatar_gesture', {'device_id': 'aether', 'gesture': 'wave'})
+            command = ws.receive_json(); assert command['type'] == 'command.avatar_gesture'
+            cid = command['payload']['command_id']
+            ws.send_json(envelope('command.accepted', {'command_id': cid}))
+            assert not task.done()
+            ws.send_json(envelope('command.completed', {'command_id': cid, 'avatar': {'screen_x': .5, 'screen_y': .5, 'posture': 'walk', 'moving': False}}))
+            assert json.loads(task.result(timeout=3)['content'][0]['text'])['status'] == 'completed'
