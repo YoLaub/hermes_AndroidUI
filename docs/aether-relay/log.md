@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-10-30
+
+* **Fix**: Corrected PR #15 test imports/fixture re-export; whole tracked-repository Ruff and 11 focused tests pass. See [handoff](/handoff.md).
+
 ## 2026-10-29
 
 * **Update**: Added the newly authorized `aether_desktop_open` MCP tool, backward-compatible capability negotiation and desktop-specific completion checks; see [handoff](/handoff.md). No deployment.

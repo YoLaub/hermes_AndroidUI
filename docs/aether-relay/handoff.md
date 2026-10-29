@@ -5,6 +5,10 @@ description: Implemented server-side AETHER pairing and MCP routing, per-profile
 timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
+# CI correction (2026-10-30)
+
+Owner authorized correcting and pushing the PR #15 lint failure on dev. Sorted imports in the two chat test modules and explicitly re-exported the shared pytest client fixture (`client as client`), preserving fixture discovery without suppressing Ruff rules. Ruff 0.16.3 passes over a clean copy of all tracked files; 11 focused chat/upstream tests pass. Untracked dashboard code was excluded from that CI-equivalent copy and left untouched. Earlier verification only linted selected changed modules and missed these tests; future lint acceptance must cover the complete tracked repository. No runtime behavior or infrastructure changes.
+
 # Latest handoff: explicit desktop opening (2026-10-29)
 
 A renewed owner authorization permits this change on `dev` with this note. Ask again before another intervention. No push, Docker build, deployment or infrastructure changes; unrelated work preserved.

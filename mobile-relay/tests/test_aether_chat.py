@@ -1,10 +1,13 @@
 import asyncio
 from uuid import uuid4
-import pytest
+
 import database
+import pytest
 from aether_chat import ChatService, initialize, snapshot
 from fastapi import HTTPException
-from test_aether_routes import client, pair
+from test_aether_routes import client as client
+from test_aether_routes import pair
+
 
 @pytest.mark.asyncio
 async def test_durable_identity_profile_and_single_turn(tmp_path, monkeypatch):

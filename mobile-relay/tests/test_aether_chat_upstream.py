@@ -1,7 +1,9 @@
 import json
+
 import httpx
 import pytest
-from aether_chat_upstream import HermesChat, ChatUnavailable
+from aether_chat_upstream import ChatUnavailable, HermesChat
+
 
 @pytest.mark.asyncio
 async def test_profile_session_and_text_only_stream():
