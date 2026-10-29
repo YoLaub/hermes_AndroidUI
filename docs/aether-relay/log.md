@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-10-29
+
+* **Update**: Added owner-authorized explicit screen attachments, negotiated status compatibility, bounded upload validation and deduplication; see [handoff](/handoff.md). Local tests only, no deployment.
+
 ## 2026-10-26
 
 * **Update**: Added authenticated per-avatar conversation routing to Hermes WebUI, persistent request deduplication and bounded text streaming; documented activation secrets, native client integration and deployment acceptance in the [handoff](/handoff.md).

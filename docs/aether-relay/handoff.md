@@ -5,7 +5,23 @@ description: Implemented server-side AETHER pairing and MCP routing, per-profile
 timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
-# Latest handoff: native AETHER conversation (2026-10-26)
+# Latest handoff: explicit AETHER screen observation (2026-10-29)
+
+The owner explicitly authorized this intervention on `dev`, with tests and this note. Ask again before a new intervention. No push, Docker build, deployment, Compose change or WebUI source change was performed; unrelated local files remain untouched.
+
+## Contract and deployment acceptance
+
+Existing `AETHER_HERMES_ORIGIN` and `AETHER_HERMES_PASSWORD` configuration is reused. No new user-facing token or configuration is required. Deploy this relay revision through the normal workflow before testing in production. AETHER's updated Brain requests `X-Aether-Features: screen-observation-v1`; only that header adds `screen_observation: <chat-configured>` to GET `/api/aether/chat/status`. Legacy clients still receive exactly `{available: ...}`. Capability indicates implementation/configuration, not upstream health or model vision support.
+
+POST `/api/aether/chat/send` accepts one optional `observation: {mime_type: "image/jpeg", data_base64: "..."}`. Images are limited to 512 KiB and JPEG headers declaring at most 1280×720. Validation is structural, not a full JPEG decode. A path-specific ASGI middleware bounds all send bodies to 750,000 bytes before JSON parsing and limits body receive time to five seconds, including chunked requests. Errors do not echo submitted pixels. No client-supplied attachment paths, profile, session or URL are accepted.
+
+The existing avatar credential/profile selects the session. The adapter logs into WebUI, creates the bound session if needed, rechecks authorization, uploads multipart `session_id` / `file` to `/api/upload`, validates the result, rechecks authorization and sends server-returned metadata in `/api/chat/start` attachments. UUID filenames prevent overwriting earlier screen attachments. Request IDs are persisted before any upload; retries return the existing state without uploading again. Interrupted upload/start stays uncertain. No automatic replay is introduced.
+
+Consent detection and the one-use ticket are local AETHER responsibilities: explicit typed “regarde mon écran”, visible indicator, cancellation and provider shutdown before send. The relay authenticates the submitting avatar; it cannot independently attest physical user consent. Relay storage contains no image file or base64. WebUI uploads/session history may persist images, including an upload whose later chat start failed or was cancelled. Cancellation cannot guarantee deletion. The selected Hermes model must support vision for useful answers.
+
+Validation: 309 relay tests pass; changed relay modules pass Ruff. An isolated composed test in AETHER `tests/test_observation_integration.py` passes through the actual native panel, authenticated Brain and real paired relay, with a local Hermes simulator and synthetic JPEG only: exactly one upload and one turn. Revocation before upload, malformed uploads, invalid/oversized images, chunked limits, non-reflecting errors, legacy status and duplicate IDs are covered. No production John message or desktop pixels were sent. After deployment, the owner should test “regarde mon écran”, denial/cancellation and ordinary chat with a vision-capable profile.
+
+# Previous handoff: native AETHER conversation (2026-10-26)
 
 The owner explicitly authorized this new intervention on `dev`, with a developer note. Ask again before any later intervention. No push, Docker build or deployment was performed. Existing unrelated deletions, Compose changes and untracked projects were preserved.
 

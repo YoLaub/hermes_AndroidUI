@@ -12,12 +12,13 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
+import aether_chat
 import memory_validations
+from aether_observation import ObservationBodyLimit
 from aether_protocol import TOOLS as AETHER_TOOLS
 from aether_protocol import Claim as AetherClaim
 from aether_relay import AetherRelay
 from aether_routes import router_for
-import aether_chat
 from database import (
     atomic_register_or_update_device,
     check_and_record_pairing_attempt,
@@ -119,6 +120,7 @@ async def lifespan(app: FastAPI):
             await app.state.aether_chat.close()
 
 app = FastAPI(title="Hermes Mobile Relay", version="1.0.0", lifespan=lifespan)
+app.add_middleware(ObservationBodyLimit)
 
 # No CORS middleware on purpose: the only clients are the Android app and MCP clients, never a
 # browser, and a wildcard origin with credentials would let any web page talk to the relay.
