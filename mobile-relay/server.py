@@ -1182,6 +1182,8 @@ async def mcp_stream_endpoint(request: Request):
                                                 protocol_version=negotiated_version)
                     log_event("aether_claimed", profile=authenticated_profile, device_id=claimed["device_id"])
                     result = {"status": "claimed", **claimed}
+                elif tool_name == "aether_desktop_open":
+                    result = await aether.open_desktop(authenticated_profile, arguments)
                 elif tool_name == "aether_avatar_gesture":
                     result = await aether.gesture(authenticated_profile, arguments)
                 else:

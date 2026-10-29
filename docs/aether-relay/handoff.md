@@ -5,7 +5,19 @@ description: Implemented server-side AETHER pairing and MCP routing, per-profile
 timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
-# Latest handoff: explicit AETHER screen observation (2026-10-29)
+# Latest handoff: explicit desktop opening (2026-10-29)
+
+A renewed owner authorization permits this change on `dev` with this note. Ask again before another intervention. No push, Docker build, deployment or infrastructure changes; unrelated work preserved.
+
+New MCP tool `aether_desktop_open` routes `action: app|url|youtube_search|spotify_search`, `target`, `device_id` and TTL through the existing owner-bound command lifecycle. AETHER enforces fixed application bundle identifiers and YouTube/Spotify content URLs/searches; the relay validates the typed envelope and ownership, while the local machine is the final target-validation boundary. The tool description requires an explicit user request, lists supported apps, forbids shell/paths/unsolicited launches, and states that search opens results and success does not prove playback.
+
+Compatibility: version `0.2.0` plus WebSocket header `X-Aether-Features: desktop-open-v1` requests optional `desktop.open`. Without the header, the ready payload remains unchanged. Only an explicitly negotiated client may acknowledge it. The new wire command is `command.desktop_open`; success is `command.completed` with `outcome: "opened"`, no avatar. Relay completion checks distinguish desktop results from movement/gesture stationary-avatar checks. Unsupported clients return `unsupported_capability`; owner isolation, revocation, deadlines, one pending command and no replay remain shared.
+
+No new settings or credentials. Deploy this alongside the preceding observation changes, then use current AETHER Brain. macOS alone acknowledges opening support. Supported apps are Safari, Chrome, Firefox, Spotify, Music, Notes, Calendar, Calculator and Maps; they must already be installed. Links use HTTPS YouTube video IDs or Spotify track/album/artist/playlist IDs without tracking parameters; text searches open service result pages. No arbitrary filesystem or shell access. `/usr/bin/open` success only confirms OS acceptance, not app readiness or playback. Cancellation does not undo an already-opened app.
+
+Validation: full relay suite passed 310 tests, then the added MCP/WebSocket desktop round-trip passed with existing route tests. Changed relay modules pass Ruff. AETHER tests cover target restrictions, subprocess failure/cancellation, expiry/deduplication and negotiated dispatch; no real app/media was opened. Live desktop behavior remains owner acceptance after deployment.
+
+# Previous handoff: explicit AETHER screen observation (2026-10-29)
 
 The owner explicitly authorized this intervention on `dev`, with tests and this note. Ask again before a new intervention. No push, Docker build, deployment, Compose change or WebUI source change was performed; unrelated local files remain untouched.
 

@@ -2,6 +2,8 @@
 
 ## 2026-10-29
 
+* **Update**: Added the newly authorized `aether_desktop_open` MCP tool, backward-compatible capability negotiation and desktop-specific completion checks; see [handoff](/handoff.md). No deployment.
+
 * **Update**: Added owner-authorized explicit screen attachments, negotiated status compatibility, bounded upload validation and deduplication; see [handoff](/handoff.md). Local tests only, no deployment.
 
 ## 2026-10-26
