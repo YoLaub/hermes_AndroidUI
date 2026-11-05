@@ -48,6 +48,7 @@ fun ChatInputField(
     availableCommands: List<CommandInfo> = emptyList(),
     onRemoveAttachment: (ChatAttachment) -> Unit = {},
     onAttachClicked: () -> Unit = {},
+    isUploadingAttachment: Boolean = false,
     onCommandSelected: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -192,15 +193,22 @@ fun ChatInputField(
                 // Attach button
                 IconButton(
                     onClick = onAttachClicked,
-                    enabled = !isStreaming
+                    enabled = !isStreaming && !isUploadingAttachment
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AttachFile,
-                        contentDescription = stringResource(R.string.chat_attach_file),
-                        tint = HermesTextSecondary
-                    )
+                    if (isUploadingAttachment) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = HermesTextSecondary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = stringResource(R.string.chat_attach_file),
+                            tint = HermesTextSecondary
+                        )
+                    }
                 }
-
                 Spacer(modifier = Modifier.width(4.dp))
 
                 // Input TextField
