@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-11-05
+
+* **Update**: Added owner-authorized `aether_observe_screen`, locally approved MCP image results, command-scoped frame bounds and regression tests; see [handoff](/handoff.md). No deployment.
+
 ## 2026-10-30
 
 * **Fix**: Corrected PR #15 test imports/fixture re-export; whole tracked-repository Ruff and 11 focused tests pass. See [handoff](/handoff.md).

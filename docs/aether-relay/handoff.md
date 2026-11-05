@@ -5,6 +5,21 @@ description: Implemented server-side AETHER pairing and MCP routing, per-profile
 timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
+
+# Latest intervention: AETHER screen observation tool (2026-11-05)
+
+The owner explicitly approved this new relay intervention on dev with this note. No push, deployment, Docker build or WebUI edits. Ask again before a new intervention. Unrelated local Compose/dashboard files are preserved.
+
+Expose `aether_observe_screen(device_id, ttl_seconds=30)` to the owning Hermes profile. It requests a single primary-display capture through `command.observe_screen`, only after `screen.observe` negotiation via `X-Aether-Observation: screen-observe-v1`. AETHER must have the new native observation helper installed and reconnect. Old clients report unsupported capability without losing movement/wave/opening support.
+
+Successful results contain text context and a native MCP `image` block (`mimeType: image/jpeg`, base64 data), using existing `format_mcp_blocks`. No chat upload or secondary message is needed. Hermes's existing `mcp_worker` / vision-routing implementation supports these image results; ensure the deployed WebUI has that support and refresh the profile's MCP tool list after relay deployment. The model must process the returned image rather than infer capabilities from browser tools.
+
+Local Mac approval is mandatory on each call; the dialog expires after 18 seconds, and all command work expires within 30 seconds. The helper stops capture before returning pixels; cancellation/disconnection kills it. The helper may need a separate macOS Screen Recording permission. No capture without local approval, continuous monitoring or automatic retries. Use an image already attached to the current message rather than requesting it again.
+
+Relay limits: 512 KiB JPEG, 1280×720 structural dimension check, at most 750,000-byte WebSocket image envelope only during a negotiated pending observation. Determine the pending allowance after receiving the frame (otherwise a receive already waiting before command dispatch incorrectly rejects large image replies). Validate owner, current token, command identity and pixels before returning them. No image database/log persistence. Hermes/model retention can still apply.
+
+Validation: 316 relay tests, complete tracked-repository Ruff 0.16.3, 11 existing WebUI image-routing tests; AETHER runner/negotiation/native synthetic approval tests and a composed MCP → real runner → image roundtrip pass. No live John request or real desktop image sent. Deploy, refresh Hermes tools, then ask the owner to approve a real observation on the Mac and verify interpretation. Scope excludes unrelated current avatar/UI work.
+
 # CI correction (2026-10-30)
 
 Owner authorized correcting and pushing the PR #15 lint failure on dev. Sorted imports in the two chat test modules and explicitly re-exported the shared pytest client fixture (`client as client`), preserving fixture discovery without suppressing Ruff rules. Ruff 0.16.3 passes over a clean copy of all tracked files; 11 focused chat/upstream tests pass. Untracked dashboard code was excluded from that CI-equivalent copy and left untouched. Earlier verification only linted selected changed modules and missed these tests; future lint acceptance must cover the complete tracked repository. No runtime behavior or infrastructure changes.

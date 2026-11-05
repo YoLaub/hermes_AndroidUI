@@ -5,7 +5,17 @@ import secrets
 import time
 from datetime import datetime, timedelta
 
-from aether_protocol import Capabilities, ClaimPoll, ClaimStart, Envelope, Hello, Result, Status, envelope
+from aether_protocol import (
+    Capabilities,
+    ClaimPoll,
+    ClaimStart,
+    Envelope,
+    Hello,
+    ObserveScreen,
+    Result,
+    Status,
+    envelope,
+)
 from database import (
     aether_device_profile,
     check_and_record_pairing_attempt,
@@ -71,11 +81,16 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
             raise HTTPException(status_code=404, detail="Unknown or expired AETHER pairing request.")
         return {"status": "paired", "device_token": device_token, **details}
 
-    async def receive(ws, timeout):
+    async def receive(ws, timeout, allow_image=False):
         text = await asyncio.wait_for(ws.receive_text(), timeout)
-        if len(text.encode("utf-8")) > 16384:
+        image_allowed = allow_image() if callable(allow_image) else allow_image
+        if len(text.encode("utf-8")) > (750000 if image_allowed else 16384):
             raise ValueError("Message too large")
         message = Envelope.model_validate_json(text)
+        if len(text.encode("utf-8")) > 16384 and (
+            message.type != "command.completed" or "image" not in message.payload
+        ):
+            raise ValueError("Large non-image message")
         sent = datetime.fromisoformat(message.sent_at.replace("Z", "+00:00"))
         if sent.utcoffset() != timedelta(0):
             raise ValueError("UTC timestamp required")
@@ -115,11 +130,24 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
             }
             extensions = hello.client_version == "0.2.0"
             desktop_extension = extensions and ws.headers.get("x-aether-features") == "desktop-open-v1"
+            observation_extension = extensions and ws.headers.get("x-aether-observation") == "screen-observe-v1"
             if extensions:
-                ready["optional_capabilities"] = ["avatar.gesture"] + (["desktop.open"] if desktop_extension else [])
+                ready["optional_capabilities"] = (
+                    ["avatar.gesture"]
+                    + (["desktop.open"] if desktop_extension else [])
+                    + (["screen.observe"] if observation_extension else [])
+                )
             await ws.send_json(envelope("server.ready", ready))
             while True:
-                message = await receive(ws, 40)
+                message = await receive(
+                    ws,
+                    40,
+                    allow_image=lambda: (
+                        connection.can_observe
+                        and connection.pending is not None
+                        and isinstance(connection.pending[2], ObserveScreen)
+                    ),
+                )
                 # Rotation/revocation applies to existing connections on their next message.
                 if not verify_device_token(hello.device_id, token, device_kind="aether"):
                     await ws.close(code=1008)
@@ -130,6 +158,9 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
                     capabilities = Capabilities.model_validate(message.payload)
                     if "desktop.open" in capabilities.capabilities and not desktop_extension:
                         raise ValueError("Desktop extension not negotiated")
+                    if "screen.observe" in capabilities.capabilities and not observation_extension:
+                        raise ValueError("Observation extension not negotiated")
+                    connection.can_observe = "screen.observe" in capabilities.capabilities
                     connection.can_open = "desktop.open" in capabilities.capabilities
                     connection.can_gesture = "avatar.gesture" in capabilities.capabilities
                 elif message.type == "telemetry.status":
@@ -140,6 +171,7 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
                     if (
                         message.type == "command.completed"
                         and result.outcome != "opened"
+                        and result.image is None
                         and (result.avatar is None or result.avatar.moving)
                     ):
                         raise ValueError("Completed command requires a stationary avatar")
