@@ -82,6 +82,7 @@ data class ChatUiState(
     val isRestartingGateway: Boolean = false,
     val gatewayStatus: GatewayStatusResponse? = null,
     val isLoading: Boolean = false,
+    val isUploadingAttachment: Boolean = false,
     val error: String? = null
 )
 
@@ -610,6 +611,36 @@ class ChatViewModel(
     fun removeAttachment(attachment: ChatAttachment) {
         _uiState.update {
             it.copy(pendingAttachments = it.pendingAttachments.filter { att -> att.path != attachment.path })
+        }
+    }
+
+    fun reportError(message: String) {
+        _uiState.update { it.copy(error = message) }
+    }
+
+    /** Uploads a picked file to the current session and queues it as a pending attachment. */
+    fun attachFile(filename: String, bytes: ByteArray, mimeType: String?) {
+        attachmentSizeError(bytes.size.toLong())?.let { msg ->
+            _uiState.update { it.copy(error = msg) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingAttachment = true, error = null) }
+            var sid = _uiState.value.sessionId
+            if (sid.isNullOrBlank()) sid = createNewSessionInternal()
+            if (sid.isNullOrBlank()) {
+                _uiState.update {
+                    it.copy(isUploadingAttachment = false, error = "Impossible de créer une conversation avec le serveur")
+                }
+                return@launch
+            }
+            val result = repository.uploadFile(sid, filename, bytes, resolveAttachmentMime(mimeType))
+            _uiState.update { st ->
+                result.fold(
+                    onSuccess = { st.copy(isUploadingAttachment = false, pendingAttachments = st.pendingAttachments + it.toChatAttachment()) },
+                    onFailure = { st.copy(isUploadingAttachment = false, error = it.localizedMessage ?: "Échec de l'envoi du fichier") }
+                )
+            }
         }
     }
 
