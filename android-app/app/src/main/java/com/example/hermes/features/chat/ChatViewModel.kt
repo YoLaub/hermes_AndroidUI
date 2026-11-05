@@ -175,7 +175,7 @@ class ChatViewModel(
                     it.copy(
                         sessionId = loadedSession.sessionId,
                         sessionTitle = loadedSession.title,
-                        messages = loadedSession.messages,
+                        messages = loadedSession.messages.let(::normalizeHistory),
                         isLoading = false
                     )
                 }
@@ -282,7 +282,7 @@ class ChatViewModel(
                     it.copy(
                         sessionId = detail.sessionId,
                         sessionTitle = detail.title,
-                        messages = detail.messages,
+                        messages = detail.messages.let(::normalizeHistory),
                         isLoading = false,
                         isStreaming = false,
                         streamingTokens = "",
@@ -807,7 +807,7 @@ class ChatViewModel(
                             event.session?.let { finalSession ->
                                 _uiState.update {
                                     it.copy(
-                                        messages = finalSession.messages,
+                                        messages = finalSession.messages.let(::normalizeHistory),
                                         streamingTokens = "",
                                         streamingReasoning = "",
                                         streamingToolCalls = emptyList()
@@ -852,7 +852,7 @@ class ChatViewModel(
                 role = "assistant",
                 content = state.streamingTokens,
                 timestamp = System.currentTimeMillis() / 1000.0,
-                toolCalls = state.streamingToolCalls.ifEmpty { null },
+                toolCalls = state.streamingToolCalls.map { if (it.output == null && it.duration == null) it.copy(output = "") else it }.ifEmpty { null },
                 reasoning = state.streamingReasoning.ifBlank { null }
             )
             _uiState.update {
@@ -889,7 +889,7 @@ class ChatViewModel(
                     val detail = detailResult.getOrThrow()
                     _uiState.update {
                         it.copy(
-                            messages = detail.messages,
+                            messages = detail.messages.let(::normalizeHistory),
                             sessionTitle = detail.title
                         )
                     }

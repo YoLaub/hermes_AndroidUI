@@ -481,7 +481,15 @@ data class ToolCall(
     val output: String? = null,
     @Serializable(with = FlexibleAgeSecondsSerializer::class)
     val duration: Double? = null,
-    @SerialName("is_error") val isError: Boolean = false
+    @SerialName("is_error") val isError: Boolean = false,
+    /** OpenAI-style shape used by the server's raw history: {"function": {"name", "arguments"}}. */
+    val function: ToolFunction? = null
+)
+
+@Serializable
+data class ToolFunction(
+    val name: String = "",
+    val arguments: String? = null
 )
 
 @Serializable
@@ -505,6 +513,7 @@ data class ChatMessage(
     @Serializable(with = FlexibleTimestampSerializer::class)
     @SerialName("_ts") val ts: Double? = null,
     @SerialName("tool_calls") val toolCalls: List<ToolCall>? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
     val attachments: List<ChatAttachment>? = null,
     @Serializable(with = FlexibleNullableStringSerializer::class)
     val reasoning: String? = null
