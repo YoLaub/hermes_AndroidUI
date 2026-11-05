@@ -4,6 +4,7 @@ package com.example.hermes.core.model
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -492,6 +493,31 @@ data class ToolFunction(
     val arguments: String? = null
 )
 
+/**
+ * Saved history lists attachments as plain file names, and some server objects use `name`
+ * instead of `filename`. Normalize both into the {filename, path} shape before decoding.
+ */
+object FlexibleAttachmentListSerializer : JsonTransformingSerializer<List<ChatAttachment>>(
+    ListSerializer(ChatAttachment.serializer())
+) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        if (element !is JsonArray) return JsonArray(emptyList())
+        return JsonArray(element.mapNotNull { item ->
+            when (item) {
+                is JsonPrimitive -> item.contentOrNull?.takeIf { it.isNotBlank() }?.let {
+                    JsonObject(mapOf("filename" to JsonPrimitive(it), "path" to JsonPrimitive("")))
+                }
+                is JsonObject -> {
+                    val name = (item["filename"] ?: item["name"])?.jsonPrimitive?.contentOrNull.orEmpty()
+                    val path = item["path"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    JsonObject(item + mapOf("filename" to JsonPrimitive(name.ifBlank { path }), "path" to JsonPrimitive(path)))
+                }
+                else -> null
+            }
+        })
+    }
+}
+
 @Serializable
 data class ChatAttachment(
     val filename: String,
@@ -514,6 +540,7 @@ data class ChatMessage(
     @SerialName("_ts") val ts: Double? = null,
     @SerialName("tool_calls") val toolCalls: List<ToolCall>? = null,
     @SerialName("tool_call_id") val toolCallId: String? = null,
+    @Serializable(with = FlexibleAttachmentListSerializer::class)
     val attachments: List<ChatAttachment>? = null,
     @Serializable(with = FlexibleNullableStringSerializer::class)
     val reasoning: String? = null
