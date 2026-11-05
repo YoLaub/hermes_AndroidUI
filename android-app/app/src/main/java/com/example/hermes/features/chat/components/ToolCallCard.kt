@@ -171,7 +171,7 @@ fun ToolCallCard(
                         )
                     }
 
-                    toolCall.output?.let { output ->
+                    toolCall.output?.takeIf { it.isNotBlank() }?.let { output ->
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = stringResource(R.string.chat_output),

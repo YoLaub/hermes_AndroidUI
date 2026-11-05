@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.example.hermes.core.model.ChatAttachment
+import com.example.hermes.features.chat.QueuedMessage
 import com.example.hermes.core.model.CommandInfo
 import com.example.hermes.theme.*
 
@@ -48,6 +49,9 @@ fun ChatInputField(
     availableCommands: List<CommandInfo> = emptyList(),
     onRemoveAttachment: (ChatAttachment) -> Unit = {},
     onAttachClicked: () -> Unit = {},
+    isUploadingAttachment: Boolean = false,
+    queuedMessages: List<QueuedMessage> = emptyList(),
+    onRemoveQueued: (Int) -> Unit = {},
     onCommandSelected: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -159,6 +163,27 @@ fun ChatInputField(
                 }
             }
 
+            // Messages waiting for the current reply to finish
+            queuedMessages.forEachIndexed { index, queued ->
+                InputChip(
+                    selected = false,
+                    onClick = {},
+                    label = {
+                        Text(
+                            stringResource(R.string.chat_queued_prefix, queued.text.ifBlank { queued.attachments.firstOrNull()?.filename.orEmpty() }),
+                            maxLines = 1
+                        )
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { onRemoveQueued(index) }) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.chat_remove))
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+
             // Attachment preview chips if any
             if (pendingAttachments.isNotEmpty()) {
                 Row(
@@ -192,15 +217,22 @@ fun ChatInputField(
                 // Attach button
                 IconButton(
                     onClick = onAttachClicked,
-                    enabled = !isStreaming
+                    enabled = !isStreaming && !isUploadingAttachment
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AttachFile,
-                        contentDescription = stringResource(R.string.chat_attach_file),
-                        tint = HermesTextSecondary
-                    )
+                    if (isUploadingAttachment) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = HermesTextSecondary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = stringResource(R.string.chat_attach_file),
+                            tint = HermesTextSecondary
+                        )
+                    }
                 }
-
                 Spacer(modifier = Modifier.width(4.dp))
 
                 // Input TextField
@@ -214,7 +246,7 @@ fun ChatInputField(
                             color = HermesTextMuted
                         )
                     },
-                    enabled = !isStreaming,
+                    // Stays editable while streaming so the next message can be typed and queued.
                     shape = RoundedCornerShape(20.dp),
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -232,9 +264,29 @@ fun ChatInputField(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Send or Stop Button
+                // Send (queues while streaming) and Stop buttons
+                val canSend = inputText.isNotBlank() || pendingAttachments.isNotEmpty()
+                if (!isStreaming || canSend) {
+                    IconButton(
+                        onClick = onSendMessage,
+                        enabled = canSend,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (canSend) HermesPrimary else OnyxDarkSurfaceVariant)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = stringResource(
+                                if (isStreaming) R.string.chat_queue_message else R.string.chat_send_message
+                            ),
+                            tint = if (canSend) Color.Black else HermesTextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
                 if (isStreaming) {
-                    // Red Stop Button
+                    if (canSend) Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
                         onClick = onCancelStream,
                         modifier = Modifier
@@ -247,24 +299,6 @@ fun ChatInputField(
                             contentDescription = stringResource(R.string.chat_cancel_stream),
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
-                        )
-                    }
-                } else {
-                    // Send Button
-                    val canSend = inputText.isNotBlank() || pendingAttachments.isNotEmpty()
-                    IconButton(
-                        onClick = onSendMessage,
-                        enabled = canSend,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (canSend) HermesPrimary else OnyxDarkSurfaceVariant)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = stringResource(R.string.chat_send_message),
-                            tint = if (canSend) Color.Black else HermesTextMuted,
-                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

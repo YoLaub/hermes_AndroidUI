@@ -1,6 +1,10 @@
 package com.example.hermes.features.chat
 
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,6 +50,31 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val resolver = context.contentResolver
+        var name = "fichier"
+        var size = -1L
+        resolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                c.getColumnIndex(OpenableColumns.DISPLAY_NAME).takeIf { it >= 0 }?.let { name = c.getString(it) ?: name }
+                c.getColumnIndex(OpenableColumns.SIZE).takeIf { it >= 0 && !c.isNull(it) }?.let { size = c.getLong(it) }
+            }
+        }
+        // Check the size before reading so a huge file never lands in memory.
+        val tooBig = if (size >= 0) attachmentSizeError(size) else null
+        if (tooBig != null) {
+            viewModel.reportError(tooBig)
+            return@rememberLauncherForActivityResult
+        }
+        val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+        if (bytes == null) {
+            viewModel.reportError("Impossible de lire le fichier")
+        } else {
+            viewModel.attachFile(name, bytes, resolver.getType(uri))
+        }
+    }
 
     val sessionsDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     // What to run once the user confirms enabling auto-approval (shield, or "YOLO" on an approval card).
@@ -161,6 +190,10 @@ fun ChatScreen(
                     pendingAttachments = state.pendingAttachments,
                     availableCommands = state.commands,
                     onRemoveAttachment = { viewModel.removeAttachment(it) },
+                    onAttachClicked = { filePicker.launch("*/*") },
+                    isUploadingAttachment = state.isUploadingAttachment,
+                    queuedMessages = state.queuedMessages,
+                    onRemoveQueued = { viewModel.removeQueued(it) },
                     onCommandSelected = { cmd ->
                         if (cmd.equals("/restart", ignoreCase = true)) {
                             viewModel.restartGateway()

@@ -82,6 +82,8 @@ data class ChatUiState(
     val isRestartingGateway: Boolean = false,
     val gatewayStatus: GatewayStatusResponse? = null,
     val isLoading: Boolean = false,
+    val isUploadingAttachment: Boolean = false,
+    val queuedMessages: List<QueuedMessage> = emptyList(),
     val error: String? = null
 )
 
@@ -174,7 +176,7 @@ class ChatViewModel(
                     it.copy(
                         sessionId = loadedSession.sessionId,
                         sessionTitle = loadedSession.title,
-                        messages = loadedSession.messages,
+                        messages = loadedSession.messages.let(::normalizeHistory),
                         isLoading = false
                     )
                 }
@@ -197,6 +199,7 @@ class ChatViewModel(
                 it.copy(
                     sessionId = sid,
                     sessionTitle = "New Chat",
+                    queuedMessages = emptyList(),
                     messages = emptyList(),
                     isLoading = false
                 )
@@ -281,7 +284,8 @@ class ChatViewModel(
                     it.copy(
                         sessionId = detail.sessionId,
                         sessionTitle = detail.title,
-                        messages = detail.messages,
+                        messages = detail.messages.let(::normalizeHistory),
+                        queuedMessages = emptyList(),
                         isLoading = false,
                         isStreaming = false,
                         streamingTokens = "",
@@ -613,11 +617,44 @@ class ChatViewModel(
         }
     }
 
+    fun reportError(message: String) {
+        _uiState.update { it.copy(error = message) }
+    }
+
+    /** Uploads a picked file to the current session and queues it as a pending attachment. */
+    fun attachFile(filename: String, bytes: ByteArray, mimeType: String?) {
+        attachmentSizeError(bytes.size.toLong())?.let { msg ->
+            _uiState.update { it.copy(error = msg) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingAttachment = true, error = null) }
+            var sid = _uiState.value.sessionId
+            if (sid.isNullOrBlank()) sid = createNewSessionInternal()
+            if (sid.isNullOrBlank()) {
+                _uiState.update {
+                    it.copy(isUploadingAttachment = false, error = "Impossible de créer une conversation avec le serveur")
+                }
+                return@launch
+            }
+            val result = repository.uploadFile(sid, filename, bytes, resolveAttachmentMime(mimeType))
+            _uiState.update { st ->
+                result.fold(
+                    onSuccess = { st.copy(isUploadingAttachment = false, pendingAttachments = st.pendingAttachments + it.toChatAttachment()) },
+                    onFailure = { st.copy(isUploadingAttachment = false, error = it.localizedMessage ?: "Échec de l'envoi du fichier") }
+                )
+            }
+        }
+    }
+
+    fun removeQueued(index: Int) {
+        _uiState.update { it.copy(queuedMessages = it.queuedMessages.withoutIndex(index)) }
+    }
+
     fun sendMessage() {
         val state = _uiState.value
         val text = state.inputText.trim()
         if (text.isBlank() && state.pendingAttachments.isEmpty()) return
-        if (state.isStreaming) return
 
         if (text.equals("/restart", ignoreCase = true)) {
             _uiState.update { it.copy(inputText = "") }
@@ -625,6 +662,29 @@ class ChatViewModel(
             return
         }
 
+        if (sendPlan(state.isStreaming) == SendPlan.Queue) {
+            _uiState.update {
+                it.copy(
+                    queuedMessages = it.queuedMessages + QueuedMessage(text, it.pendingAttachments),
+                    inputText = "",
+                    pendingAttachments = emptyList()
+                )
+            }
+            return
+        }
+        dispatchTurn(text, state.pendingAttachments, clearComposer = true)
+    }
+
+    /** Sends the oldest queued message. Called only after the previous turn is fully settled. */
+    private fun drainQueue() {
+        val state = _uiState.value
+        if (state.isStreaming) return
+        val (next, rest) = state.queuedMessages.dequeue() ?: return
+        _uiState.update { it.copy(queuedMessages = rest) }
+        dispatchTurn(next.text, next.attachments, clearComposer = false)
+    }
+
+    private fun dispatchTurn(text: String, attachments: List<ChatAttachment>, clearComposer: Boolean) {
         viewModelScope.launch {
             var sid = _uiState.value.sessionId
             if (sid.isNullOrBlank()) {
@@ -645,15 +705,15 @@ class ChatViewModel(
                 role = "user",
                 content = text,
                 timestamp = System.currentTimeMillis() / 1000.0,
-                attachments = _uiState.value.pendingAttachments.ifEmpty { null }
+                attachments = attachments.ifEmpty { null }
             )
 
             // Optimistically add user message
             _uiState.update {
                 it.copy(
                     messages = it.messages + userMessage,
-                    inputText = "",
-                    pendingAttachments = emptyList(),
+                    inputText = if (clearComposer) "" else it.inputText,
+                    pendingAttachments = if (clearComposer) emptyList() else it.pendingAttachments,
                     isStreaming = true,
                     streamingTokens = "",
                     streamingReasoning = "",
@@ -776,7 +836,7 @@ class ChatViewModel(
                             event.session?.let { finalSession ->
                                 _uiState.update {
                                     it.copy(
-                                        messages = finalSession.messages,
+                                        messages = finalSession.messages.let(::normalizeHistory),
                                         streamingTokens = "",
                                         streamingReasoning = "",
                                         streamingToolCalls = emptyList()
@@ -786,7 +846,7 @@ class ChatViewModel(
                         }
                         is HermesSseEvent.StreamEnd -> {
                             flushBuffers(force = true)
-                            finalizeStreamingMessage()
+                            finalizeStreamingMessage(thenDrainQueue = true)
                         }
                         is HermesSseEvent.Cancelled -> {
                             flushBuffers(force = true)
@@ -812,7 +872,7 @@ class ChatViewModel(
         }
     }
 
-    private fun finalizeStreamingMessage() {
+    private fun finalizeStreamingMessage(thenDrainQueue: Boolean = false) {
         val state = _uiState.value
         val sid = state.sessionId
 
@@ -821,7 +881,7 @@ class ChatViewModel(
                 role = "assistant",
                 content = state.streamingTokens,
                 timestamp = System.currentTimeMillis() / 1000.0,
-                toolCalls = state.streamingToolCalls.ifEmpty { null },
+                toolCalls = state.streamingToolCalls.map { if (it.output == null && it.duration == null) it.copy(output = "") else it }.ifEmpty { null },
                 reasoning = state.streamingReasoning.ifBlank { null }
             )
             _uiState.update {
@@ -858,12 +918,14 @@ class ChatViewModel(
                     val detail = detailResult.getOrThrow()
                     _uiState.update {
                         it.copy(
-                            messages = detail.messages,
+                            messages = detail.messages.let(::normalizeHistory),
                             sessionTitle = detail.title
                         )
                     }
                 }
                 loadSessions()
+                // Only after the resync above, otherwise it would overwrite the optimistic next turn.
+                if (thenDrainQueue) drainQueue()
             }
         } else {
             loadSessions()
