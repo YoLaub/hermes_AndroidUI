@@ -246,7 +246,7 @@ fun ChatInputField(
                             color = HermesTextMuted
                         )
                     },
-                    enabled = !isStreaming,
+                    // Stays editable while streaming so the next message can be typed and queued.
                     shape = RoundedCornerShape(20.dp),
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
