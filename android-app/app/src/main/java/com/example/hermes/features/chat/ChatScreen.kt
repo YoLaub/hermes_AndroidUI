@@ -192,6 +192,8 @@ fun ChatScreen(
                     onRemoveAttachment = { viewModel.removeAttachment(it) },
                     onAttachClicked = { filePicker.launch("*/*") },
                     isUploadingAttachment = state.isUploadingAttachment,
+                    queuedMessages = state.queuedMessages,
+                    onRemoveQueued = { viewModel.removeQueued(it) },
                     onCommandSelected = { cmd ->
                         if (cmd.equals("/restart", ignoreCase = true)) {
                             viewModel.restartGateway()

@@ -83,6 +83,7 @@ data class ChatUiState(
     val gatewayStatus: GatewayStatusResponse? = null,
     val isLoading: Boolean = false,
     val isUploadingAttachment: Boolean = false,
+    val queuedMessages: List<QueuedMessage> = emptyList(),
     val error: String? = null
 )
 
@@ -198,6 +199,7 @@ class ChatViewModel(
                 it.copy(
                     sessionId = sid,
                     sessionTitle = "New Chat",
+                    queuedMessages = emptyList(),
                     messages = emptyList(),
                     isLoading = false
                 )
@@ -283,6 +285,7 @@ class ChatViewModel(
                         sessionId = detail.sessionId,
                         sessionTitle = detail.title,
                         messages = detail.messages.let(::normalizeHistory),
+                        queuedMessages = emptyList(),
                         isLoading = false,
                         isStreaming = false,
                         streamingTokens = "",
@@ -644,11 +647,14 @@ class ChatViewModel(
         }
     }
 
+    fun removeQueued(index: Int) {
+        _uiState.update { it.copy(queuedMessages = it.queuedMessages.withoutIndex(index)) }
+    }
+
     fun sendMessage() {
         val state = _uiState.value
         val text = state.inputText.trim()
         if (text.isBlank() && state.pendingAttachments.isEmpty()) return
-        if (state.isStreaming) return
 
         if (text.equals("/restart", ignoreCase = true)) {
             _uiState.update { it.copy(inputText = "") }
@@ -656,6 +662,29 @@ class ChatViewModel(
             return
         }
 
+        if (sendPlan(state.isStreaming) == SendPlan.Queue) {
+            _uiState.update {
+                it.copy(
+                    queuedMessages = it.queuedMessages + QueuedMessage(text, it.pendingAttachments),
+                    inputText = "",
+                    pendingAttachments = emptyList()
+                )
+            }
+            return
+        }
+        dispatchTurn(text, state.pendingAttachments, clearComposer = true)
+    }
+
+    /** Sends the oldest queued message. Called only after the previous turn is fully settled. */
+    private fun drainQueue() {
+        val state = _uiState.value
+        if (state.isStreaming) return
+        val (next, rest) = state.queuedMessages.dequeue() ?: return
+        _uiState.update { it.copy(queuedMessages = rest) }
+        dispatchTurn(next.text, next.attachments, clearComposer = false)
+    }
+
+    private fun dispatchTurn(text: String, attachments: List<ChatAttachment>, clearComposer: Boolean) {
         viewModelScope.launch {
             var sid = _uiState.value.sessionId
             if (sid.isNullOrBlank()) {
@@ -676,15 +705,15 @@ class ChatViewModel(
                 role = "user",
                 content = text,
                 timestamp = System.currentTimeMillis() / 1000.0,
-                attachments = _uiState.value.pendingAttachments.ifEmpty { null }
+                attachments = attachments.ifEmpty { null }
             )
 
             // Optimistically add user message
             _uiState.update {
                 it.copy(
                     messages = it.messages + userMessage,
-                    inputText = "",
-                    pendingAttachments = emptyList(),
+                    inputText = if (clearComposer) "" else it.inputText,
+                    pendingAttachments = if (clearComposer) emptyList() else it.pendingAttachments,
                     isStreaming = true,
                     streamingTokens = "",
                     streamingReasoning = "",
@@ -817,7 +846,7 @@ class ChatViewModel(
                         }
                         is HermesSseEvent.StreamEnd -> {
                             flushBuffers(force = true)
-                            finalizeStreamingMessage()
+                            finalizeStreamingMessage(thenDrainQueue = true)
                         }
                         is HermesSseEvent.Cancelled -> {
                             flushBuffers(force = true)
@@ -843,7 +872,7 @@ class ChatViewModel(
         }
     }
 
-    private fun finalizeStreamingMessage() {
+    private fun finalizeStreamingMessage(thenDrainQueue: Boolean = false) {
         val state = _uiState.value
         val sid = state.sessionId
 
@@ -895,6 +924,8 @@ class ChatViewModel(
                     }
                 }
                 loadSessions()
+                // Only after the resync above, otherwise it would overwrite the optimistic next turn.
+                if (thenDrainQueue) drainQueue()
             }
         } else {
             loadSessions()

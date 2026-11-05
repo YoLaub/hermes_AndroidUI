@@ -494,6 +494,8 @@
     <string name="chat_tool">Outil : %1$s</string>
     <string name="chat_yolo" translatable="false">YOLO</string>
     <string name="chat_remove">Retirer</string>
+    <string name="chat_queue_message">Mettre en file d\'attente</string>
+    <string name="chat_queued_prefix">En attente : %1$s</string>
     <string name="chat_attach_file">Joindre un fichier</string>
     <string name="chat_cancel_stream">Arrêter la réponse</string>
     <string name="chat_send_message">Envoyer le message</string>
