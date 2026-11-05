@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
-from aether_protocol import DesktopOpen, Gesture, Move, envelope
+from aether_observation import decode_observation
+from aether_protocol import DesktopOpen, Gesture, Move, ObserveScreen, envelope
 
 
 @dataclass(eq=False)
@@ -22,6 +23,7 @@ class Connection:
     can_move: bool = True
     can_gesture: bool = False
     can_open: bool = False
+    can_observe: bool = False
     authorized: Callable[[], bool] = lambda: True
 
 
@@ -83,9 +85,13 @@ class AetherRelay:
     async def open_desktop(self, profile, arguments):
         return await self._command(profile, DesktopOpen.model_validate(arguments))
 
+    async def observe(self, profile, arguments):
+        return await self._command(profile, ObserveScreen.model_validate(arguments))
+
     async def _command(self, profile, args):
         gesture = isinstance(args, Gesture)
         desktop = isinstance(args, DesktopOpen)
+        observation = isinstance(args, ObserveScreen)
         cid = uuid4().hex
         # Someone else's avatar answers exactly like a missing one, so its existence is not revealed.
         connection = self.owned(profile, args.device_id)
@@ -94,7 +100,15 @@ class AetherRelay:
         if not connection.authorized():
             self.disconnect(connection)
             return self.error(cid, "unauthorized")
-        if not (connection.can_open if desktop else connection.can_gesture if gesture else connection.can_move):
+        if not (
+            connection.can_observe
+            if observation
+            else connection.can_open
+            if desktop
+            else connection.can_gesture
+            if gesture
+            else connection.can_move
+        ):
             return self.error(cid, "unsupported_capability")
         if connection.pending:
             return self.error(cid, "command_rejected")
@@ -108,7 +122,9 @@ class AetherRelay:
             async def exchange():
                 await connection.socket.send_json(
                     envelope(
-                        "command.desktop_open"
+                        "command.observe_screen"
+                        if observation
+                        else "command.desktop_open"
                         if desktop
                         else "command.avatar_gesture"
                         if gesture
@@ -137,7 +153,29 @@ class AetherRelay:
         cid, future, args = connection.pending
         if future.done() or payload["command_id"] != cid or kind == "command.accepted":
             return
+        if not connection.authorized():
+            future.set_result(self.error(cid, "unauthorized"))
+            return
         if kind == "command.completed":
+            if isinstance(args, ObserveScreen):
+                image = payload.get("image")
+                try:
+                    if (
+                        not image
+                        or image.get("mime_type") != "image/jpeg"
+                        or payload.get("avatar")
+                        or payload.get("outcome")
+                    ):
+                        raise ValueError("Invalid capture result")
+                    decode_observation(image["data_base64"])
+                except (ValueError, KeyError, TypeError):
+                    future.set_result(self.error(cid, "execution_failed"))
+                    return
+                future.set_result({"command_id": cid, "status": "completed", "image": image})
+                return
+            if payload.get("image"):
+                future.set_result(self.error(cid, "execution_failed"))
+                return
             if isinstance(args, DesktopOpen):
                 if payload.get("outcome") == "opened" and payload.get("avatar") is None:
                     future.set_result({"command_id": cid, "status": "completed", "outcome": "opened"})
