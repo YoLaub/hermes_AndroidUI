@@ -130,12 +130,14 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
             }
             extensions = hello.client_version == "0.2.0"
             desktop_extension = extensions and ws.headers.get("x-aether-features") == "desktop-open-v1"
+            mail_extension = extensions and ws.headers.get("x-aether-mail") == "apple-mail-v1"
             observation_extension = extensions and ws.headers.get("x-aether-observation") == "screen-observe-v1"
             if extensions:
                 ready["optional_capabilities"] = (
                     ["avatar.gesture"]
                     + (["desktop.open"] if desktop_extension else [])
                     + (["screen.observe"] if observation_extension else [])
+                    + (["mail.manage"] if mail_extension else [])
                 )
             await ws.send_json(envelope("server.ready", ready))
             while True:
@@ -160,6 +162,9 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
                         raise ValueError("Desktop extension not negotiated")
                     if "screen.observe" in capabilities.capabilities and not observation_extension:
                         raise ValueError("Observation extension not negotiated")
+                    if "mail.manage" in capabilities.capabilities and not mail_extension:
+                        raise ValueError("Mail extension not offered")
+                    connection.can_mail = "mail.manage" in capabilities.capabilities
                     connection.can_observe = "screen.observe" in capabilities.capabilities
                     connection.can_open = "desktop.open" in capabilities.capabilities
                     connection.can_gesture = "avatar.gesture" in capabilities.capabilities
@@ -172,6 +177,7 @@ def router_for(relay, client_ip, enforce_not_blocked, note_auth_failure):
                         message.type == "command.completed"
                         and result.outcome != "opened"
                         and result.image is None
+                        and result.mail_result is None
                         and (result.avatar is None or result.avatar.moving)
                     ):
                         raise ValueError("Completed command requires a stationary avatar")

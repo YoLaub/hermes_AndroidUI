@@ -1,12 +1,14 @@
 """Device-scoped AETHER command lifetimes, independent of HTTP and Android sessions."""
 
 import asyncio
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
+from aether_mail import MailCommand
 from aether_observation import decode_observation
 from aether_protocol import DesktopOpen, Gesture, Move, ObserveScreen, envelope
 
@@ -24,6 +26,7 @@ class Connection:
     can_gesture: bool = False
     can_open: bool = False
     can_observe: bool = False
+    can_mail: bool = False
     authorized: Callable[[], bool] = lambda: True
 
 
@@ -85,10 +88,14 @@ class AetherRelay:
     async def open_desktop(self, profile, arguments):
         return await self._command(profile, DesktopOpen.model_validate(arguments))
 
+    async def mail(self, profile, arguments):
+        return await self._command(profile, MailCommand.model_validate(arguments))
+
     async def observe(self, profile, arguments):
         return await self._command(profile, ObserveScreen.model_validate(arguments))
 
     async def _command(self, profile, args):
+        mail = isinstance(args, MailCommand)
         gesture = isinstance(args, Gesture)
         desktop = isinstance(args, DesktopOpen)
         observation = isinstance(args, ObserveScreen)
@@ -101,7 +108,9 @@ class AetherRelay:
             self.disconnect(connection)
             return self.error(cid, "unauthorized")
         if not (
-            connection.can_observe
+            connection.can_mail
+            if mail
+            else connection.can_observe
             if observation
             else connection.can_open
             if desktop
@@ -122,7 +131,9 @@ class AetherRelay:
             async def exchange():
                 await connection.socket.send_json(
                     envelope(
-                        "command.observe_screen"
+                        "command.mail"
+                        if mail
+                        else "command.observe_screen"
                         if observation
                         else "command.desktop_open"
                         if desktop
@@ -132,7 +143,7 @@ class AetherRelay:
                         {
                             "command_id": cid,
                             "expires_at": expires,
-                            **args.model_dump(exclude={"device_id", "ttl_seconds"}),
+                            **args.model_dump(exclude={"device_id", "ttl_seconds"}, exclude_unset=mail),
                         },
                     )
                 )
@@ -157,6 +168,21 @@ class AetherRelay:
             future.set_result(self.error(cid, "unauthorized"))
             return
         if kind == "command.completed":
+            if isinstance(args, MailCommand):
+                raw = payload.get("mail_result")
+                try:
+                    if (not isinstance(raw, str) or len(json.dumps(raw).encode()) > 12000
+                            or not isinstance(json.loads(raw), dict)
+                            or payload.get("image") or payload.get("avatar") or payload.get("outcome")):
+                        raise ValueError("Invalid mail result")
+                except (ValueError, TypeError):
+                    future.set_result(self.error(cid, "execution_failed"))
+                    return
+                future.set_result({"command_id": cid, "status": "completed", "mail": json.loads(raw)})
+                return
+            if payload.get("mail_result") is not None:
+                future.set_result(self.error(cid, "execution_failed"))
+                return
             if isinstance(args, ObserveScreen):
                 image = payload.get("image")
                 try:

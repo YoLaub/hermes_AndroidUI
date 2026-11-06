@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-11-06
+
+* **Update**: Added owner-authorized Apple Mail MCP routing, optional capability negotiation and bounded results. See [handoff](/handoff.md). Synthetic tests only; no push or deployment.
+
 ## 2026-11-05
 
 * **Update**: Added owner-authorized `aether_observe_screen`, locally approved MCP image results, command-scoped frame bounds and regression tests; see [handoff](/handoff.md). No deployment.
