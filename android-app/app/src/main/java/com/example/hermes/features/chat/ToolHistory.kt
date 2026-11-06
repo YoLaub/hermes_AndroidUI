@@ -19,6 +19,7 @@ fun normalizeHistory(messages: List<ChatMessage>): List<ChatMessage> {
 
     return messages
         .filter { it.role != "tool" }
+        .map { it.takeIf { m -> m.role == "user" }?.let { m -> m.copy(content = stripAttachmentSuffix(m.content)) } ?: it }
         .map { msg ->
             val calls = msg.toolCalls ?: return@map msg
             msg.copy(toolCalls = calls.map { it.resolved(results) })

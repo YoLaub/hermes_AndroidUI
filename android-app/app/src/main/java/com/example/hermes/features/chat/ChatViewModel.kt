@@ -724,7 +724,7 @@ class ChatViewModel(
 
             val startResult = repository.startChatTurn(
                 sessionId = sid,
-                message = text,
+                message = messageWithAttachments(text, userMessage.attachments ?: emptyList()),
                 attachments = userMessage.attachments ?: emptyList()
             )
 
