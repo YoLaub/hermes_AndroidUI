@@ -149,3 +149,81 @@ def test_the_agent_phone_cannot_start_a_john_session():
 def test_an_agent_phone_token_does_not_authenticate_as_an_ordinary_phone_or_the_reverse():
     assert not database.verify_device_token(AGENT_DEVICE, AGENT_TOKEN)  # default kind: android
     assert not database.verify_device_token(PLAIN_DEVICE, PLAIN_TOKEN, device_kind="agent_phone")
+
+
+# ── Launching any app: only a standing profile may choose the package ─────────
+
+from unittest.mock import patch  # noqa: E402
+
+
+def launch(headers, package=None):
+    return mcp(headers, "mobile_launch_allowed_app", {} if package is None else {"package": package})
+
+
+def connect_agent(ws):
+    ws.send_text(json.dumps(auth(AGENT_DEVICE, AGENT_TOKEN)))
+    ws.receive_json(); ws.receive_json()
+
+
+def connect_john_session(ws, target="com.linkedin.android"):
+    ws.send_text(json.dumps(auth(PLAIN_DEVICE, PLAIN_TOKEN)))
+    ws.receive_json(); ws.receive_json()
+    ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "session_start", "session_id": "ses_l1",
+                             "target_package": target, "allowed_profile": "john",
+                             "mode": "interaction", "duration_seconds": 900}))
+    assert ws.receive_json()["type"] == "session_started_ack"
+
+
+def test_launch_tool_advertises_an_optional_package_argument():
+    res = client.post("/mcp", headers=AGENT, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    tool = next(t for t in res.json()["result"]["tools"] if t["name"] == "mobile_launch_allowed_app")
+    assert "package" in tool["inputSchema"]["properties"]
+    assert not tool["inputSchema"].get("required")
+
+
+def test_the_agent_phone_can_launch_any_app_by_package():
+    with client.websocket_connect("/ws/device") as ws:
+        connect_agent(ws)
+        box = {}
+        t = threading.Thread(target=lambda: box.update(out=launch(AGENT, "com.android.settings")))
+        t.start()
+        cmd = ws.receive_json()
+        assert cmd["operation"] == "launch_app" and cmd["arguments"]["package"] == "com.android.settings"
+        ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "result", "command_id": cmd["command_id"],
+                                 "status": "success", "message": "ouvert"}))
+        t.join(10)
+        assert not box["out"].get("isError")
+
+
+@pytest.mark.parametrize("bad", ["", "settings", "com..x", "com.x; rm", "a" * 300 + ".b", 5, ["com.x"]])
+def test_a_malformed_package_is_refused_before_reaching_the_phone(bad):
+    with client.websocket_connect("/ws/device") as ws:
+        connect_agent(ws)
+        with patch.object(type(manager), "send_command_to_device") as sent:
+            out = launch(AGENT, bad)
+        assert not sent.called
+    assert out["isError"] and out["content"][0]["text"].startswith("INVALID_ARGUMENTS")
+
+
+def test_john_cannot_launch_an_app_other_than_his_target():
+    with client.websocket_connect("/ws/device") as ws:
+        connect_john_session(ws)
+        with patch.object(type(manager), "send_command_to_device") as sent:
+            out = launch(JOHN, "com.android.settings")
+        assert not sent.called
+    assert out["isError"] and out["content"][0]["text"].startswith("APP_NOT_ALLOWED")
+
+
+def test_john_launching_his_own_target_is_unchanged_and_sends_no_package():
+    with client.websocket_connect("/ws/device") as ws:
+        connect_john_session(ws)
+        box = {}
+        t = threading.Thread(target=lambda: box.update(out=launch(JOHN, "com.linkedin.android")))
+        t.start()
+        cmd = ws.receive_json()
+        assert cmd["operation"] == "launch_app" and cmd["target_package"] == "com.linkedin.android"
+        assert cmd["arguments"].get("package") is None
+        ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "result", "command_id": cmd["command_id"],
+                                 "status": "success", "message": "ouvert"}))
+        t.join(10)
+        assert not box["out"].get("isError")

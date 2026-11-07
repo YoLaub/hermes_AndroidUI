@@ -57,6 +57,8 @@ class MobileCommandArguments(BaseModel):
     y: Optional[int] = None
     days: Optional[int] = None
     to: Optional[str] = None
+    # launch_app only: the app to open. Set only for a standing profile; otherwise the session's target is launched.
+    package: Optional[str] = None
     # Calendar write (create / update / delete). Dates are local to the phone, "2026-10-07T15:00".
     event_id: Optional[str] = None
     title: Optional[str] = None

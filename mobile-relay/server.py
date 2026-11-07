@@ -685,6 +685,8 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
 # ── WebSocket Device Endpoint ────────────────────────────────────────────────
 
 STANDING_SESSION_SECONDS = 365 * 24 * 3600
+# An Android application id: dot-separated segments, at least two, 255 characters at most.
+PACKAGE_NAME = re.compile(r"(?=.{1,255}$)[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
 
 
 def open_standing_session(device_id: str, kind: str) -> None:
@@ -926,10 +928,12 @@ MCP_TOOLS = [
     },
     {
         "name": "mobile_launch_allowed_app",
-        "description": "Ouvre l'application autorisée (ex: LinkedIn) sur le téléphone au premier plan.",
+        "description": "Ouvre l'application autorisée (ex: LinkedIn) sur le téléphone au premier plan. Sur un téléphone dédié à l'agent, l'argument optionnel package (ex: com.android.settings) ouvre n'importe quelle application.",
         "inputSchema": {
             "type": "object",
-            "properties": {}
+            "properties": {
+                "package": {"type": "string", "description": "Identifiant de l'application à ouvrir (téléphone dédié à l'agent uniquement)"}
+            }
         }
     },
     {
@@ -1346,6 +1350,24 @@ async def mcp_stream_endpoint(request: Request):
                     protocol_version=negotiated_version,
                 )
 
+        launch_package = None
+        if op == "launch_app" and "package" in arguments:
+            requested = arguments["package"]
+            if not (isinstance(requested, str) and PACKAGE_NAME.fullmatch(requested)):
+                return format_mcp_error(
+                    req_id,
+                    "INVALID_ARGUMENTS: package doit être un identifiant d'application Android (ex: com.android.settings).",
+                    protocol_version=negotiated_version,
+                )
+            if policy_for(session.allowed_profile).standing:
+                launch_package = requested
+            elif requested != session.target_package:
+                return format_mcp_error(
+                    req_id,
+                    f"APP_NOT_ALLOWED: Seule l'application autorisée pour la session ({session.target_package}) peut être ouverte.",
+                    protocol_version=negotiated_version,
+                )
+
         days = None
         if op == "calendar_read":
             days = arguments.get("days")
@@ -1379,6 +1401,7 @@ async def mcp_stream_endpoint(request: Request):
                 element_ref=arguments.get("element_ref"),
                 text=arguments.get("text") if op in ("set_text", "sms_send") else None,
                 to=arguments.get("to") if op in ("sms_send", "call_place") else None,
+                package=launch_package,
                 **(calendar_write_arguments(op, arguments) if op in CALENDAR_WRITE_OPERATIONS else {}),
                 direction=arguments.get("direction", "down"),
                 x=arguments.get("x") if op == "tap_xy" else None,
