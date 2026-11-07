@@ -8,27 +8,30 @@ data class WakePlan(val wake: Boolean, val swipeToUnlock: Boolean, val blockedCo
 }
 
 /**
- * A phone dedicated to the agent sleeps between requests. When a command needs the screen, wake it and swipe
+ * A phone dedicated to the agent sleeps between requests. Whatever the command (the lock check refuses all of them
+ * on a locked phone), wake the screen and swipe
  * away a plain "swipe to unlock" keyguard. A PIN, pattern or fingerprint is never bypassed: the command is
  * refused as DEVICE_LOCKED (the screen still wakes, so the owner sees the phone is waiting).
  */
-object ScreenWake {
-    /** Reading data or placing a call/SMS does not look at the screen. */
-    private val NO_SCREEN = setOf(
-        "calendar_read", "sms_read", "call_log_read", "sms_send", "call_place",
-        "calendar_create", "calendar_update", "calendar_delete", "end_session"
-    )
+/** A vertical swipe, in pixels. */
+data class UnlockSwipe(val x: Int, val fromY: Int, val toY: Int)
 
-    fun operationNeedsScreen(operation: String): Boolean = operation !in NO_SCREEN
+object ScreenWake {
+    /**
+     * The swipe that dismisses a plain keyguard. It must start well above the bottom: measured on a real phone, a
+     * swipe starting at 85-91 % of the height lands on the lock icon and the charge text and is ignored, while one
+     * starting around 70 % works whatever its speed.
+     */
+    fun unlockSwipe(widthPx: Int, heightPx: Int) =
+        UnlockSwipe(x = widthPx / 2, fromY = (heightPx * 0.70).toInt(), toY = (heightPx * 0.20).toInt())
 
     fun plan(
         wakesScreen: Boolean,
-        operation: String,
         interactive: Boolean,
         keyguardLocked: Boolean,
         keyguardSecure: Boolean
     ): WakePlan {
-        if (!wakesScreen || !operationNeedsScreen(operation)) return WakePlan.NOTHING
+        if (!wakesScreen) return WakePlan.NOTHING
         val wake = !interactive
         if (!keyguardLocked) return WakePlan(wake = wake, swipeToUnlock = false, blockedCode = null)
         return if (keyguardSecure) {

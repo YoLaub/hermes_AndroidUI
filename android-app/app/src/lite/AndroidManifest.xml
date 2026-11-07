@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Wakes the sleeping screen when the agent sends a command. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Lets the agent open any launchable app by package (Android 11+ hides other apps otherwise). -->
     <queries>
         <intent>

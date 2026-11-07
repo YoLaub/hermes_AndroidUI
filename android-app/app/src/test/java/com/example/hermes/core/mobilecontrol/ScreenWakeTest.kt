@@ -10,11 +10,10 @@ import org.junit.Test
 class ScreenWakeTest {
     private fun plan(
         wakes: Boolean = true,
-        op: String = "observe",
         interactive: Boolean,
         locked: Boolean,
         secure: Boolean = false
-    ) = ScreenWake.plan(wakes, op, interactive, locked, secure)
+    ) = ScreenWake.plan(wakes, interactive, locked, secure)
 
     // ── Policy ────────────────────────────────────────────────────────────────
 
@@ -27,30 +26,6 @@ class ScreenWakeTest {
     @Test
     fun theFullAppNeverTouchesTheScreenState() {
         val p = plan(wakes = false, interactive = false, locked = true)
-        assertFalse(p.wake)
-        assertFalse(p.swipeToUnlock)
-        assertNull(p.blockedCode)
-    }
-
-    // ── What needs the screen ─────────────────────────────────────────────────
-
-    @Test
-    fun screenCommandsNeedTheScreen() {
-        listOf("observe", "screenshot", "click_element", "set_text", "scroll", "back", "tap_xy", "launch_app")
-            .forEach { assertTrue(it, ScreenWake.operationNeedsScreen(it)) }
-    }
-
-    @Test
-    fun dataCommandsLeaveTheScreenAlone() {
-        listOf(
-            "calendar_read", "sms_read", "call_log_read", "sms_send", "call_place",
-            "calendar_create", "calendar_update", "calendar_delete", "end_session"
-        ).forEach { assertFalse(it, ScreenWake.operationNeedsScreen(it)) }
-    }
-
-    @Test
-    fun aDataCommandDoesNotWakeASleepingPhone() {
-        val p = plan(op = "sms_read", interactive = false, locked = true)
         assertFalse(p.wake)
         assertFalse(p.swipeToUnlock)
         assertNull(p.blockedCode)
@@ -112,8 +87,23 @@ class ScreenWakeTest {
         assertFalse(p.wake)
     }
 
+    // ── The swipe that dismisses a plain keyguard ─────────────────────────────
+
     @Test
-    fun aSecureLockOnlyBlocksCommandsThatNeedTheScreen() {
-        assertNull(plan(op = "calendar_read", interactive = false, locked = true, secure = true).blockedCode)
+    fun theUnlockSwipeStartsAboveTheLockIconAndChargeArea() {
+        // Measured on a real phone: a swipe starting at 85-91 % of the height lands on the lock icon / charge text
+        // and is ignored; one starting around 70 % dismisses the keyguard.
+        val s = ScreenWake.unlockSwipe(widthPx = 720, heightPx = 1640)
+        assertEquals(360, s.x)
+        assertTrue("starts at ${s.fromY}", s.fromY in (1640 * 0.6).toInt()..(1640 * 0.78).toInt())
+        assertTrue(s.toY < s.fromY)
+        assertTrue(s.toY > 0)
+    }
+
+    @Test
+    fun theUnlockSwipeScalesWithTheScreen() {
+        val small = ScreenWake.unlockSwipe(widthPx = 480, heightPx = 800)
+        assertEquals(240, small.x)
+        assertTrue(small.fromY < 800 && small.fromY > small.toY)
     }
 }
