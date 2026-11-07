@@ -32,6 +32,7 @@ Ajoutez le service suivant dans votre `docker-compose.yml` Coolify :
       - MOBILE_CONTROL_TOKEN_MARIO=${MOBILE_CONTROL_TOKEN_MARIO}
       - MOBILE_CONTROL_TOKEN_GASTON=${MOBILE_CONTROL_TOKEN_GASTON}
       - MOBILE_CONTROL_TOKEN_JOHN=${MOBILE_CONTROL_TOKEN_JOHN}
+      - MOBILE_CONTROL_TOKEN_PHONE_AGENT=${MOBILE_CONTROL_TOKEN_PHONE_AGENT}
     ports:
       - "8765:8765"
     networks:
@@ -191,3 +192,26 @@ Règles de comportement à donner à John :
 3. L'agent prépare le texte dans le champ de commentaire avec `mobile_set_text`.
 4. **Validation humaine finale :** Vous vérifiez le texte à l'écran sur votre téléphone et cliquez vous-même sur "Publier" !
 5. Vous pouvez interrompre la session à tout moment en cliquant sur **"ARRÊTER LE CONTRÔLE"** dans l'app ou dans la barre de notification.
+
+---
+
+## 4. Téléphone dédié à l'agent (édition « lite », profil `phone-agent`)
+
+Édition facultative pour un téléphone qui appartient à l'agent : pas de compte personnel dessus, pas de chat, pas de
+confirmation. Elle ne remplace pas l'application complète ni les règles de `john` (voir la section 2.13 de
+`MOBILE_CONTROL_SPEC.md`).
+
+1. **Relais.** Définir `MOBILE_CONTROL_TOKEN_PHONE_AGENT` (valeur longue et aléatoire) dans Coolify, puis redéployer le relais.
+   Vérifier dans les logs que le service redémarre.
+2. **Profil de l'agent.** Ajouter un serveur MCP pour le profil `phone-agent` avec `Authorization: Bearer ${MOBILE_CONTROL_TOKEN_PHONE_AGENT}`
+   (même URL que la section 2).
+3. **Installer l'APK lite** (`app-lite-debug.apk`, application « Hermes Phone », identifiant `com.example.hermes.lite`). Elle peut
+   coexister avec l'application complète.
+4. **Code d'appairage.** Avec le jeton admin : `POST /api/pair/generate` avec `{"device_kind": "agent_phone"}`. Saisir le code dans
+   l'application lite.
+5. **Sur le téléphone** : activer l'accessibilité « Hermes », accorder les permissions proposées. Une fois connecté,
+   l'écran affiche « Prêt ». Le bouton « Arrêter » déconnecte le téléphone : l'agent n'a alors plus de session.
+
+L'application complète s'installe désormais avec `app-full-debug.apk` (même identifiant `com.example.hermes` qu'avant : elle
+met à jour l'installation existante).
+

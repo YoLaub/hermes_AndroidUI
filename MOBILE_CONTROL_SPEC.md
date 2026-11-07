@@ -292,6 +292,28 @@ the user's tap on the phone** (same confirmation as 2.11: one at a time, 60 seco
   titles, places and ids are not logged or stored on the relay; the audit records `CALENDAR_CREATE` / `CALENDAR_UPDATE` /
   `CALENDAR_DELETE` with the outcome only.
 
+### 2.13 Standing profile: a phone dedicated to the agent (`phone-agent`)
+
+An **optional, separate edition** for a phone that belongs to the agent (no personal accounts on it). It never replaces
+the strict flow above: `john` keeps its phone-started, bounded, consented sessions and its confirmations, unchanged.
+
+- **Profile policy, by profile.** The relay holds a table of profiles allowed to control a phone: `john` (phone-started) and
+  `phone-agent` (standing). Any other profile stays refused (`PROFILE_NOT_ALLOWED`). A **phone can never claim** the standing
+  profile: a `session_start` for `phone-agent` is refused, and an agent phone cannot start a `john` session.
+- **Device kind.** `POST /api/pair/generate` (admin) and `/api/pair/verify` accept `device_kind: "agent_phone"`. The device is
+  stored with that kind and bound to `phone-agent`; its token does not authenticate as an ordinary phone, nor the reverse.
+  Overwriting follows the same rules as 2.1.
+- **Standing session.** When an agent phone authenticates, the **relay opens its session**: `target_package` is `"*"` (no
+  particular app), mode `interaction`, every consent in 2.7b, expiry one year (the session ends when the phone disconnects
+  and is reopened on reconnection; the phone's stop button is a disconnection). The phone receives it as `session_state`.
+- **No confirmation, by design of this edition.** The phone trusts the relay's consents and asks no tap before sending an SMS,
+  placing a call or changing the calendar. This applies only to a device paired as `agent_phone`.
+- **Agent token.** The MCP token of the profile is `MOBILE_CONTROL_TOKEN_PHONE_AGENT` (or an entry for `phone-agent` in
+  `HERMES_PROFILE_TOKENS` / the database). It only drives the agent phone; the `john` token cannot, and the reverse.
+- **Launching any app.** `mobile_launch_allowed_app` takes an optional `package` (an Android application id). On a standing
+  session it opens that app; the phone command carries it as `arguments.package`. On a session bound to an app it must be that
+  app, otherwise `APP_NOT_ALLOWED`; a malformed id is `INVALID_ARGUMENTS`. No new error code is introduced.
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |
