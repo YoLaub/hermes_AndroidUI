@@ -21,10 +21,12 @@ from aether_relay import AetherRelay
 from aether_routes import router_for
 from database import (
     atomic_register_or_update_device,
+    authenticate_phone,
     check_and_record_pairing_attempt,
     claim_aether_avatar,
     consume_pairing_code,
     count_active_pairing_codes,
+    device_profile,
     init_db,
     is_auth_blocked,
     log_audit,
@@ -34,7 +36,6 @@ from database import (
     retry_after_seconds,
     save_pairing_code,
     verify_admin_token,
-    verify_device_token,
     verify_profile_token_in_db,
 )
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
@@ -461,6 +462,11 @@ def authenticate_hermes_profile(request: Request) -> str:
         if env_val and secrets.compare_digest(env_val.strip(), token):
             return prof
 
+    # 2b. The profile of a phone dedicated to the agent (its name is not a valid env var suffix as is)
+    agent_env = os.environ.get("MOBILE_CONTROL_TOKEN_PHONE_AGENT")
+    if agent_env and secrets.compare_digest(agent_env.strip(), token):
+        return "phone-agent"
+
     # 3. Check generic MOBILE_CONTROL_TOKEN (maps to default mobile control profile john)
     generic_token = os.environ.get("MOBILE_CONTROL_TOKEN")
     if generic_token and secrets.compare_digest(generic_token.strip(), token):
@@ -657,7 +663,8 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
         device_kind=req.device_kind,
         device_name=req.device_name or "Android Phone",
         current_token=candidate_device_token,
-        is_admin_authorized=is_admin_auth
+        is_admin_authorized=is_admin_auth,
+        profile="phone-agent" if req.device_kind == "agent_phone" else None,
     )
 
     if not success:
@@ -676,6 +683,30 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     return PairingVerifyResponse(ok=True, device_token=device_token)
 
 # ── WebSocket Device Endpoint ────────────────────────────────────────────────
+
+STANDING_SESSION_SECONDS = 365 * 24 * 3600
+
+
+def open_standing_session(device_id: str, kind: str) -> None:
+    """An agent phone gets its session from the relay: every app, interaction, every consent. It ends when the
+    phone disconnects and is reopened on reconnection, so the phone's own stop is simply to disconnect."""
+    if kind != "agent_phone":
+        return
+    profile = device_profile(device_id)
+    policy = policy_for(profile)
+    if policy is None or not policy.standing:
+        return
+    manager.set_active_session(ActiveSession(
+        session_id="standing_" + str(uuid.uuid4()),
+        device_id=device_id,
+        target_package="*",
+        allowed_profile=policy.name,
+        mode="interaction",
+        expires_at=time.time() + STANDING_SESSION_SECONDS,
+        consents=KNOWN_CONSENTS,
+    ))
+    log_event("standing_session_opened", device_id=device_id, profile=policy.name)
+
 
 def session_state_message(device_id: str) -> dict:
     """The relay's own view of this device's session (the source of truth)."""
@@ -724,9 +755,11 @@ async def websocket_device_endpoint(
     try:
         # Initial authentication via headers if present (skipped for a blocked source)
         if x_device_id and x_device_token and not source_is_blocked(source):
-            if verify_device_token(x_device_id, x_device_token):
+            header_kind = authenticate_phone(x_device_id, x_device_token)
+            if header_kind:
                 authenticated_device_id = x_device_id
                 manager.register_connection(authenticated_device_id, websocket)
+                open_standing_session(authenticated_device_id, header_kind)
                 log_event("device_authenticated", device_id=authenticated_device_id, via="header")
             else:
                 note_auth_failure(source, "ws")
@@ -754,9 +787,11 @@ async def websocket_device_endpoint(
                     close_reason = "auth_rate_limited"
                     await websocket.close()
                     break
-                if dev_id and token and verify_device_token(dev_id, token):
+                message_kind = authenticate_phone(dev_id, token) if dev_id and token else None
+                if message_kind:
                     authenticated_device_id = dev_id
                     manager.register_connection(dev_id, websocket)
+                    open_standing_session(dev_id, message_kind)
                     log_event("device_authenticated", device_id=dev_id, via="message")
                     await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "auth_ok"}))
                     # Reconnection sync: tell the phone what the relay actually holds.
@@ -791,7 +826,7 @@ async def websocket_device_endpoint(
                 # Server-side restriction: a phone may only start a session for a non-standing profile (john).
                 # A standing profile (phone-agent) is opened by the relay for a paired agent phone, never claimed.
                 req_policy = policy_for(req_profile)
-                if req_policy is None or req_policy.standing:
+                if req_policy is None or req_policy.standing or device_profile(authenticated_device_id):
                     await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED",
                                          f"Ce profil n'est pas autorisé à démarrer une session depuis le téléphone (reçu: '{req_profile}').")
                     continue

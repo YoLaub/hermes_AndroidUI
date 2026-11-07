@@ -115,7 +115,8 @@ class MobileAuthMsg(BaseModel):
 
 class PairingGenerateRequest(BaseModel):
     # AETHER avatars pair through /api/aether/pair/*, which binds them to a profile.
-    device_kind: Literal["android"] = "android"
+    # "agent_phone" is a phone dedicated to the agent: the admin pairs it, and it is bound to `phone-agent`.
+    device_kind: Literal["android", "agent_phone"] = "android"
     user_id: Optional[str] = "admin"
 
 class PairingGenerateResponse(BaseModel):
@@ -123,7 +124,7 @@ class PairingGenerateResponse(BaseModel):
     expires_in_seconds: int = 300
 
 class PairingVerifyRequest(BaseModel):
-    device_kind: Literal["android"] = "android"
+    device_kind: Literal["android", "agent_phone"] = "android"
     code: str
     device_id: str
     device_name: Optional[str] = "Android Phone"
