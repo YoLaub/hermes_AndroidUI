@@ -24,7 +24,9 @@ import java.util.UUID
 
 class MobileControlManager(
     private val context: Context,
-    private val preferences: HermesPreferences
+    private val preferences: HermesPreferences,
+    /** FULL unless this build is the agent-phone edition. */
+    private val policy: ControlPolicy = ControlPolicy.FULL
 ) {
     companion object {
         private const val TAG = "MobileControlManager"
@@ -103,7 +105,7 @@ class MobileControlManager(
             scope.launch { apply(SessionConfirmation.onError(currentView(), err), refused = true) }
         }
         wsClient.onSessionState = { state ->
-            scope.launch { apply(SessionConfirmation.onServerState(currentView(), state, System.currentTimeMillis())) }
+            scope.launch { apply(SessionConfirmation.onServerState(currentView(), state, System.currentTimeMillis(), policy.trustRelaySession)) }
         }
 
         // Keep the process alive and visible while a session is pending or active.
@@ -111,7 +113,8 @@ class MobileControlManager(
             ForegroundSync(
                 views = combine(_pendingSession, _activeSession) { pending, active -> SessionView(pending, active) },
                 start = { MobileControlService.start(context) },
-                stop = { MobileControlService.stop(context) }
+                stop = { MobileControlService.stop(context) },
+                keepAlive = policy.keepAlive
             ).run()
         }
 
@@ -349,7 +352,7 @@ class MobileControlManager(
 
         // 8. Foreground check (except for launch_app)
         val fgPackage = service.getForegroundPackage()
-        if (CommandSessionGuard.needsTargetInForeground(cmd.operation) && fgPackage.isNotBlank() && fgPackage != session.targetPackage) {
+        if (CommandSessionGuard.needsTargetInForeground(cmd.operation, session.targetPackage) && fgPackage.isNotBlank() && fgPackage != session.targetPackage) {
             // Check if fgPackage is a system dialog or keyboard
             if (!fgPackage.startsWith("com.android.") && !fgPackage.contains("inputmethod")) {
                 return reject(cmd, "APP_NOT_FOREGROUND", "L'application cible (${session.targetPackage}) n'est pas au premier plan (Actuel: $fgPackage).")
@@ -491,22 +494,26 @@ class MobileControlManager(
 
                 "launch_app" -> {
                     val pm = context.packageManager
-                    val launchIntent = pm.getLaunchIntentForPackage(session.targetPackage)
+                    val toLaunch = when (val target = launchTarget(session.targetPackage, cmd.arguments?.packageName)) {
+                        is LaunchTarget.Package -> target.name
+                        is LaunchTarget.Rejected -> return reject(cmd, target.code, target.message)
+                    }
+                    val launchIntent = pm.getLaunchIntentForPackage(toLaunch)
                     if (launchIntent != null) {
                         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(launchIntent)
                         delay(600) // Brief delay for window to attach
                         val screenData = service.observeScreen()
-                        logAudit("LAUNCH_APP", session.targetPackage, "SUCCESS", null, session.allowedProfile)
+                        logAudit("LAUNCH_APP", toLaunch, "SUCCESS", null, session.allowedProfile)
                         MobileCommandResult(
                             commandId = cmd.commandId,
                             status = MobileCommandStatus.SUCCESS,
                             executedAt = System.currentTimeMillis(),
-                            message = "Application ${session.targetAppName} lancée.",
+                            message = "Application ${if (session.targetPackage == ANY_APP) toLaunch else session.targetAppName} lancée.",
                             data = screenData
                         )
                     } else {
-                        reject(cmd, "ACTION_FAILED", "Impossible de lancer le package ${session.targetPackage}.")
+                        reject(cmd, "ACTION_FAILED", "Impossible de lancer le package $toLaunch.")
                     }
                 }
 
@@ -648,6 +655,8 @@ class MobileControlManager(
      * the action run. Anything else is the rejection to return.
      */
     private suspend fun confirmOrReject(cmd: MobileCommand, session: MobileControlSession, request: ConfirmationRequest): MobileCommandResult? {
+        // An agent phone has no one to ask: the edition that sets this policy is dedicated to the agent.
+        if (!policy.requireConfirmation) return null
         when (confirmer.confirm(request)) {
             null -> return reject(cmd, "CONFIRMATION_BUSY", "Une autre confirmation est déjà en attente sur le téléphone.")
             Decision.REFUSED -> return reject(cmd, "USER_REFUSED", "L'utilisateur a refusé sur son téléphone.")

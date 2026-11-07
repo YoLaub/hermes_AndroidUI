@@ -121,7 +121,7 @@ def test_unknown_and_observation_modes_deny_interaction():
     assert "MODE_DENIED" in res_unk.json()["result"]["content"][0]["text"]
 
 def test_session_rejects_non_john_profile():
-    # ActiveSession constructor strictly rejects any profile other than john
+    # ActiveSession constructor rejects any profile that has no control policy (mario, ...)
     with pytest.raises(ValueError) as excinfo:
         ActiveSession(
             session_id="ses_mario",
@@ -131,7 +131,7 @@ def test_session_rejects_non_john_profile():
             mode="interaction",
             expires_at=9999999999.0
         )
-    assert "Seul le profil 'john' est autorisé" in str(excinfo.value)
+    assert "Profil non autorisé 'mario'" in str(excinfo.value)
 
     with pytest.raises(ValueError):
         ActiveSession(

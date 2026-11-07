@@ -198,7 +198,7 @@ def atomic_register_or_update_device(
     Retourne (True, "created" | "updated") en cas de succès,
     ou (False, "UNAUTHORIZED_OVERWRITE" | "INTEGRITY_ERROR") en cas de refus.
     """
-    if device_kind not in ("android", "aether"):
+    if device_kind not in ("android", "aether", "agent_phone"):
         raise ValueError("Unknown device kind")
     conn = get_db()
     conn.isolation_level = None # Allows explicit BEGIN IMMEDIATE transaction
@@ -257,6 +257,22 @@ def atomic_register_or_update_device(
     finally:
         conn.close()
     return result
+
+def device_profile(device_id: str) -> Optional[str]:
+    """The profile an agent phone was paired for (None for any other kind of device)."""
+    conn = get_db()
+    row = conn.execute("SELECT profile FROM paired_devices WHERE device_id = ? AND device_kind = 'agent_phone'", (device_id,)).fetchone()
+    conn.close()
+    return row["profile"] if row else None
+
+
+def authenticate_phone(device_id: str, token: str) -> Optional[str]:
+    """The kind of phone these credentials belong to ("android" or "agent_phone"), or None."""
+    for kind in ("android", "agent_phone"):
+        if verify_device_token(device_id, token, device_kind=kind):
+            return kind
+    return None
+
 
 def aether_device_profile(device_id: str) -> Optional[str]:
     conn = get_db()

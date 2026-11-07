@@ -21,10 +21,12 @@ from aether_relay import AetherRelay
 from aether_routes import router_for
 from database import (
     atomic_register_or_update_device,
+    authenticate_phone,
     check_and_record_pairing_attempt,
     claim_aether_avatar,
     consume_pairing_code,
     count_active_pairing_codes,
+    device_profile,
     init_db,
     is_auth_blocked,
     log_audit,
@@ -34,7 +36,6 @@ from database import (
     retry_after_seconds,
     save_pairing_code,
     verify_admin_token,
-    verify_device_token,
     verify_profile_token_in_db,
 )
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
@@ -48,6 +49,7 @@ from models import (
     PairingVerifyRequest,
     PairingVerifyResponse,
 )
+from profile_policy import policy_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("mobile-relay")
@@ -194,13 +196,13 @@ def consent_fields(session) -> dict:
 class ActiveSession:
     def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str,
                  expires_at: float, consents=frozenset()):
-        prof = allowed_profile.strip().lower()
-        if prof != "john":
-            raise ValueError(f"Profil non autorisé '{allowed_profile}'. Seul le profil 'john' est autorisé.")
+        policy = policy_for(allowed_profile)
+        if policy is None:
+            raise ValueError(f"Profil non autorisé '{allowed_profile}'.")
         self.session_id = session_id
         self.device_id = device_id
         self.target_package = target_package
-        self.allowed_profile = "john"
+        self.allowed_profile = policy.name
         self.mode = mode.lower()
         self.expires_at = expires_at
         # Explicit, per-session consents given by the user on the phone: names from KNOWN_CONSENTS, each its own.
@@ -246,7 +248,7 @@ class DeviceConnectionManager:
         logger.info(f"Device disconnected: {device_id}")
 
     def set_active_session(self, session: ActiveSession):
-        if session.allowed_profile != "john":
+        if policy_for(session.allowed_profile) is None:
             logger.warning(f"Refusing to activate session for unauthorized profile: {session.allowed_profile}")
             return False
         self.active_sessions[session.device_id] = session
@@ -460,6 +462,11 @@ def authenticate_hermes_profile(request: Request) -> str:
         if env_val and secrets.compare_digest(env_val.strip(), token):
             return prof
 
+    # 2b. The profile of a phone dedicated to the agent (its name is not a valid env var suffix as is)
+    agent_env = os.environ.get("MOBILE_CONTROL_TOKEN_PHONE_AGENT")
+    if agent_env and secrets.compare_digest(agent_env.strip(), token):
+        return "phone-agent"
+
     # 3. Check generic MOBILE_CONTROL_TOKEN (maps to default mobile control profile john)
     generic_token = os.environ.get("MOBILE_CONTROL_TOKEN")
     if generic_token and secrets.compare_digest(generic_token.strip(), token):
@@ -656,7 +663,8 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
         device_kind=req.device_kind,
         device_name=req.device_name or "Android Phone",
         current_token=candidate_device_token,
-        is_admin_authorized=is_admin_auth
+        is_admin_authorized=is_admin_auth,
+        profile="phone-agent" if req.device_kind == "agent_phone" else None,
     )
 
     if not success:
@@ -675,6 +683,32 @@ def verify_pairing_code(request: Request, req: PairingVerifyRequest):
     return PairingVerifyResponse(ok=True, device_token=device_token)
 
 # ── WebSocket Device Endpoint ────────────────────────────────────────────────
+
+STANDING_SESSION_SECONDS = 365 * 24 * 3600
+# An Android application id: dot-separated segments, at least two, 255 characters at most.
+PACKAGE_NAME = re.compile(r"(?=.{1,255}$)[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
+
+
+def open_standing_session(device_id: str, kind: str) -> None:
+    """An agent phone gets its session from the relay: every app, interaction, every consent. It ends when the
+    phone disconnects and is reopened on reconnection, so the phone's own stop is simply to disconnect."""
+    if kind != "agent_phone":
+        return
+    profile = device_profile(device_id)
+    policy = policy_for(profile)
+    if policy is None or not policy.standing:
+        return
+    manager.set_active_session(ActiveSession(
+        session_id="standing_" + str(uuid.uuid4()),
+        device_id=device_id,
+        target_package="*",
+        allowed_profile=policy.name,
+        mode="interaction",
+        expires_at=time.time() + STANDING_SESSION_SECONDS,
+        consents=KNOWN_CONSENTS,
+    ))
+    log_event("standing_session_opened", device_id=device_id, profile=policy.name)
+
 
 def session_state_message(device_id: str) -> dict:
     """The relay's own view of this device's session (the source of truth)."""
@@ -723,9 +757,11 @@ async def websocket_device_endpoint(
     try:
         # Initial authentication via headers if present (skipped for a blocked source)
         if x_device_id and x_device_token and not source_is_blocked(source):
-            if verify_device_token(x_device_id, x_device_token):
+            header_kind = authenticate_phone(x_device_id, x_device_token)
+            if header_kind:
                 authenticated_device_id = x_device_id
                 manager.register_connection(authenticated_device_id, websocket)
+                open_standing_session(authenticated_device_id, header_kind)
                 log_event("device_authenticated", device_id=authenticated_device_id, via="header")
             else:
                 note_auth_failure(source, "ws")
@@ -753,9 +789,11 @@ async def websocket_device_endpoint(
                     close_reason = "auth_rate_limited"
                     await websocket.close()
                     break
-                if dev_id and token and verify_device_token(dev_id, token):
+                message_kind = authenticate_phone(dev_id, token) if dev_id and token else None
+                if message_kind:
                     authenticated_device_id = dev_id
                     manager.register_connection(dev_id, websocket)
+                    open_standing_session(dev_id, message_kind)
                     log_event("device_authenticated", device_id=dev_id, via="message")
                     await websocket.send_text(json.dumps({"protocol": "mobile-control/1", "type": "auth_ok"}))
                     # Reconnection sync: tell the phone what the relay actually holds.
@@ -787,10 +825,12 @@ async def websocket_device_endpoint(
                                          "Appareil non authentifié : appairez à nouveau le téléphone.")
                     continue
 
-                # Server-side restriction: Reject any session whose allowed_profile is not 'john'
-                if req_profile != "john":
+                # Server-side restriction: a phone may only start a session for a non-standing profile (john).
+                # A standing profile (phone-agent) is opened by the relay for a paired agent phone, never claimed.
+                req_policy = policy_for(req_profile)
+                if req_policy is None or req_policy.standing or device_profile(authenticated_device_id):
                     await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED",
-                                         f"Seul le profil 'john' est autorisé pour le contrôle mobile (reçu: '{req_profile}').")
+                                         f"Ce profil n'est pas autorisé à démarrer une session depuis le téléphone (reçu: '{req_profile}').")
                     continue
 
                 # Durée maximale bornée côté relais (max 1800s / 30 min)
@@ -805,7 +845,7 @@ async def websocket_device_endpoint(
                         session_id=data.get("session_id", str(uuid.uuid4())),
                         device_id=authenticated_device_id,
                         target_package=data.get("target_package", ""),
-                        allowed_profile="john",
+                        allowed_profile=req_policy.name,
                         mode=data.get("mode", "interaction"),
                         expires_at=time.time() + bounded_duration,
                         consents=parse_consents(data),
@@ -888,10 +928,12 @@ MCP_TOOLS = [
     },
     {
         "name": "mobile_launch_allowed_app",
-        "description": "Ouvre l'application autorisée (ex: LinkedIn) sur le téléphone au premier plan.",
+        "description": "Ouvre l'application autorisée (ex: LinkedIn) sur le téléphone au premier plan. Sur un téléphone dédié à l'agent, l'argument optionnel package (ex: com.android.settings) ouvre n'importe quelle application.",
         "inputSchema": {
             "type": "object",
-            "properties": {}
+            "properties": {
+                "package": {"type": "string", "description": "Identifiant de l'application à ouvrir (téléphone dédié à l'agent uniquement)"}
+            }
         }
     },
     {
@@ -1308,6 +1350,24 @@ async def mcp_stream_endpoint(request: Request):
                     protocol_version=negotiated_version,
                 )
 
+        launch_package = None
+        if op == "launch_app" and "package" in arguments:
+            requested = arguments["package"]
+            if not (isinstance(requested, str) and PACKAGE_NAME.fullmatch(requested)):
+                return format_mcp_error(
+                    req_id,
+                    "INVALID_ARGUMENTS: package doit être un identifiant d'application Android (ex: com.android.settings).",
+                    protocol_version=negotiated_version,
+                )
+            if policy_for(session.allowed_profile).standing:
+                launch_package = requested
+            elif requested != session.target_package:
+                return format_mcp_error(
+                    req_id,
+                    f"APP_NOT_ALLOWED: Seule l'application autorisée pour la session ({session.target_package}) peut être ouverte.",
+                    protocol_version=negotiated_version,
+                )
+
         days = None
         if op == "calendar_read":
             days = arguments.get("days")
@@ -1341,6 +1401,7 @@ async def mcp_stream_endpoint(request: Request):
                 element_ref=arguments.get("element_ref"),
                 text=arguments.get("text") if op in ("set_text", "sms_send") else None,
                 to=arguments.get("to") if op in ("sms_send", "call_place") else None,
+                package=launch_package,
                 **(calendar_write_arguments(op, arguments) if op in CALENDAR_WRITE_OPERATIONS else {}),
                 direction=arguments.get("direction", "down"),
                 x=arguments.get("x") if op == "tap_xy" else None,

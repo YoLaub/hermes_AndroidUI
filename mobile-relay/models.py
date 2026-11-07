@@ -57,6 +57,8 @@ class MobileCommandArguments(BaseModel):
     y: Optional[int] = None
     days: Optional[int] = None
     to: Optional[str] = None
+    # launch_app only: the app to open. Set only for a standing profile; otherwise the session's target is launched.
+    package: Optional[str] = None
     # Calendar write (create / update / delete). Dates are local to the phone, "2026-10-07T15:00".
     event_id: Optional[str] = None
     title: Optional[str] = None
@@ -115,7 +117,8 @@ class MobileAuthMsg(BaseModel):
 
 class PairingGenerateRequest(BaseModel):
     # AETHER avatars pair through /api/aether/pair/*, which binds them to a profile.
-    device_kind: Literal["android"] = "android"
+    # "agent_phone" is a phone dedicated to the agent: the admin pairs it, and it is bound to `phone-agent`.
+    device_kind: Literal["android", "agent_phone"] = "android"
     user_id: Optional[str] = "admin"
 
 class PairingGenerateResponse(BaseModel):
@@ -123,7 +126,7 @@ class PairingGenerateResponse(BaseModel):
     expires_in_seconds: int = 300
 
 class PairingVerifyRequest(BaseModel):
-    device_kind: Literal["android"] = "android"
+    device_kind: Literal["android", "agent_phone"] = "android"
     code: str
     device_id: str
     device_name: Optional[str] = "Android Phone"

@@ -78,6 +78,8 @@ data class MobileCommandArguments(
     val days: Int? = null,
     /** Recipient for sms_send and call_place: an exact contact name or a number of a contact. */
     val to: String? = null,
+    /** launch_app on an any-app session: the app to open. */
+    @SerialName("package") val packageName: String? = null,
     /** Calendar changes: the event to modify or delete, and the fields (dates local to the phone, 2026-10-07T15:00). */
     @SerialName("event_id") val eventId: String? = null,
     val title: String? = null,

@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Hermes Phone</string>
+
+    <string name="lite_title">Téléphone de l\'agent</string>
+    <string name="lite_status_not_paired">Pas encore appairé</string>
+    <string name="lite_status_stopped">Arrêté : l\'agent ne peut plus agir</string>
+    <string name="lite_status_offline">Hors ligne : connexion au relais impossible</string>
+    <string name="lite_status_accessibility_off">Connecté, mais l\'accessibilité est désactivée</string>
+    <string name="lite_status_ready">Prêt : l\'agent peut contrôler ce téléphone</string>
+    <string name="lite_agent_active">L\'agent contrôle ce téléphone en ce moment</string>
+
+    <string name="lite_relay_url">Adresse du relais</string>
+    <string name="lite_pairing_code">Code d\'appairage</string>
+    <string name="lite_pair">Appairer ce téléphone</string>
+    <string name="lite_unpair">Dissocier</string>
+    <string name="lite_stop">Arrêter</string>
+    <string name="lite_resume">Reprendre</string>
+    <string name="lite_enable_accessibility">Activer l\'accessibilité</string>
+    <string name="lite_grant_permissions">Accorder les permissions</string>
+    <string name="lite_permissions_count">Permissions accordées : %1$d sur %2$d</string>
+    <string name="lite_pairing_help">Demandez un code d\'appairage de type « téléphone de l\'agent » à l\'administrateur du relais.</string>
+</resources>

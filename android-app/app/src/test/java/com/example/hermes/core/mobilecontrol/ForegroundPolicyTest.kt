@@ -52,4 +52,12 @@ class ForegroundPolicyTest {
         val off = ForegroundPolicy.notificationFor(SessionView(pending = null, active = session()))
         assertFalse(off.text.contains("captures", ignoreCase = true))
     }
+
+    @Test
+    fun anAnyAppSessionIsNotShownAsAnAppNamedStar() {
+        val any = session().copy(targetPackage = ANY_APP, targetAppName = ANY_APP, allowedProfile = "phone-agent")
+        val c = ForegroundPolicy.notificationFor(SessionView(pending = null, active = any))
+        assertFalse(c.title.contains("*"))
+        assertTrue(c.text.contains("phone-agent"))
+    }
 }
