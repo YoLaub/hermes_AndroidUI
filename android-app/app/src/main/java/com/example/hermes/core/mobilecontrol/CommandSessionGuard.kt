@@ -25,6 +25,10 @@ object CommandSessionGuard {
     /** Whether the target app must be the foreground app for this operation to run. */
     fun needsTargetInForeground(operation: String): Boolean = operation !in NO_FOREGROUND_NEEDED
 
+    /** An any-app session has no particular app that must be in front. */
+    fun needsTargetInForeground(operation: String, targetPackage: String): Boolean =
+        targetPackage != ANY_APP && needsTargetInForeground(operation)
+
     fun validate(
         active: MobileControlSession?,
         pendingSessionId: String?,

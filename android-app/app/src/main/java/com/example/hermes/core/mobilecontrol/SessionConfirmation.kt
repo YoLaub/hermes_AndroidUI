@@ -45,7 +45,13 @@ object SessionConfirmation {
         )
     }
 
-    fun onServerState(view: SessionView, state: MobileSessionState, nowMs: Long): SessionTransition {
+    fun onServerState(
+        view: SessionView,
+        state: MobileSessionState,
+        nowMs: Long,
+        /** True only on a phone dedicated to the agent: the relay's consents are then the session's consents. */
+        trustRelayConsents: Boolean = false
+    ): SessionTransition {
         val active = view.active
         val pending = view.pending
 
@@ -81,8 +87,8 @@ object SessionConfirmation {
             startedAt = nowMs,
             durationSeconds = state.expiresInSeconds ?: 0,
             expiresAt = nowMs + (state.expiresInSeconds ?: 0) * 1000L,
-            // The user never consented to this session on this phone: no screenshots, whatever the relay says.
-            consents = emptySet()
+            // On a strict phone the user never consented to this session: no screenshots, whatever the relay says.
+            consents = if (trustRelayConsents) state.echoedConsents() else emptySet()
         )
         return SessionTransition(
             SessionView(pending = pending, active = adopted),

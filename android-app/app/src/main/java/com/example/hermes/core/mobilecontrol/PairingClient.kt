@@ -52,7 +52,9 @@ private data class PairVerifyRequest(
     val code: String,
     @SerialName("device_id") val deviceId: String,
     @SerialName("device_name") val deviceName: String,
-    @SerialName("current_device_token") val currentDeviceToken: String? = null
+    @SerialName("current_device_token") val currentDeviceToken: String? = null,
+    /** Left out for an ordinary phone; "agent_phone" for a phone dedicated to the agent. */
+    @SerialName("device_kind") val deviceKind: String? = null
 )
 
 @Serializable
@@ -75,7 +77,8 @@ class PairingClient(
         code: String,
         deviceId: String,
         deviceName: String,
-        currentDeviceToken: String? = null
+        currentDeviceToken: String? = null,
+        deviceKind: String? = null
     ): PairingResult {
         val cleanCode = code.trim()
         if (cleanCode.isEmpty()) {
@@ -87,7 +90,7 @@ class PairingClient(
         }
 
         val body = json.encodeToString(
-            PairVerifyRequest(cleanCode, deviceId, deviceName, currentDeviceToken?.takeIf { it.isNotBlank() })
+            PairVerifyRequest(cleanCode, deviceId, deviceName, currentDeviceToken?.takeIf { it.isNotBlank() }, deviceKind)
         )
         val reply = try {
             transport.postJson("$base/api/pair/verify", body, emptyMap())

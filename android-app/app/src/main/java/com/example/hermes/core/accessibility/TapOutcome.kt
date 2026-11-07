@@ -29,7 +29,7 @@ enum class TapOutcome {
 object TapGuard {
     /** True only if the session's target app is still the foreground app (no dialog, shade or other app on top). */
     fun targetStillInForeground(foregroundPackage: String?, targetPackage: String): Boolean =
-        !foregroundPackage.isNullOrBlank() && foregroundPackage == targetPackage
+        !foregroundPackage.isNullOrBlank() && (targetPackage == "*" || foregroundPackage == targetPackage)
 
     /** A disabled element refused the click on purpose, and a hidden one is not what the user sees. */
     fun elementTappable(enabled: Boolean, visibleToUser: Boolean): Boolean = enabled && visibleToUser
