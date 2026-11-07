@@ -13,6 +13,8 @@ class HermesApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // A phone dedicated to the agent reconnects by itself, including when Android restarts the process.
+        if (BuildConfig.AGENT_PHONE) container.agentPhoneLink.start()
         // Seal secrets that an older version stored in plaintext. Readers cope in the meantime.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {

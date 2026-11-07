@@ -56,7 +56,7 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - run: ./gradlew :app:testFullDebugUnitTest :app:testLiteDebugUnitTest :app:assembleDebug --stacktrace
         working-directory: android-app
 
   webui-mcp-agent:

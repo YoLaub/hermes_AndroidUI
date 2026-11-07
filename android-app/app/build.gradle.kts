@@ -16,6 +16,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // "full" is the app as it was. "lite" is the edition for a phone dedicated to the agent (own applicationId,
+    // so both can be installed): no chat, only pairing, accessibility and a stop button.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("full") {
+            dimension = "edition"
+            buildConfigField("boolean", "AGENT_PHONE", "false")
+        }
+        create("lite") {
+            dimension = "edition"
+            applicationIdSuffix = ".lite"
+            versionNameSuffix = "-lite"
+            buildConfigField("boolean", "AGENT_PHONE", "true")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -29,7 +45,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 
