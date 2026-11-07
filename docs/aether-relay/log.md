@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-11-07
+
+* **Fix**: Replaced the fixed chat deadline with runtime-status follow-up and verified terminal replay after network interruption, without resubmitting messages. See [handoff](/handoff.md). No deployment.
+
 ## 2026-11-06
 
 * **Update**: Added owner-authorized Apple Mail MCP routing, optional capability negotiation and bounded results. See [handoff](/handoff.md). Synthetic tests only; no push or deployment.

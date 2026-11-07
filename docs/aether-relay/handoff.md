@@ -6,6 +6,35 @@ timestamp: 2026-10-26
 tags: [aether, relay, mcp, handoff]
 ---
 
+# Latest intervention: runtime-based conversation follow-up (2026-11-07)
+
+The owner approved this new intervention on dev, explicitly rejecting a fixed
+total duration for agent work. Removed the 180-second turn deadline. Individual
+HTTP operations retain 30-second network timeouts; these do not cancel an agent
+run. SSE bytes are consumed without waiting for a 4 KiB buffer, reducing partial
+response display latency.
+
+After a stream EOF or transport failure, query `/api/chat/stream/status` for the
+same stream ID. While active, keep polling with bounded requests, without an
+execution-time cap. On inactive + durable terminal journal, replay the same
+`/api/chat/stream`; verify journal session/run identity and remove only the exact
+already-delivered text prefix. Never repeat `/api/chat/start`, silently accept a
+changed prefix, or infer completion from inactivity alone. Transport errors while
+polling/replaying remain recoverable. Missing/stale journal or authorization
+failure still produces an explicit uncertain outcome, without automatic rerun.
+
+Only explicit task cancellation and the existing unsupported approval/clarify
+handoff request upstream cancellation. Observer/network failures no longer cancel
+server work. Full relay process restart is not resumed by this change: stream IDs
+are still in-memory and the existing startup policy marks interrupted turns
+uncertain. Previously uncertain turns are not retroactively recovered. The WebUI
+must expose the inspected status/journal replay API. No WebUI files changed.
+
+Tests cover no total deadline, active polling, broken stream replay without text
+or action duplication, wrong journal identity, changed prefix, and existing
+approval/large-response handling. No push or deployment; deploy the new relay to
+activate the fix. No Mac rebuild is needed for this intervention.
+
 # Latest intervention: Apple Mail tools (2026-11-06)
 
 The owner approved this intervention on `dev`, including listing and organizing
