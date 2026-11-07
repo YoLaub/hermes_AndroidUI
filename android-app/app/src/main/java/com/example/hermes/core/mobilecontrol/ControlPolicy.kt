@@ -12,10 +12,12 @@ data class ControlPolicy(
     val trustRelaySession: Boolean,
     val requireConfirmation: Boolean,
     /** Keep the foreground service (and so the relay connection) alive even with no session. */
-    val keepAlive: Boolean
+    val keepAlive: Boolean,
+    /** Wake the screen (and swipe a plain keyguard away) when a command needs it. */
+    val wakesScreen: Boolean = false
 ) {
     companion object {
         val FULL = ControlPolicy(trustRelaySession = false, requireConfirmation = true, keepAlive = false)
-        val LITE = ControlPolicy(trustRelaySession = true, requireConfirmation = false, keepAlive = true)
+        val LITE = ControlPolicy(trustRelaySession = true, requireConfirmation = false, keepAlive = true, wakesScreen = true)
     }
 }

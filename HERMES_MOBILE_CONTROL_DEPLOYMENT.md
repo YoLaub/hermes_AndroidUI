@@ -211,6 +211,10 @@ confirmation. Elle ne remplace pas l'application complète ni les règles de `jo
    l'application lite.
 5. **Sur le téléphone** : activer l'accessibilité « Hermes », accorder les permissions proposées. Une fois connecté,
    l'écran affiche « Prêt ». Le bouton « Arrêter » déconnecte le téléphone : l'agent n'a alors plus de session.
+6. **Verrouillage de l'écran : « Balayer ».** Le téléphone n'a pas besoin de rester allumé : à chaque commande, l'édition lite
+   rallume l'écran et fait glisser un verrouillage « Balayer » (balayage depuis ~70 % de la hauteur : plus bas, Android ignore
+   le geste). Un code PIN, un schéma ou une empreinte ne sont **jamais** contournés : la commande est refusée avec
+   `DEVICE_LOCKED`. Un téléphone sans écran de verrouillage sécurisé est le choix assumé de cette édition (téléphone dédié, sans compte personnel).
 
 L'application complète s'installe désormais avec `app-full-debug.apk` (même identifiant `com.example.hermes` qu'avant : elle
 met à jour l'installation existante).
