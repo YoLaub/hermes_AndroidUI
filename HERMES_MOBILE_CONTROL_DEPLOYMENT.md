@@ -215,6 +215,9 @@ confirmation. Elle ne remplace pas l'application complète ni les règles de `jo
    rallume l'écran et fait glisser un verrouillage « Balayer » (balayage depuis ~70 % de la hauteur : plus bas, Android ignore
    le geste). Un code PIN, un schéma ou une empreinte ne sont **jamais** contournés : la commande est refusée avec
    `DEVICE_LOCKED`. Un téléphone sans écran de verrouillage sécurisé est le choix assumé de cette édition (téléphone dédié, sans compte personnel).
+7. **Écrans sensibles.** L'édition lite déclare son service comme *outil d'accessibilité* (`isAccessibilityTool`) : sans cela, Android 14+
+   cache à l'agent les écrans sensibles (par ex. la page Wi-Fi des Réglages : 0 élément lu, capture noire). L'application complète
+   ne fait pas cette déclaration.
 
 L'application complète s'installe désormais avec `app-full-debug.apk` (même identifiant `com.example.hermes` qu'avant : elle
 met à jour l'installation existante).
