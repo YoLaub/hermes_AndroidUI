@@ -34,6 +34,12 @@ class StandingProfileTest {
         assertFalse(ControlPolicy.LITE.requireConfirmation)
     }
 
+    @Test
+    fun onlyTheLitePolicyKeepsTheConnectionAliveWithoutASession() {
+        assertFalse(ControlPolicy.FULL.keepAlive)
+        assertTrue(ControlPolicy.LITE.keepAlive)
+    }
+
     // ── Adopting the relay's session ─────────────────────────────────────────
 
     @Test

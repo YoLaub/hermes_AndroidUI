@@ -16,6 +16,10 @@ object ForegroundPolicy {
     fun notificationFor(view: SessionView): ForegroundNotificationContent {
         val active = view.active
         return when {
+            active != null && active.targetPackage == ANY_APP -> ForegroundNotificationContent(
+                title = "Hermes Phone : l'agent contrôle ce téléphone",
+                text = "Profil : ${active.allowedProfile} • Mode : ${active.mode.name.lowercase()}"
+            )
             active != null -> ForegroundNotificationContent(
                 title = "Contrôle Hermes actif : ${active.targetAppName}",
                 text = "Profil autorisé : ${active.allowedProfile} • Mode : ${active.mode.name.lowercase()}" +

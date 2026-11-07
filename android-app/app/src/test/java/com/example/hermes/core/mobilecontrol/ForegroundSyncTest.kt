@@ -82,4 +82,21 @@ class ForegroundSyncTest {
         assertEquals(2, calls.starts)
         job.cancel()
     }
+
+    @Test
+    fun anAgentPhoneKeepsTheServiceStartedEvenWithNoSessionAndNeverStopsIt() = runTest {
+        val calls = Calls()
+        val views = MutableStateFlow(none)
+        val job = launch {
+            ForegroundSync(views, start = { calls.starts++ }, stop = { calls.stops++ }, stopDelayMs = 1_000, keepAlive = true).run()
+        }
+        runCurrent()
+        assertEquals(1, calls.starts)
+        views.value = active
+        runCurrent()
+        views.value = none
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(0, calls.stops)
+        job.cancel()
+    }
 }

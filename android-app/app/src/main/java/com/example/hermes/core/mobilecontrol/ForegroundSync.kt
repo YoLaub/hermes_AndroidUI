@@ -17,13 +17,15 @@ class ForegroundSync(
     private val views: Flow<SessionView>,
     private val start: () -> Unit,
     private val stop: () -> Unit,
-    private val stopDelayMs: Long = 1_500
+    private val stopDelayMs: Long = 1_500,
+    /** An agent phone stays in the foreground with no session at all: the relay opens one when it connects. */
+    private val keepAlive: Boolean = false
 ) {
     private var started = false
 
     suspend fun run() {
         views.collectLatest { view ->
-            if (ForegroundPolicy.shouldRunForeground(view)) {
+            if (keepAlive || ForegroundPolicy.shouldRunForeground(view)) {
                 started = true
                 start()
             } else if (started) {
