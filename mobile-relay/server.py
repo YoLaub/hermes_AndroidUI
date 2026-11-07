@@ -48,6 +48,7 @@ from models import (
     PairingVerifyRequest,
     PairingVerifyResponse,
 )
+from profile_policy import policy_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("mobile-relay")
@@ -194,13 +195,13 @@ def consent_fields(session) -> dict:
 class ActiveSession:
     def __init__(self, session_id: str, device_id: str, target_package: str, allowed_profile: str, mode: str,
                  expires_at: float, consents=frozenset()):
-        prof = allowed_profile.strip().lower()
-        if prof != "john":
-            raise ValueError(f"Profil non autorisé '{allowed_profile}'. Seul le profil 'john' est autorisé.")
+        policy = policy_for(allowed_profile)
+        if policy is None:
+            raise ValueError(f"Profil non autorisé '{allowed_profile}'.")
         self.session_id = session_id
         self.device_id = device_id
         self.target_package = target_package
-        self.allowed_profile = "john"
+        self.allowed_profile = policy.name
         self.mode = mode.lower()
         self.expires_at = expires_at
         # Explicit, per-session consents given by the user on the phone: names from KNOWN_CONSENTS, each its own.
@@ -246,7 +247,7 @@ class DeviceConnectionManager:
         logger.info(f"Device disconnected: {device_id}")
 
     def set_active_session(self, session: ActiveSession):
-        if session.allowed_profile != "john":
+        if policy_for(session.allowed_profile) is None:
             logger.warning(f"Refusing to activate session for unauthorized profile: {session.allowed_profile}")
             return False
         self.active_sessions[session.device_id] = session
@@ -787,10 +788,12 @@ async def websocket_device_endpoint(
                                          "Appareil non authentifié : appairez à nouveau le téléphone.")
                     continue
 
-                # Server-side restriction: Reject any session whose allowed_profile is not 'john'
-                if req_profile != "john":
+                # Server-side restriction: a phone may only start a session for a non-standing profile (john).
+                # A standing profile (phone-agent) is opened by the relay for a paired agent phone, never claimed.
+                req_policy = policy_for(req_profile)
+                if req_policy is None or req_policy.standing:
                     await refuse_session(websocket, authenticated_device_id, req_session_id, "PROFILE_NOT_ALLOWED",
-                                         f"Seul le profil 'john' est autorisé pour le contrôle mobile (reçu: '{req_profile}').")
+                                         f"Ce profil n'est pas autorisé à démarrer une session depuis le téléphone (reçu: '{req_profile}').")
                     continue
 
                 # Durée maximale bornée côté relais (max 1800s / 30 min)
@@ -805,7 +808,7 @@ async def websocket_device_endpoint(
                         session_id=data.get("session_id", str(uuid.uuid4())),
                         device_id=authenticated_device_id,
                         target_package=data.get("target_package", ""),
-                        allowed_profile="john",
+                        allowed_profile=req_policy.name,
                         mode=data.get("mode", "interaction"),
                         expires_at=time.time() + bounded_duration,
                         consents=parse_consents(data),
