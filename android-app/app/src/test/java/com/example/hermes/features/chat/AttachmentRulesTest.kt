@@ -34,4 +34,42 @@ class AttachmentRulesTest {
         assertEquals("application/octet-stream", resolveAttachmentMime(null))
         assertEquals("image/png", resolveAttachmentMime("image/png"))
     }
+
+    private val pdf = ChatAttachment("devis.pdf", "/h/.hermes/attachments/s1/devis.pdf", "application/pdf", 10, false)
+    private val jpg = ChatAttachment("photo.jpg", "/h/.hermes/attachments/s1/photo.jpg", "image/jpeg", 10, true)
+
+    @Test
+    fun `a non-image attachment path is appended so the agent can open it`() {
+        assertEquals(
+            "Résume ce devis\n\n[Attached files: /h/.hermes/attachments/s1/devis.pdf]",
+            messageWithAttachments("Résume ce devis", listOf(pdf))
+        )
+    }
+
+    @Test
+    fun `images are listed by name, like the WebUI`() {
+        assertEquals(
+            "Regarde\n\n[Attached files: photo.jpg, /h/.hermes/attachments/s1/devis.pdf]",
+            messageWithAttachments("Regarde", listOf(jpg, pdf))
+        )
+    }
+
+    @Test
+    fun `a message with only attachments gets a default sentence`() {
+        assertEquals(
+            "I've uploaded 1 file(s): /h/.hermes/attachments/s1/devis.pdf",
+            messageWithAttachments("", listOf(pdf))
+        )
+    }
+
+    @Test
+    fun `no attachments leaves the text untouched`() {
+        assertEquals("salut", messageWithAttachments("salut", emptyList()))
+    }
+
+    @Test
+    fun `the attachment suffix is hidden when history is displayed`() {
+        assertEquals("Résume ce devis", stripAttachmentSuffix("Résume ce devis\n\n[Attached files: /p/devis.pdf]"))
+        assertEquals("salut", stripAttachmentSuffix("salut"))
+    }
 }

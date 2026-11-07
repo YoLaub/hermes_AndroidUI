@@ -56,4 +56,12 @@ class ToolHistoryTest {
         assertEquals("ok", tc.output)
         assertTrue(tc.args.toString().contains("path"))
     }
+
+    @Test
+    fun `user messages are shown without the attached-files suffix`() {
+        val msgs = json.decodeFromString<List<ChatMessage>>(
+            """[{"role":"user","content":"Résume\n\n[Attached files: /p/a.pdf]"}]"""
+        )
+        assertEquals("Résume", normalizeHistory(msgs)[0].content)
+    }
 }
