@@ -23,7 +23,7 @@ class AuthInterceptor : Interceptor {
         sessionCookie?.let {
             cookieParts.add("hermes_session=$it")
         }
-        activeProfile?.let {
+        (originalRequest.tag(RequestProfile::class.java)?.name ?: activeProfile)?.let {
             cookieParts.add("hermes_profile=$it")
         }
 
@@ -46,7 +46,7 @@ class AuthInterceptor : Interceptor {
                     onSessionCookieUpdated?.invoke(null)
                 }
             }
-            if (header.contains("hermes_profile=")) {
+            if (header.contains("hermes_profile=") && originalRequest.tag(RequestProfile::class.java) == null) {
                 val value = header.substringAfter("hermes_profile=").substringBefore(";")
                 if (value.isNotEmpty()) {
                     activeProfile = value
