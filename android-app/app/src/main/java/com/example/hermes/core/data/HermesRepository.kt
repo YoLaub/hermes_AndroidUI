@@ -282,7 +282,7 @@ class HermesRepository(
     }
 
     fun streamChatEvents(streamId: String): Flow<HermesSseEvent> {
-        var base = "http://10.0.2.2:8000"
+        var base = HermesPreferences.DEFAULT_SERVER_URL
         try {
             kotlinx.coroutines.runBlocking { base = getBaseUrl() }
         } catch (_: Exception) {}

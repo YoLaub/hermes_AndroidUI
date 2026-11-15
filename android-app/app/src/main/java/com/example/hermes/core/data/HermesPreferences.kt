@@ -81,7 +81,7 @@ class HermesPreferences(
         val KEY_MOBILE_DEVICE_TOKEN = stringPreferencesKey("mobile_device_token")
         val KEY_MOBILE_RELAY_URL = stringPreferencesKey("mobile_relay_url")
         val KEY_MEMORY_OWNER_TOKEN = stringPreferencesKey("memory_owner_token")
-        const val DEFAULT_SERVER_URL = "http://10.0.2.2:8000"
+        const val DEFAULT_SERVER_URL = "https://hermes.john-world.store"
         const val DEFAULT_OPENBAO_URL = "https://hermes-bao.john-world.store"
         const val DEFAULT_OPENBAO_MOUNT = "hermes"
     }
