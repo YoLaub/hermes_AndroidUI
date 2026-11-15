@@ -314,6 +314,16 @@ the strict flow above: `john` keeps its phone-started, bounded, consented sessio
   session it opens that app; the phone command carries it as `arguments.package`. On a session bound to an app it must be that
   app, otherwise `APP_NOT_ALLOWED`; a malformed id is `INVALID_ARGUMENTS`. No new error code is introduced.
 
+### 2.14 LinkedIn draft with a generated workspace image
+
+`mobile_linkedin_draft(image_path, text?)` prepares a **draft**, not a publication. It requires an active `john` interaction session targeting exactly `com.linkedin.android`. `image_path` is the absolute path of a JPEG/PNG saved in one of John's authorized workspaces; URLs, parent traversal, NUL bytes and paths longer than 4096 characters are refused. `text` is optional and limited to 3000 characters.
+
+The relay forwards command `linkedin_draft` with `arguments.image_path` and `arguments.text`. Its validity is 60 seconds (relay wait: 65 seconds). It forwards no image bytes or WebUI credentials. The phone uses its own authenticated WebUI connection, pinned to `john`, to fetch `/api/documents?action=image&path=...`. Redirects are refused. The image is streamed to a private temporary file, limited to 10 MiB, with JPEG/PNG metadata and at most 25 million pixels verified before sharing.
+
+After downloading, the phone rechecks session identity, expiry and command expiry. It ends the local session and notifies the relay **before** opening LinkedIn's share composer (`ACTION_SEND`, a single FileProvider URI with a temporary read grant). No subsequent command in the ended session can click Publish. **The owner reviews the image and caption and publishes manually in LinkedIn.** The success response says only that the draft was handed off; LinkedIn accepting the caption/attachment is subject to device testing, never inferred from `startActivity` alone.
+
+Only the `linkedin-drafts/` cache subdirectory is exposed by the non-exported FileProvider. Failed preparations delete their file. Files handed to LinkedIn remain available for the draft and are purged after 24 hours on the next preparation (or by Android cache eviction). The image path, caption and image bytes are not logged by the relay. Existing normalized errors apply (`PROFILE_DENIED`, `APP_NOT_ALLOWED`, `MODE_DENIED`, `INVALID_ARGUMENTS`, `SESSION_EXPIRED`, `ACTION_FAILED`); no error code is added.
+
 ## 3. Codes d'Erreur Normalisés
 
 | Code d'Erreur | Signification |

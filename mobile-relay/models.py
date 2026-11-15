@@ -50,6 +50,7 @@ class MobileCallItem(BaseModel):
     duration_sec: int = 0
 
 class MobileCommandArguments(BaseModel):
+    image_path: Optional[str] = None
     element_ref: Optional[str] = None
     text: Optional[str] = None
     direction: Optional[str] = None
