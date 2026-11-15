@@ -21,4 +21,17 @@ class LinkedInDraftRulesTest {
         assertFalse(LinkedInDraftRules.validImage("image/jpeg", 100000, 100000))
         assertFalse(LinkedInDraftRules.validImage("image/png", -1, -1))
     }
+    @Test fun sharingSelectsThePostActivityAndNeverPrivateMessaging() {
+        val post = "com.linkedin.android.publishing.sharing.SharingDeepLinkActivity"
+        val message = "com.linkedin.android.publishing.sharing.MessagingDeepLinkActivity"
+        assertEquals(post, LinkedInDraftRules.postActivity(listOf(message, post)))
+        assertNull(LinkedInDraftRules.postActivity(listOf(message)))
+    }
+    @Test fun onlyTheKnownLinkedinComposerFieldCanReceiveTheCaption() {
+        val field = "com.linkedin.android:id/share_compose_text_input_entities"
+        assertTrue(LinkedInDraftRules.captionField("com.linkedin.android", field, true, true))
+        assertFalse(LinkedInDraftRules.captionField("com.other", field, true, true))
+        assertFalse(LinkedInDraftRules.captionField("com.linkedin.android", "com.linkedin.android:id/search", true, true))
+        assertFalse(LinkedInDraftRules.captionField("com.linkedin.android", field, true, false))
+    }
 }

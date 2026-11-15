@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,7 +66,7 @@ fun FilesScreen(viewModel: FilesViewModel, profiles: List<String>, initialProfil
         if (!state.busy && state.space.isNotBlank() && state.entries.isEmpty()) Text(stringResource(R.string.files_empty))
         LazyColumn(Modifier.weight(1f)) {
             items(state.entries, key = { it.name }) { file ->
-                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                Column(Modifier.fillMaxWidth().testTag("document-row-${file.name}").padding(vertical = 8.dp)) {
                     Text(if (file.isDir) "📁 ${file.name}" else file.name, style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.clickable(enabled = !state.busy) {
                             if (file.isDir) viewModel.navigate(viewModel.child(file.name)) else viewModel.edit(file.name)

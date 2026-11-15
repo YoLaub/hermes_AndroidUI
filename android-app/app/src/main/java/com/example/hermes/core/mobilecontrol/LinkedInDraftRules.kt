@@ -1,6 +1,13 @@
 package com.example.hermes.core.mobilecontrol
 
 object LinkedInDraftRules {
+    /** Known exported ACTION_SEND post entry point. Unknown versions fall back to Android's chooser. */
+    fun postActivity(candidates: List<String>): String? = candidates.singleOrNull {
+        it == "com.linkedin.android.publishing.sharing.SharingDeepLinkActivity"
+    }
+    const val COMPOSER_FIELD = "com.linkedin.android:id/share_compose_text_input_entities"
+    fun captionField(packageName: String?, viewId: String?, editable: Boolean, visible: Boolean): Boolean =
+        packageName == "com.linkedin.android" && viewId == COMPOSER_FIELD && editable && visible
     const val MAX_IMAGE_BYTES = 10L * 1024 * 1024
     fun rejection(profile: String, target: String, path: String?, caption: String): String? = when {
         profile != "john" -> "PROFILE_DENIED"

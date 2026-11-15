@@ -7,7 +7,7 @@ suspend fun <T> handoffDraft(
     prepare: suspend () -> T,
     authorized: () -> Boolean,
     endControl: () -> Unit,
-    open: (T) -> Unit,
+    open: suspend (T) -> Unit,
     discard: (T) -> Unit,
 ) {
     val prepared = prepare()
