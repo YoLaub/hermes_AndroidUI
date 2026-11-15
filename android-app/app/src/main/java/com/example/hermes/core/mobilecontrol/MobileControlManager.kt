@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import android.util.Log
 import com.example.hermes.core.accessibility.CaptureOutcome
@@ -32,6 +33,8 @@ class MobileControlManager(
         private const val TAG = "MobileControlManager"
         private const val MAX_LOGS = 50
         private const val CONFIRMATION_TIMEOUT_MS = 10_000L
+        private const val WAKE_HOLD_MS = 5_000L
+        private const val WAKE_SETTLE_MS = 600L
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -306,6 +309,32 @@ class MobileControlManager(
         }
     }
 
+    /** Applies [ScreenWake]'s plan: light the screen, then swipe a plain keyguard away. Nothing in the FULL app. */
+    private suspend fun wakeScreenIfNeeded(service: HermesAccessibilityService) {
+        if (!policy.wakesScreen) return
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+        val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager ?: return
+        val plan = ScreenWake.plan(
+            wakesScreen = true,
+            interactive = power.isInteractive,
+            keyguardLocked = keyguard.isKeyguardLocked,
+            keyguardSecure = keyguard.isKeyguardSecure
+        )
+        if (plan.wake) {
+            @Suppress("DEPRECATION")
+            power.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "hermes:agent-wake"
+            ).acquire(WAKE_HOLD_MS)
+            delay(WAKE_SETTLE_MS)
+        }
+        if (plan.swipeToUnlock) {
+            val swiped = service.swipeUp()
+            Log.i(TAG, "event=keyguard_swipe swiped=$swiped")
+            delay(WAKE_SETTLE_MS)
+        }
+    }
+
     // ── Command Execution & Validation Engine ───────────────────────────────
 
     suspend fun executeCommand(cmd: MobileCommand): MobileCommandResult = commandMutex.withLock {
@@ -327,6 +356,10 @@ class MobileControlManager(
         if (service == null || !HermesAccessibilityService.isRunning()) {
             return reject(cmd, "ACCESSIBILITY_DISABLED", "Le service d'accessibilité Hermes n'est pas activé sur le téléphone.")
         }
+
+        // 3b. A phone dedicated to the agent sleeps between requests: wake it (and swipe a plain keyguard away)
+        // before the lock check below. A PIN or pattern is never bypassed: it stays DEVICE_LOCKED.
+        wakeScreenIfNeeded(service)
 
         // 4. Device Locked?
         val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager

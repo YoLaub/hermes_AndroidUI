@@ -17,6 +17,7 @@ import android.content.Intent
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.example.hermes.core.mobilecontrol.MobileScreenData
+import com.example.hermes.core.mobilecontrol.ScreenWake
 import com.example.hermes.core.mobilecontrol.MobileScreenshot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -151,6 +152,29 @@ class HermesAccessibilityService : AccessibilityService() {
             ?: return TapOutcome.REFUSED
 
         return dispatchTap(point)
+    }
+
+    /**
+     * A swipe up from the bottom centre: dismisses a plain "swipe to unlock" keyguard. It never touches a PIN or
+     * pattern keyguard (the caller refuses those before it gets here). Returns whether Android ran the gesture.
+     */
+    suspend fun swipeUp(): Boolean {
+        val metrics = resources.displayMetrics
+        val swipe = ScreenWake.unlockSwipe(metrics.widthPixels, metrics.heightPixels)
+        val path = Path().apply {
+            moveTo(swipe.x.toFloat(), swipe.fromY.toFloat())
+            lineTo(swipe.x.toFloat(), swipe.toY.toFloat())
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 200))
+            .build()
+        val done = CompletableDeferred<Boolean>()
+        val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) { done.complete(true) }
+            override fun onCancelled(gestureDescription: GestureDescription?) { done.complete(false) }
+        }, null)
+        if (!dispatched) return false
+        return withTimeoutOrNull(2_000) { done.await() } ?: false
     }
 
     /** Injects a short tap at [point] and reports what happened. Callers have already run their checks. */
