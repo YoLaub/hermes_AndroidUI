@@ -4020,6 +4020,10 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/session/export":
         return _handle_session_export(handler, parsed)
 
+    if parsed.path == "/api/documents":
+        from api.documents import handle_get as documents_get
+        return documents_get(handler, parsed)
+
     if parsed.path == "/api/workspaces":
         return j(
             handler, {"workspaces": load_workspaces(), "last": get_last_workspace()}
@@ -4455,6 +4459,10 @@ def handle_post(handler, parsed) -> bool:
         if diag:
             diag.finish()
         raise
+
+    if parsed.path == "/api/documents":
+        from api.documents import handle_post as documents_post
+        return documents_post(handler, body)
 
     if parsed.path == "/api/session/recovery/repair-safe":
         from api.session_recovery import repair_safe_session_recovery
