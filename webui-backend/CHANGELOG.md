@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- Profile-scoped document browser independent of chat sessions: browse profile and registered workspaces, create/edit UTF-8 documents with revision conflict checks, rename, confirm deletion and download binary files. Android consumes the same `/api/documents` contract.
+- Authorized workspace JPEG/PNG download for the Android LinkedIn draft handoff; no arbitrary download URLs.
+
 
 ## [v0.51.92] — 2026-05-19 — Release BP (stage-385 — 7-PR full sweep batch — RFC Slice 3c clarification + workspace tree icon alignment + project move cache refresh + auto-compression handoff metadata + Grok OAuth provider catalog + anonymous custom endpoint picker fallback + PWA standalone reload + pull-to-refresh)
 

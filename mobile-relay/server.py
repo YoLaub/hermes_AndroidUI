@@ -911,6 +911,13 @@ async def websocket_device_endpoint(
 
 MCP_TOOLS = [
     {
+        "name": "mobile_linkedin_draft",
+        "description": "Prépare un brouillon LinkedIn avec une image JPEG/PNG générée dans un workspace autorisé. image_path est le chemin absolu du fichier sur le serveur Hermes (pas une URL). Réservé à john, session interaction ciblant LinkedIn. Ouvre le brouillon et termine le contrôle : l’utilisateur vérifie puis publie lui-même. Ne publie jamais automatiquement.",
+        "inputSchema": {"type": "object", "properties": {
+            "image_path": {"type": "string"}, "text": {"type": "string", "maxLength": 3000}
+        }, "required": ["image_path"]}
+    },
+    {
         "name": "mobile_control_status",
         "description": "Vérifie si une session de contrôle mobile est active sur le téléphone Android pour votre profil Hermes.",
         "inputSchema": {
@@ -1093,7 +1100,7 @@ MCP_TOOLS = [
     }
 ]
 
-INTERACTION_OPERATIONS = {"click_element", "set_text", "scroll", "launch_app", "back", "tap_xy", "sms_send", "call_place",
+INTERACTION_OPERATIONS = {"linkedin_draft", "click_element", "set_text", "scroll", "launch_app", "back", "tap_xy", "sms_send", "call_place",
                           "calendar_create", "calendar_update", "calendar_delete"}
 
 # Screenshots: what the phone may send. 1 MB of JPEG is far more than a 1280 px capture needs.
@@ -1291,6 +1298,7 @@ async def mcp_stream_endpoint(request: Request):
             )
 
         op_map = {
+            "mobile_linkedin_draft": "linkedin_draft",
             "mobile_observe": "observe",
             "mobile_launch_allowed_app": "launch_app",
             "mobile_click_element": "click_element",
@@ -1323,6 +1331,17 @@ async def mcp_stream_endpoint(request: Request):
                 f"MODE_DENIED: Le mode actuel de la session est '{session.mode}'. Seul le mode 'interaction' autorise les actions interactives ({op}).",
                 protocol_version=negotiated_version
             )
+
+        if op == "linkedin_draft":
+            image_path, caption = arguments.get("image_path"), arguments.get("text", "")
+            if not (isinstance(image_path, str) and image_path.startswith("/") and len(image_path) <= 4096
+                    and "\x00" not in image_path and ".." not in image_path.split("/")
+                    and isinstance(caption, str) and len(caption) <= 3000 and "\x00" not in caption):
+                return format_mcp_error(req_id, "INVALID_ARGUMENTS: chemin absolu de l’image et texte de 3000 caractères au plus requis.", protocol_version=negotiated_version)
+            if session.allowed_profile != "john":
+                return format_mcp_error(req_id, "PROFILE_DENIED: Ce partage est réservé à john.", protocol_version=negotiated_version)
+            if session.target_package != "com.linkedin.android":
+                return format_mcp_error(req_id, "APP_NOT_ALLOWED: La session doit cibler LinkedIn.", protocol_version=negotiated_version)
 
         # Each consent is the user's, for THIS session. Refused here, before anything is sent to the phone
         # (the phone enforces the same rule on its side).
@@ -1396,10 +1415,11 @@ async def mcp_stream_endpoint(request: Request):
             operation=op,
             target_package=session.target_package,
             screen_revision=arguments.get("screen_revision"),
-            expires_at=int((time.time() + (ACTION_COMMAND_TTL_SECONDS if op in ACTION_OPERATIONS else 25)) * 1000),
+            expires_at=int((time.time() + (60 if op == "linkedin_draft" else ACTION_COMMAND_TTL_SECONDS if op in ACTION_OPERATIONS else 25)) * 1000),
             arguments=MobileCommandArguments(
                 element_ref=arguments.get("element_ref"),
-                text=arguments.get("text") if op in ("set_text", "sms_send") else None,
+                text=arguments.get("text", "") if op in ("set_text", "sms_send", "linkedin_draft") else None,
+                image_path=arguments.get("image_path") if op == "linkedin_draft" else None,
                 to=arguments.get("to") if op in ("sms_send", "call_place") else None,
                 package=launch_package,
                 **(calendar_write_arguments(op, arguments) if op in CALENDAR_WRITE_OPERATIONS else {}),
@@ -1414,7 +1434,7 @@ async def mcp_stream_endpoint(request: Request):
                   device_id=session.device_id, mode=session.mode, command_id=cmd.command_id,
                   device_connected=str(session.device_id in manager.active_connections).lower())
         result = await manager.send_command_to_device(
-            session.device_id, cmd, timeout=ACTION_WAIT_SECONDS if op in ACTION_OPERATIONS else 25.0)
+            session.device_id, cmd, timeout=65.0 if op == "linkedin_draft" else ACTION_WAIT_SECONDS if op in ACTION_OPERATIONS else 25.0)
         log_event("mcp_tool_result", tool=tool_name, session_id=session.session_id, device_id=session.device_id,
                   command_id=cmd.command_id, status=result.status, error_code=result.error_code)
 
@@ -1430,6 +1450,12 @@ async def mcp_stream_endpoint(request: Request):
                 "La session côté relais a été fermée : le téléphone doit démarrer une nouvelle session.",
                 protocol_version=negotiated_version,
             )
+
+        if result.status == "success" and op == "linkedin_draft":
+            manager.end_active_session(session.device_id, session.session_id)
+            return format_mcp_response(req_id,
+                "Brouillon LinkedIn préparé. Le contrôle est terminé : l’utilisateur doit vérifier l’image et le texte et publier lui-même sur le téléphone. Rien n’a été publié automatiquement.",
+                protocol_version=negotiated_version)
 
         if result.status == "success":
             shot = result.data.screenshot if result.data else None

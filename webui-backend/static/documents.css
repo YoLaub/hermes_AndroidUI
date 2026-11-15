@@ -1,0 +1,10 @@
+#documentsDialog { box-sizing: border-box; width: min(900px, 94vw); max-height: 90dvh; padding: 20px; color: var(--text, #eae0d5); background: var(--panel, #181818); border: 1px solid var(--border, #555); border-radius: 12px; }
+#documentsDialog::backdrop { background: #0009; }
+.documents-toolbar, .document-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 12px; }
+.document-row { border-bottom: 1px solid var(--border, #555); padding-bottom: 8px; }
+.document-row > button:first-child { flex: 1 1 220px; text-align: left; overflow-wrap: anywhere; }
+#documentsEntries { max-height: 45dvh; overflow: auto; }
+#documentsText { width: 100%; min-height: 200px; box-sizing: border-box; color: inherit; background: inherit; font-family: monospace; }
+#documentsError { color: var(--error, #f87171); white-space: pre-wrap; }
+#documentsBody[aria-busy="true"] button, #documentsBody[aria-busy="true"] select { pointer-events: none; opacity: .55; }
+#documentsPath, #documentsEditing { overflow-wrap: anywhere; }

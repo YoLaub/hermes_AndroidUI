@@ -9,6 +9,9 @@ import androidx.core.content.ContextCompat
 import android.util.Log
 import com.example.hermes.core.accessibility.CaptureOutcome
 import com.example.hermes.core.accessibility.HermesAccessibilityService
+import com.example.hermes.HermesApp
+import com.example.hermes.core.network.DocumentsApi
+import kotlinx.coroutines.flow.first
 import com.example.hermes.core.data.HermesPreferences
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -644,6 +647,31 @@ class MobileControlManager(
                         message = "Retour arrière effectué.",
                         data = nextScreen
                     )
+                }
+
+                "linkedin_draft" -> {
+                    val caption = cmd.arguments?.text.orEmpty()
+                    val path = cmd.arguments?.imagePath
+                    val problem = LinkedInDraftRules.rejection(session.allowedProfile, session.targetPackage, path, caption)
+                    if (problem != null) return reject(cmd, problem, "Brouillon LinkedIn non autorisé ou arguments invalides.")
+                    val app = context.applicationContext as HermesApp
+                    val sender = LinkedInDraft(context, DocumentsApi(app.container.repository.apiClient.okHttpClient))
+                    try {
+                        handoffDraft(
+                            prepare = { sender.prepare(preferences.serverUrl.first(), path!!) },
+                            authorized = {
+                                _activeSession.value?.id == session.id && System.currentTimeMillis() < session.expiresAt &&
+                                    (cmd.expiresAt == null || System.currentTimeMillis() <= cmd.expiresAt)
+                            },
+                            endControl = { stopSession("linkedin_manual_publication") },
+                            open = { sender.open(it, caption) },
+                            discard = { it.file.delete() },
+                        )
+                    } catch (_: DraftSessionExpired) {
+                        return reject(cmd, "SESSION_EXPIRED", "Session terminée avant le partage de l’image.")
+                    }
+                    MobileCommandResult(commandId = cmd.commandId, status = MobileCommandStatus.SUCCESS,
+                        executedAt = System.currentTimeMillis(), message = "Brouillon LinkedIn ouvert. Vérifiez et publiez manuellement sur le téléphone.")
                 }
 
                 "end_session" -> {

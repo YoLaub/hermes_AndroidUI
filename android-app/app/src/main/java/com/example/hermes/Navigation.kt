@@ -28,6 +28,10 @@ import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.calendar.DevicePhoneCalendar
 import com.example.hermes.features.workspace.forum.ForumViewModel
 import com.example.hermes.features.workspace.notes.NotesViewModel
+import com.example.hermes.features.workspace.files.FilesViewModel
+import com.example.hermes.features.workspace.files.RemoteDocumentsRepository
+import com.example.hermes.core.network.DocumentsApi
+import kotlinx.coroutines.flow.first
 import com.example.hermes.nav.AppScaffold
 import com.example.hermes.nav.AppViewModels
 
@@ -79,6 +83,14 @@ fun MainNavigation() {
         }
     })
 
+    val filesViewModel: FilesViewModel = viewModel(factory = viewModelFactory {
+        initializer {
+            FilesViewModel(RemoteDocumentsRepository(DocumentsApi(container.repository.apiClient.okHttpClient)) {
+                container.preferences.serverUrl.first()
+            })
+        }
+    })
+
     // Connexion stays outside the tabs until an instance is validated.
     var connected by rememberSaveable { mutableStateOf(false) }
 
@@ -101,7 +113,7 @@ fun MainNavigation() {
         )
     } else {
         AppScaffold(
-            vm = AppViewModels(chatViewModel, kanbanViewModel, notesViewModel, calendarViewModel, forumViewModel, mobileControlViewModel),
+            vm = AppViewModels(chatViewModel, kanbanViewModel, notesViewModel, calendarViewModel, forumViewModel, mobileControlViewModel, filesViewModel),
             avatarStore = container.avatarStore,
             onDisconnect = { connected = false },
         )

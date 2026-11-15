@@ -59,6 +59,7 @@ fun WorkspaceHubScreen(
     onOpenForum: () -> Unit,
     onDictate: () -> Unit,
     onNewTask: () -> Unit,
+    onOpenFiles: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(stringResource(R.string.nav_space), subtitle = stringResource(R.string.space_subtitle))
@@ -75,6 +76,9 @@ fun WorkspaceHubScreen(
                     StatusChip(stringResource(R.string.space_tasks_running, state.tasks.running), tone = StatusTone.Info)
                 }
                 Text(stringResource(R.string.space_tasks_board, state.board), style = MaterialTheme.typography.labelMedium, color = HermesColors.Meta)
+            }
+            HubCard(stringResource(R.string.files_title), Icons.Outlined.Description, onOpenFiles) {
+                Text(stringResource(R.string.files_subtitle), style = MaterialTheme.typography.bodySmall)
             }
             HubCard(stringResource(R.string.space_notes), Icons.Outlined.Description, onOpenNotes, count = state.notes.count) {
                 Text(

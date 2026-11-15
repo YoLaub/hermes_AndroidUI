@@ -215,7 +215,34 @@ confirmation. Elle ne remplace pas l'application complète ni les règles de `jo
    rallume l'écran et fait glisser un verrouillage « Balayer » (balayage depuis ~70 % de la hauteur : plus bas, Android ignore
    le geste). Un code PIN, un schéma ou une empreinte ne sont **jamais** contournés : la commande est refusée avec
    `DEVICE_LOCKED`. Un téléphone sans écran de verrouillage sécurisé est le choix assumé de cette édition (téléphone dédié, sans compte personnel).
+7. **Écrans sensibles.** L'édition lite déclare son service comme *outil d'accessibilité* (`isAccessibilityTool`) : sans cela, Android 14+
+   cache à l'agent les écrans sensibles (par ex. la page Wi-Fi des Réglages : 0 élément lu, capture noire). L'application complète
+   ne fait pas cette déclaration.
 
 L'application complète s'installe désormais avec `app-full-debug.apk` (même identifiant `com.example.hermes` qu'avant : elle
 met à jour l'installation existante).
 
+
+
+## 5. Isolated document and LinkedIn device checks
+
+Do not point the automated fixture tests at a production workspace. Start `webui-backend/tests/manual_documents_server.py` with Python 3.12; it binds only `127.0.0.1:8879`, creates temporary sample documents and a synthetic image, and prints the image path. Stop the process to remove its temporary workspace.
+
+With the full-app phone connected, run `adb reverse tcp:8879 tcp:8879`. Build and update the APKs explicitly, then invoke instrumentation directly:
+
+```sh
+cd android-app
+./gradlew assembleFullDebug assembleFullDebugAndroidTest
+adb install -r app/build/outputs/apk/full/debug/app-full-debug.apk
+adb install -r app/build/outputs/apk/androidTest/full/debug/app-full-debug-androidTest.apk
+adb shell am instrument -w -r \
+  -e class com.example.hermes.features.workspace.files.FilesDeviceTest \
+  -e documentsTrialUrl http://127.0.0.1:8879 \
+  com.example.hermes.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+**Do not use `connectedFullDebugAndroidTest` on an existing personal installation.** The Gradle UTP configuration observed on the Pixel has `uninstall_after_test: true` and uninstalls the application after testing, removing its local state. Direct `am instrument` does not uninstall it. Check package presence after each run.
+
+For the LinkedIn test, invoke `am instrument` with class `com.example.hermes.features.workspace.files.LinkedInDraftDeviceTest` and `-e draftImagePath <absolute-image-path-printed-by-fixture>`. These tests are skipped without their explicit fixture arguments. The LinkedIn test uses instrumentation accessibility to fill the exact composer field, without enabling the production accessibility service or publishing a post. Review and discard the synthetic test draft afterward.
+
+This verifies the installed LinkedIn version's image/caption handoff. Real agent control additionally requires the full app's accessibility service, the updated WebUI and relay deployments, and a John interaction session targeting LinkedIn. Recheck that control ends before the owner publishes. An isolated device test does not establish that the production stack is deployed or configured.

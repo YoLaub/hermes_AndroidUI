@@ -537,6 +537,28 @@ data: {
 - `GET /api/file/raw?session_id=<id>&path=<rel_path>&download=1` : Télécharge le flux binaire brut d'un fichier (avec support des `Range` headers HTTP).
 - `GET /api/media?path=<abs_path>` : Affiche les images générées ou capturées par l'agent (ex: captures d'écran du navigateur d'agent).
 
+### Gestion des documents sans session de chat
+
+`GET /api/documents` expose les espaces du profil authentifié (cookie `hermes_profile`). Aucun `session_id` n’est requis. Le catalogue inclut le dossier `workspace` propre au profil s’il existe, et ses workspaces configurés. Un dossier partagé tel que `/workspace` reste un seul dossier physique, visible dans les profils qui l’utilisent. Les dossiers de configuration des profils et les racines parentes ne sont pas proposés.
+
+- `?action=spaces` (défaut) : `{"spaces":[{"id":"opaque","name":"Documents du profil","profile":"john"}]}`.
+- `?action=list&space=<id>&path=.` : `{"entries":[{"name":"devis.pdf","is_dir":false,"size":123,"modified":123456.0}],"path":"."}`.
+- `?action=read&space=<id>&path=<relatif>` : texte UTF-8, limité à 2 Mio, `{"content":"...","revision":"sha256"}`. Les fichiers binaires ne sont pas édités en texte.
+- `?action=revision&space=<id>&path=<relatif>` : révision SHA-256 du fichier, y compris binaire.
+- `?action=download&space=<id>&path=<relatif>` : téléchargement binaire avec disposition `attachment`, cache interdit.
+- `?action=image&path=<chemin absolu>` : téléchargement réservé aux JPEG/PNG dans une racine autorisée du profil, limité à 10 Mio. Utilisé par le partage LinkedIn ; aucune URL externe n’est acceptée. Le téléphone vérifie également le format et les dimensions.
+
+`POST /api/documents` reçoit `space`, `path` et `action` :
+
+| Action | Champs supplémentaires |
+|---|---|
+| `create` | `content` (texte, création sans écrasement) |
+| `save` | `content`, `revision` |
+| `rename` | `name` (nom seul), `revision` |
+| `delete` | `revision` (fichier seul, jamais suppression récursive) |
+
+Une révision périmée ou une destination déjà existante renvoie HTTP 409. Le contenu chargé reste dans l’éditeur en cas d’échec d’enregistrement. Les chemins absolus (hors action `image`), traversées `..` et liens symboliques sont rejetés. Les opérations HTTP conservent les protections d’authentification et CSRF existantes. L’écriture de texte utilise un fichier temporaire et un remplacement atomique ; la révision détecte une modification présente au moment de la vérification, sans prétendre verrouiller les outils externes de l’agent.
+
 ### 6.3 Téléversement (Upload) de pièces jointes
 - **URL :** `/api/upload`
 - **Méthode :** `POST`

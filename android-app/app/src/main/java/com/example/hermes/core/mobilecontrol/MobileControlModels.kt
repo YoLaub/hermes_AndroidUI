@@ -68,6 +68,7 @@ data class MobileScreenData(
 
 @Serializable
 data class MobileCommandArguments(
+    @SerialName("image_path") val imagePath: String? = null,
     @SerialName("element_ref") val elementRef: String? = null,
     val text: String? = null,
     val direction: String? = null, // "up", "down", "left", "right"

@@ -2,6 +2,7 @@ package com.example.hermes.features.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.hermes.core.data.HermesPreferences
 import com.example.hermes.core.data.HermesRepository
 import com.example.hermes.core.model.AuthStatusResponse
 import com.example.hermes.core.model.HealthResponse
@@ -20,7 +21,7 @@ sealed class ConnectionStatus {
 }
 
 data class AuthUiState(
-    val serverUrl: String = "http://10.0.2.2:8000",
+    val serverUrl: String = HermesPreferences.DEFAULT_SERVER_URL,
     val password: String = "",
     val isConnecting: Boolean = false,
     val connectionStatus: ConnectionStatus = ConnectionStatus.Idle,

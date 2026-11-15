@@ -661,4 +661,18 @@
     <string name="forum_room_members">Agents invités, dans l\'ordre de parole :</string>
     <string name="forum_room_cost">Chaque message sans mention est envoyé à tous les agents invités, un par un.</string>
     <string name="forum_create">Créer le salon</string>
+    <string name="files_title">Fichiers</string>
+    <string name="files_subtitle">Documents des profils et espaces partagés</string>
+    <string name="files_parent">Dossier parent</string>
+    <string name="files_refresh">Actualiser</string>
+    <string name="files_create">Créer un fichier texte</string>
+    <string name="files_no_space">Aucun espace accessible pour ce profil.</string>
+    <string name="files_empty">Ce dossier est vide.</string>
+    <string name="files_download">Télécharger</string>
+    <string name="files_rename">Renommer</string>
+    <string name="files_delete">Supprimer</string>
+    <string name="files_confirm_delete">Supprimer définitivement %1$s ?</string>
+    <string name="files_name">Nom du fichier</string>
+    <string name="files_confirm">Confirmer</string>
+    <string name="files_save">Enregistrer</string>
 </resources>

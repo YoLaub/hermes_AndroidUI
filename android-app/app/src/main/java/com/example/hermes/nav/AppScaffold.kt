@@ -82,6 +82,8 @@ import com.example.hermes.R
 import androidx.compose.ui.res.stringResource
 import com.example.hermes.features.workspace.calendar.CalendarViewModel
 import com.example.hermes.features.workspace.forum.ForumViewModel
+import com.example.hermes.features.workspace.files.FilesViewModel
+import com.example.hermes.features.workspace.files.FilesScreen
 import com.example.hermes.features.workspace.notes.NotesViewModel
 import com.example.hermes.theme.HermesColors
 import com.example.hermes.ui.components.SessionBanner
@@ -95,6 +97,7 @@ class AppViewModels(
     val calendar: CalendarViewModel,
     val forum: ForumViewModel,
     val mobileControl: MobileControlViewModel,
+    val files: FilesViewModel,
 )
 
 /** The signed-in app: five tabs, one back stack each, the agent sheets and dialogs above them. */
@@ -238,6 +241,7 @@ private fun AppScaffoldContent(vm: AppViewModels, avatarStore: AvatarStore, onDi
                                 vm.kanban.loadData()
                                 go(nav.push(KanbanRoute))
                             },
+                            onOpenFiles = { go(nav.push(FilesRoute)) },
                             onOpenNotes = { go(nav.push(NotesRoute)) },
                             onOpenAgenda = { go(nav.push(AgendaRoute)) },
                             onOpenForum = { go(nav.push(ForumRoute)) },
@@ -250,6 +254,11 @@ private fun AppScaffoldContent(vm: AppViewModels, avatarStore: AvatarStore, onDi
                                 vm.kanban.showCreateDialog(true)
                             },
                         )
+                    }
+                    entry<FilesRoute> {
+                        SpaceSectionScreen(stringResource(R.string.files_title), onBack = { nav.back()?.let(::go) }) {
+                            FilesScreen(vm.files, chat.profiles.map { it.name }, chat.activeProfile)
+                        }
                     }
                     entry<NotesRoute> {
                         SpaceSectionScreen(stringResource(R.string.space_notes), onBack = { nav.back()?.let(::go) }) {
