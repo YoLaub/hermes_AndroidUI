@@ -42,7 +42,7 @@ class MobileControlViewModel(
 
     private val _uiState = MutableStateFlow(
         MobileControlUiState(
-            relayUrl = "https://mobile-relay-hermes.john-world.store",
+            relayUrl = "https://mobile-relay-hermes.john-world.men",
             deviceId = "dev_" + UUID.randomUUID().toString().take(8)
         )
     )
@@ -113,7 +113,7 @@ class MobileControlViewModel(
                 if (!url.isNullOrBlank()) {
                     _uiState.update { it.copy(relayUrl = url) }
                 } else {
-                    _uiState.update { it.copy(relayUrl = "https://mobile-relay-hermes.john-world.store") }
+                    _uiState.update { it.copy(relayUrl = "https://mobile-relay-hermes.john-world.men") }
                 }
             }
         }

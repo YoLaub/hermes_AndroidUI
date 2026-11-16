@@ -171,7 +171,7 @@ Règles de comportement à donner à John :
      -H "Content-Type: application/json" -d '{}'
    ```
 2. Cliquez sur l'icône d'engrenage dans l'encadré *Relais VPS*.
-3. Vérifiez l'URL de votre serveur (ex: `https://mobile-relay-hermes.john-world.store` ou domaine configuré).
+3. Vérifiez l'URL de votre serveur (ex: `https://mobile-relay-hermes.john-world.men` ou domaine configuré).
 4. Saisissez le code, puis cliquez sur **Enregistrer** : c'est le relais qui vérifie le code et délivre le token de l'appareil.
    L'indicateur passe à « Connecté » seulement quand le relais a authentifié le téléphone.
 5. Si le téléphone est déjà enregistré sur le relais (erreur « déjà enregistré »), son enregistrement doit être supprimé côté relais avant un nouvel appairage.

@@ -187,7 +187,7 @@ The Android `mobile-control/1` protocol, its error codes and its sessions are un
 
 # Agent-driven pairing
 
-AETHER ships with the relay address as its default (`https://mobile-relay-hermes.john-world.store`, editable in its settings). No admin token is involved.
+AETHER ships with the relay address as its default (`https://mobile-relay-hermes.john-world.men`, editable in its settings). No admin token is involved.
 
 1. AETHER calls `POST /api/aether/pair/start` with `{"device_id":"<new stable avatar id>","device_name":"<display name>"}` (unknown fields rejected). Response: `claim_code` (format `XXXX-XXXX`), `poll_token`, `expires_in_seconds:300` and `agent_prompt`, a ready-to-paste text naming the tool and the code.
 2. AETHER shows `agent_prompt`. The user pastes it to the Hermes agent of the chosen profile, which calls the `aether_claim_avatar` MCP tool with `{"code":"..."}`. The relay binds the avatar to the caller's authenticated profile; the answer contains `device_id` and `device_name`, never a token.
