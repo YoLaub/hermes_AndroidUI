@@ -67,3 +67,11 @@ def test_batch_requires_unique_ids_and_destination():
     assert MailCommand(**args).message_ids == [2, 5]
     with pytest.raises(ValueError):
         MailCommand(**(args | {'message_ids': [2, 2]}))
+
+
+def test_sort_plan_preserves_groups_and_rejects_double_moves():
+    group = dict(mailbox=['Inbox'], destination=['Archives'], message_ids=[1, 2])
+    args = dict(device_id='mac', action='sort_plan', groups=[group])
+    assert MailCommand(**args).model_dump()['groups'] == [group]
+    with pytest.raises(ValueError):
+        MailCommand(**(args | {'groups': [group, group]}))

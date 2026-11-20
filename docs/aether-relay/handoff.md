@@ -271,3 +271,5 @@ An isolated actual Uvicorn relay, temporary pairing/SQLite state, real authentic
 2026-11-20 — Apple Mail now accepts create_mailbox, move_batch and trash_batch.
 Deploy with the updated Mac client. Trash is a move to the chosen Trash folder.
 Inspect partial results before any further mutation. Gaston routing is a profile setting.
+
+2026-11-20 — aether_apple_mail supports sort_plan on updated Macs. Submit all groups in one call for one local review (50 messages maximum across existing folders in one account). On timeout, check mailbox state before issuing a new plan. Older clients require an update.
