@@ -267,3 +267,7 @@ This environment satisfies the relay's dependencies; on another machine, use the
 ## Combined local acceptance (2026-10-26)
 
 An isolated actual Uvicorn relay, temporary pairing/SQLite state, real authenticated MCP call, AETHER WebSocket session and native engine were exercised together: `aether_avatar_gesture` returned completed only after the visible VRM wave finished. This used synthetic credentials and local processes, not John or the deployed VPS. The relay process used an environment containing its declared WebSocket dependency (`websockets`); the AETHER-only environment does not include a WebSocket server backend.
+
+2026-11-20 — Apple Mail now accepts create_mailbox, move_batch and trash_batch.
+Deploy with the updated Mac client. Trash is a move to the chosen Trash folder.
+Inspect partial results before any further mutation. Gaston routing is a profile setting.
