@@ -6,9 +6,17 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class SortGroup(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    mailbox: list[str] = Field(min_length=1, max_length=8)
+    destination: list[str] = Field(min_length=1, max_length=8)
+    message_ids: list[int] = Field(min_length=1, max_length=50)
+
+
 class MailArguments(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
-    action: Literal['accounts', 'mailboxes', 'list', 'read', 'draft', 'mark_read', 'flag', 'move', 'create_mailbox', 'move_batch', 'trash_batch']
+    action: Literal['accounts', 'mailboxes', 'list', 'read', 'draft', 'mark_read', 'flag', 'move', 'create_mailbox', 'move_batch', 'trash_batch', 'sort_plan']
+    groups: list[SortGroup] = Field(default_factory=list, max_length=50)
     account: str = Field(default='', max_length=256)
     mailbox: list[str] = Field(default_factory=list, max_length=8)
     destination: list[str] = Field(default_factory=list, max_length=8)
@@ -28,6 +36,7 @@ class MailArguments(BaseModel):
             if not name or len(name) > 256 or any(ord(c) < 32 for c in name):
                 raise ValueError('Invalid mailbox path')
         allowed = {
+            'sort_plan': {'account', 'groups'},
             'accounts': set(), 'mailboxes': {'account', 'mailbox', 'offset', 'limit'},
             'list': {'account', 'mailbox', 'query', 'offset', 'limit'},
             'read': {'account', 'mailbox', 'message_id'},
@@ -53,6 +62,23 @@ class MailArguments(BaseModel):
                 raise ValueError('Select distinct messages and a different destination')
         if self.action in ('create_mailbox', 'move_batch', 'trash_batch', 'move') and not self.destination:
             raise ValueError('Destination required')
+        if self.action == 'sort_plan':
+            seen = set()
+            if not self.groups:
+                raise ValueError('Empty sorting plan')
+            for group in self.groups:
+                for name in group.mailbox + group.destination:
+                    if not name or len(name) > 256 or any(ord(c) < 32 for c in name):
+                        raise ValueError('Invalid mailbox path')
+                if group.mailbox == group.destination:
+                    raise ValueError('Select a different destination')
+                for mid in group.message_ids:
+                    key = (tuple(group.mailbox), mid)
+                    if mid <= 0 or key in seen:
+                        raise ValueError('Invalid or repeated plan message')
+                    seen.add(key)
+            if len(seen) > 50:
+                raise ValueError('Sorting plan exceeds 50 messages')
         if self.action == 'draft' and (not re.fullmatch(r'[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+', self.to)
                 or '\r' in self.subject or '\n' in self.subject or not self.body.strip()):
             raise ValueError('Recipient, subject and draft body required')
