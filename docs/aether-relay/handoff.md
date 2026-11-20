@@ -187,7 +187,7 @@ The Android `mobile-control/1` protocol, its error codes and its sessions are un
 
 # Agent-driven pairing
 
-AETHER ships with the relay address as its default (`https://mobile-relay-hermes.john-world.store`, editable in its settings). No admin token is involved.
+AETHER ships with the relay address as its default (`https://mobile-relay-hermes.john-world.men`, editable in its settings). No admin token is involved.
 
 1. AETHER calls `POST /api/aether/pair/start` with `{"device_id":"<new stable avatar id>","device_name":"<display name>"}` (unknown fields rejected). Response: `claim_code` (format `XXXX-XXXX`), `poll_token`, `expires_in_seconds:300` and `agent_prompt`, a ready-to-paste text naming the tool and the code.
 2. AETHER shows `agent_prompt`. The user pastes it to the Hermes agent of the chosen profile, which calls the `aether_claim_avatar` MCP tool with `{"code":"..."}`. The relay binds the avatar to the caller's authenticated profile; the answer contains `device_id` and `device_name`, never a token.
@@ -267,3 +267,7 @@ This environment satisfies the relay's dependencies; on another machine, use the
 ## Combined local acceptance (2026-10-26)
 
 An isolated actual Uvicorn relay, temporary pairing/SQLite state, real authenticated MCP call, AETHER WebSocket session and native engine were exercised together: `aether_avatar_gesture` returned completed only after the visible VRM wave finished. This used synthetic credentials and local processes, not John or the deployed VPS. The relay process used an environment containing its declared WebSocket dependency (`websockets`); the AETHER-only environment does not include a WebSocket server backend.
+
+2026-11-20 — Apple Mail now accepts create_mailbox, move_batch and trash_batch.
+Deploy with the updated Mac client. Trash is a move to the chosen Trash folder.
+Inspect partial results before any further mutation. Gaston routing is a profile setting.

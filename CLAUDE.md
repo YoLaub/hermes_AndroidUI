@@ -22,7 +22,7 @@ priorité, ne sacrifier aucun des deux sans le dire.
 - Relais : Python, SQLite, WebSocket + MCP Streamable HTTP (`mobile-relay/`).
 - WebUI : `webui-backend/`, modifiable (périmètre ouvert).
 - Hébergement : VPS via Coolify, images publiées sur ghcr par GitHub Actions
-  (`.github/workflows/`). URL relais : `https://mobile-relay-hermes.john-world.store`.
+  (`.github/workflows/`). URL relais : `https://mobile-relay-hermes.john-world.men`.
 
 ## Méthode
 - TDD et commits incrémentaux : voir CLAUDE.md global.

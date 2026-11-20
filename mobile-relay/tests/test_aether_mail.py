@@ -59,3 +59,11 @@ def test_mail_mcp_roundtrip(client):  # noqa: F811
                 'command_id': command['payload']['command_id'], 'mail_result': '{"accounts":[]}'
             }))
             assert json.loads(task.result(timeout=3)['content'][0]['text'])['mail'] == {'accounts': []}
+
+
+def test_batch_requires_unique_ids_and_destination():
+    args = dict(device_id='mac', action='trash_batch', mailbox=['Inbox'],
+                destination=['Trash'], message_ids=[2, 5])
+    assert MailCommand(**args).message_ids == [2, 5]
+    with pytest.raises(ValueError):
+        MailCommand(**(args | {'message_ids': [2, 2]}))

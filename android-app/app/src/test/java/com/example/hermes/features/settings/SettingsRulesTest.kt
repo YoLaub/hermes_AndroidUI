@@ -8,7 +8,7 @@ import org.junit.Test
 class SettingsRulesTest {
     @Test
     fun `the relay address must be an http or https URL with a host`() {
-        assertNull(relayUrlError("https://mobile-relay-hermes.john-world.store"))
+        assertNull(relayUrlError("https://mobile-relay-hermes.john-world.men"))
         assertNull(relayUrlError("http://192.168.1.20:8800"))
         assertEquals(RelayUrlError.Required, relayUrlError(" "))
         assertEquals(RelayUrlError.Scheme, relayUrlError("mobile-relay.example"))

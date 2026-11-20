@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-const val DEFAULT_RELAY_URL = "https://mobile-relay-hermes.john-world.store"
+const val DEFAULT_RELAY_URL = "https://mobile-relay-hermes.john-world.men"
 
 /**
  * The agent-phone edition's connection: whenever a pairing is stored, keep the relay socket open (the relay opens the
