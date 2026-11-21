@@ -214,14 +214,15 @@ def test_john_cannot_launch_an_app_other_than_his_target():
     assert out["isError"] and out["content"][0]["text"].startswith("APP_NOT_ALLOWED")
 
 
-def test_john_launching_his_own_target_is_unchanged_and_sends_no_package():
+@pytest.mark.parametrize("target", ["com.linkedin.android", "org.mozilla.firefox", "com.instagram.android"])
+def test_john_launching_his_own_target_is_unchanged_and_sends_no_package(target):
     with client.websocket_connect("/ws/device") as ws:
-        connect_john_session(ws)
+        connect_john_session(ws, target)
         box = {}
-        t = threading.Thread(target=lambda: box.update(out=launch(JOHN, "com.linkedin.android")))
+        t = threading.Thread(target=lambda: box.update(out=launch(JOHN, target)))
         t.start()
         cmd = ws.receive_json()
-        assert cmd["operation"] == "launch_app" and cmd["target_package"] == "com.linkedin.android"
+        assert cmd["operation"] == "launch_app" and cmd["target_package"] == target
         assert cmd["arguments"].get("package") is None
         ws.send_text(json.dumps({"protocol": "mobile-control/1", "type": "result", "command_id": cmd["command_id"],
                                  "status": "success", "message": "ouvert"}))
