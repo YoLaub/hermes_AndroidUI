@@ -935,7 +935,7 @@ MCP_TOOLS = [
     },
     {
         "name": "mobile_launch_allowed_app",
-        "description": "Ouvre l'application autorisée (ex: LinkedIn) sur le téléphone au premier plan. Sur un téléphone dédié à l'agent, l'argument optionnel package (ex: com.android.settings) ouvre n'importe quelle application.",
+        "description": "Ouvre l'application choisie pour la session (par exemple Firefox, Instagram ou LinkedIn) sur le téléphone au premier plan. Sur un téléphone dédié à l'agent, l'argument optionnel package (ex: com.android.settings) ouvre n'importe quelle application.",
         "inputSchema": {
             "type": "object",
             "properties": {

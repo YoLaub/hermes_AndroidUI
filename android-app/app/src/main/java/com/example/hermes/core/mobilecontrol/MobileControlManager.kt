@@ -78,7 +78,9 @@ class MobileControlManager(
 
     private val _allowedApps = MutableStateFlow<List<AllowedApp>>(
         listOf(
-            AllowedApp("com.linkedin.android", "LinkedIn", isEnabled = true)
+            AllowedApp("com.linkedin.android", "LinkedIn", isEnabled = true),
+            AllowedApp("org.mozilla.firefox", "Firefox", isEnabled = false),
+            AllowedApp("com.instagram.android", "Instagram", isEnabled = false)
         )
     )
     val allowedApps: StateFlow<List<AllowedApp>> = _allowedApps.asStateFlow()
